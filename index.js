@@ -2,23 +2,26 @@ require('dotenv').config();
 
 const app = require('./src/app');
 const env = require('./src/config/env');
+const connectDB = require('./src/config/db');
 
-const server = app.listen(env.PORT, () => {
-  console.log(`[${env.NODE_ENV}] Server running on http://localhost:${env.PORT}`);
-});
-
-const shutdown = (signal) => {
-  console.log(`\n${signal} received. Shutting down gracefully...`);
-  server.close(() => {
-    console.log('Server closed.');
-    process.exit(0);
+connectDB().then(() => {
+  const server = app.listen(env.PORT, () => {
+    console.log(`[${env.NODE_ENV}] Server running on http://localhost:${env.PORT}`);
   });
 
-  setTimeout(() => {
-    console.error('Forced shutdown — connections did not close in time.');
-    process.exit(1);
-  }, 10000);
-};
+  const shutdown = (signal) => {
+    console.log(`\n${signal} received. Shutting down gracefully...`);
+    server.close(() => {
+      console.log('Server closed.');
+      process.exit(0);
+    });
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+    setTimeout(() => {
+      console.error('Forced shutdown — connections did not close in time.');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+});
