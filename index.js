@@ -1,13 +1,24 @@
-const express = require('express');
-const app = express();
-const PORT = 3000;
+require('dotenv').config();
 
-// A simple "Route"
-app.get('/', (req, res) => {
-    res.send('Hello World! Your Express server is running.');
+const app = require('./src/app');
+const env = require('./src/config/env');
+
+const server = app.listen(env.PORT, () => {
+  console.log(`[${env.NODE_ENV}] Server running on http://localhost:${env.PORT}`);
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is vibrating on http://localhost:${PORT}`);
-});
+const shutdown = (signal) => {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+  server.close(() => {
+    console.log('Server closed.');
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    console.error('Forced shutdown — connections did not close in time.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
