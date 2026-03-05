@@ -1,7 +1,7 @@
 const Withdrawal = require('../models/Withdrawal');
 const { success, fail } = require('../utils/response');
 
-const POPULATE_FIELDS = ['withdrawnBy', 'material'];
+const POPULATE_FIELDS = ['order', 'withdrawnBy', 'material'];
 
 exports.getAll = async (req, res, next) => {
   try {

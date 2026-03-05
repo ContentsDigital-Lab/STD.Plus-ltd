@@ -9,6 +9,7 @@ const customerRoutes = require('./customer.routes');
 const claimRoutes = require('./claim.routes');
 const requestRoutes = require('./request.routes');
 const withdrawalRoutes = require('./withdrawal.routes');
+const orderRoutes = require('./order.routes');
 const auth = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const claimController = require('../controllers/claim.controller');
@@ -24,6 +25,7 @@ router.use('/customers', customerRoutes);
 router.use('/claims', claimRoutes);
 router.use('/requests', requestRoutes);
 router.use('/withdrawals', withdrawalRoutes);
+router.use('/orders', orderRoutes);
 
 const createClaimSchema = z.object({
   body: z.object({

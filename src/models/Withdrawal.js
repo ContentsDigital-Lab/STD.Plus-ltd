@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const withdrawalSchema = new mongoose.Schema({
   order: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'ProductionOrder',
+    ref: 'Order',
     default: null,
   },
   withdrawnBy: {
