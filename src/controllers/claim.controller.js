@@ -28,7 +28,7 @@ exports.create = async (req, res, next) => {
   try {
     const claim = await Claim.create({
       ...req.validated.body,
-      order: req.params.orderId,
+      request: req.params.requestId,
     });
     const populated = await claim.populate(POPULATE_FIELDS);
     success(res, populated, 'Claim created', 201);

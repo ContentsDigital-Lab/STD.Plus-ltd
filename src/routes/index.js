@@ -7,6 +7,7 @@ const materialRoutes = require('./material.routes');
 const inventoryRoutes = require('./inventory.routes');
 const customerRoutes = require('./customer.routes');
 const claimRoutes = require('./claim.routes');
+const requestRoutes = require('./request.routes');
 const auth = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const claimController = require('../controllers/claim.controller');
@@ -20,6 +21,7 @@ router.use('/materials', materialRoutes);
 router.use('/inventories', inventoryRoutes);
 router.use('/customers', customerRoutes);
 router.use('/claims', claimRoutes);
+router.use('/requests', requestRoutes);
 
 const createClaimSchema = z.object({
   body: z.object({
@@ -33,6 +35,6 @@ const createClaimSchema = z.object({
   }),
 });
 
-router.post('/orders/:orderId/claims', auth, validate(createClaimSchema), claimController.create);
+router.post('/requests/:requestId/claims', auth, validate(createClaimSchema), claimController.create);
 
 module.exports = router;
