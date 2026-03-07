@@ -1,5 +1,6 @@
 const Material = require('../models/Material');
 const { success, fail } = require('../utils/response');
+const emit = require('../utils/emitEvent');
 
 exports.getAll = async (req, res, next) => {
   try {
@@ -23,6 +24,7 @@ exports.getById = async (req, res, next) => {
 exports.create = async (req, res, next) => {
   try {
     const material = await Material.create(req.validated.body);
+    emit(req, 'material:updated', { action: 'created', data: material }, ['dashboard', 'inventory']);
     success(res, material, 'Material created', 201);
   } catch (err) {
     next(err);
@@ -36,6 +38,7 @@ exports.update = async (req, res, next) => {
       runValidators: true,
     });
     if (!material) return fail(res, 'Material not found', 404);
+    emit(req, 'material:updated', { action: 'updated', data: material }, ['dashboard', 'inventory']);
     success(res, material, 'Material updated');
   } catch (err) {
     next(err);
@@ -46,6 +49,7 @@ exports.deleteOne = async (req, res, next) => {
   try {
     const material = await Material.findByIdAndDelete(req.params.id);
     if (!material) return fail(res, 'Material not found', 404);
+    emit(req, 'material:updated', { action: 'deleted', data: material }, ['dashboard', 'inventory']);
     success(res, null, 'Material deleted');
   } catch (err) {
     next(err);
@@ -56,6 +60,7 @@ exports.deleteMany = async (req, res, next) => {
   try {
     const { ids } = req.validated.body;
     const result = await Material.deleteMany({ _id: { $in: ids } });
+    emit(req, 'material:updated', { action: 'deleted', data: { ids } }, ['dashboard', 'inventory']);
     success(res, { deletedCount: result.deletedCount }, 'Materials deleted');
   } catch (err) {
     next(err);

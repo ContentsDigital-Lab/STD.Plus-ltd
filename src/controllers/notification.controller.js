@@ -1,5 +1,6 @@
 const Notification = require('../models/Notification');
 const { success, fail } = require('../utils/response');
+const emit = require('../utils/emitEvent');
 
 const POPULATE_FIELDS = ['recipient'];
 
@@ -25,7 +26,9 @@ exports.getById = async (req, res, next) => {
 exports.create = async (req, res, next) => {
   try {
     const notification = await Notification.create(req.validated.body);
+    const recipientId = notification.recipient;
     const populated = await notification.populate(POPULATE_FIELDS);
+    emit(req, 'notification', populated, [`user:${recipientId}`]);
     success(res, populated, 'Notification created', 201);
   } catch (err) {
     next(err);

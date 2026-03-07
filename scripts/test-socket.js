@@ -116,10 +116,117 @@ async function testLeaveEvents() {
   console.log(`\n=== All room leave event tests passed ===\n`);
 }
 
+function waitForEvent(socket, event, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timeout waiting for "${event}"`)), timeout);
+    socket.once(event, (data) => {
+      clearTimeout(timer);
+      resolve(data);
+    });
+  });
+}
+
+async function apiCall(method, path, token, body = null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${API}${path}`, opts);
+  return res.json();
+}
+
+async function testDataEvents() {
+  console.log('=== Data Events ===\n');
+
+  const token = await getToken();
+  const socket = await connect(API, '/api/socket-entry', { token });
+
+  // join rooms to receive events
+  const rooms = ['dashboard', 'inventory', 'log', 'request', 'withdrawal', 'order', 'claim'];
+  for (const room of rooms) {
+    await emitWithAck(socket, `join_${room}`);
+  }
+  await emitWithAck(socket, 'join_me');
+  console.log('   (joined all rooms)\n');
+
+  let n = 1;
+
+  // 1. material:updated
+  const matPromise = waitForEvent(socket, 'material:updated');
+  const mat = await apiCall('POST', '/api/materials', token, { name: 'Test Glass', unit: 'sheet', reorderPoint: 5 });
+  const matEvent = await matPromise;
+  console.log(`${n++}. PASS material:updated — action: ${matEvent.action}`);
+  const matId = mat.data._id;
+
+  // 2. inventory:updated
+  const invPromise = waitForEvent(socket, 'inventory:updated');
+  const inv = await apiCall('POST', '/api/inventories', token, { material: matId, stockType: 'Raw', quantity: 100, location: 'Warehouse A' });
+  const invEvent = await invPromise;
+  console.log(`${n++}. PASS inventory:updated — action: ${invEvent.action}`);
+
+  // 3. order:updated
+  const cust = await apiCall('POST', '/api/customers', token, { name: 'Test Customer' });
+  const ordPromise = waitForEvent(socket, 'order:updated');
+  const ord = await apiCall('POST', '/api/orders', token, { customer: cust.data._id, material: matId, quantity: 10 });
+  const ordEvent = await ordPromise;
+  console.log(`${n++}. PASS order:updated — action: ${ordEvent.action}`);
+  const ordId = ord.data._id;
+
+  // 4. request:updated
+  const reqPromise = waitForEvent(socket, 'request:updated');
+  const reqData = await apiCall('POST', '/api/requests', token, { details: { type: 'cut', quantity: 5 }, customer: cust.data._id });
+  const reqEvent = await reqPromise;
+  console.log(`${n++}. PASS request:updated — action: ${reqEvent.action}`);
+
+  // 5. withdrawal:updated
+  const meRes = await apiCall('GET', '/api/auth/me', token);
+  const workerId = meRes.data._id;
+  const wdPromise = waitForEvent(socket, 'withdrawal:updated');
+  await apiCall('POST', '/api/withdrawals', token, { withdrawnBy: workerId, material: matId, quantity: 2, stockType: 'Raw' });
+  const wdEvent = await wdPromise;
+  console.log(`${n++}. PASS withdrawal:updated — action: ${wdEvent.action}`);
+
+  // 6. claim:updated
+  const claimPromise = waitForEvent(socket, 'claim:updated');
+  await apiCall('POST', `/api/orders/${ordId}/claims`, token, { source: 'worker', material: matId, description: 'Test claim', reportedBy: workerId });
+  const claimEvent = await claimPromise;
+  console.log(`${n++}. PASS claim:updated — action: ${claimEvent.action}`);
+
+  // 7. log:updated
+  const logPromise = waitForEvent(socket, 'log:updated');
+  await apiCall('POST', '/api/material-logs', token, { material: matId, actionType: 'import', quantityChanged: 50 });
+  const logEvent = await logPromise;
+  console.log(`${n++}. PASS log:updated — action: ${logEvent.action}`);
+
+  // 8. notification
+  const notifPromise = waitForEvent(socket, 'notification');
+  await apiCall('POST', '/api/notifications', token, { recipient: workerId, type: 'info', title: 'Test notification' });
+  const notifEvent = await notifPromise;
+  console.log(`${n++}. PASS notification — title: ${notifEvent.title}`);
+
+  // 9. system_alert
+  const alertPromise = waitForEvent(socket, 'system_alert');
+  socket.emit('system_alert', { message: 'Test system alert' });
+  const alertEvent = await alertPromise;
+  console.log(`${n++}. PASS system_alert — message: ${alertEvent.message}`);
+
+  // Cleanup test data
+  await apiCall('DELETE', `/api/materials/${matId}`, token);
+  await apiCall('DELETE', `/api/inventories/${inv.data._id}`, token);
+  await apiCall('DELETE', `/api/orders/${ordId}`, token);
+  await apiCall('DELETE', `/api/requests/${reqData.data._id}`, token);
+  await apiCall('DELETE', `/api/customers/${cust.data._id}`, token);
+
+  socket.disconnect();
+  console.log(`\n=== All data event tests passed ===\n`);
+}
+
 async function main() {
   await testSystemEvents();
   await testJoinEvents();
   await testLeaveEvents();
+  await testDataEvents();
   process.exit(0);
 }
 

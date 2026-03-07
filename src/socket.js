@@ -56,6 +56,11 @@ const setupSocket = (httpServer) => {
       });
     }
 
+    socket.on('system_alert', (data) => {
+      console.log(`[socket] system_alert from ${socket.user.name}:`, data);
+      io.emit('system_alert', data);
+    });
+
     socket.on('error', (err) => {
       console.error(`[socket] Error for ${socket.user.name}:`, err.message);
       socket.emit('error', { message: err.message });
