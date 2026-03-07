@@ -1,12 +1,20 @@
 require('dotenv').config();
 
+const http = require('http');
 const app = require('./src/app');
 const env = require('./src/config/env');
 const connectDB = require('./src/config/db');
+const setupSocket = require('./src/socket');
 
 connectDB().then(() => {
-  const server = app.listen(env.PORT, () => {
+  const server = http.createServer(app);
+  const io = setupSocket(server);
+
+  app.set('io', io);
+
+  server.listen(env.PORT, () => {
     console.log(`[${env.NODE_ENV}] Server running on http://localhost:${env.PORT}`);
+    console.log(`[socket] WebSocket ready at /api/socket-entry`);
   });
 
   const shutdown = (signal) => {
