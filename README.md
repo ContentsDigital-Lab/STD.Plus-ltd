@@ -256,10 +256,24 @@ const socket = io('http://localhost:3000', {
 
 ## Testing
 
-```bash
-# Test WebSocket events
-node scripts/test-socket.js
+Make sure the server is running first:
 
-# Test rate limiting
+```bash
+npm run dev
+```
+
+### WebSocket Events
+
+Tests all system events (connect, disconnect, error), room events (join/leave), and data events (material:updated, order:updated, etc.):
+
+```bash
+node scripts/test-socket.js
+```
+
+### Rate Limiting
+
+Sends 200 requests to the health endpoint to verify rate limiting kicks in:
+
+```bash
 bash scripts/test-rate-limit.sh
 ```
