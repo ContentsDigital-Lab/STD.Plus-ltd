@@ -29,10 +29,37 @@ const setupSocket = (httpServer) => {
     }
   });
 
+  const ROOMS = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim'];
+
   io.on('connection', (socket) => {
     console.log(`[socket] ${socket.user.name} connected (${socket.id})`);
 
     socket.join(`user:${socket.user._id}`);
+
+    socket.on('join_me', (callback) => {
+      socket.join(`user:${socket.user._id}`);
+      console.log(`[socket] ${socket.user.name} joined room user:${socket.user._id}`);
+      if (typeof callback === 'function') callback({ ok: true, room: `user:${socket.user._id}` });
+    });
+
+    for (const room of ROOMS) {
+      socket.on(`join_${room}`, (callback) => {
+        socket.join(room);
+        console.log(`[socket] ${socket.user.name} joined room ${room}`);
+        if (typeof callback === 'function') callback({ ok: true, room });
+      });
+
+      socket.on(`leave_${room}`, (callback) => {
+        socket.leave(room);
+        console.log(`[socket] ${socket.user.name} left room ${room}`);
+        if (typeof callback === 'function') callback({ ok: true, room });
+      });
+    }
+
+    socket.on('error', (err) => {
+      console.error(`[socket] Error for ${socket.user.name}:`, err.message);
+      socket.emit('error', { message: err.message });
+    });
 
     socket.on('disconnect', (reason) => {
       console.log(`[socket] ${socket.user.name} disconnected (${reason})`);
