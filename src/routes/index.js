@@ -12,6 +12,7 @@ const withdrawalRoutes = require('./withdrawal.routes');
 const orderRoutes = require('./order.routes');
 const stationRoutes = require('./station.routes');
 const materialLogRoutes = require('./materialLog.routes');
+const notificationRoutes = require('./notification.routes');
 const auth = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const claimController = require('../controllers/claim.controller');
@@ -30,6 +31,7 @@ router.use('/withdrawals', withdrawalRoutes);
 router.use('/orders', orderRoutes);
 router.use('/stations', stationRoutes);
 router.use('/material-logs', materialLogRoutes);
+router.use('/notifications', notificationRoutes);
 
 const createClaimSchema = z.object({
   body: z.object({
