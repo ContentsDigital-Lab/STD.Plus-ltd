@@ -1,7 +1,7 @@
 const Claim = require('../models/Claim');
 const { success, fail } = require('../utils/response');
 
-const POPULATE_FIELDS = ['material', 'reportedBy', 'approvedBy'];
+const POPULATE_FIELDS = ['order', 'material', 'reportedBy', 'approvedBy'];
 
 exports.getAll = async (req, res, next) => {
   try {
@@ -28,7 +28,7 @@ exports.create = async (req, res, next) => {
   try {
     const claim = await Claim.create({
       ...req.validated.body,
-      request: req.params.requestId,
+      order: req.params.orderId,
     });
     const populated = await claim.populate(POPULATE_FIELDS);
     success(res, populated, 'Claim created', 201);

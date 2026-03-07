@@ -1,5 +1,4 @@
 const { Router } = require('express');
-const { z } = require('zod');
 const healthRoutes = require('./health.routes');
 const authRoutes = require('./auth.routes');
 const workerRoutes = require('./worker.routes');
@@ -13,9 +12,6 @@ const orderRoutes = require('./order.routes');
 const stationRoutes = require('./station.routes');
 const materialLogRoutes = require('./materialLog.routes');
 const notificationRoutes = require('./notification.routes');
-const auth = require('../middleware/auth');
-const validate = require('../middleware/validate');
-const claimController = require('../controllers/claim.controller');
 
 const router = Router();
 
@@ -32,19 +28,5 @@ router.use('/orders', orderRoutes);
 router.use('/stations', stationRoutes);
 router.use('/material-logs', materialLogRoutes);
 router.use('/notifications', notificationRoutes);
-
-const createClaimSchema = z.object({
-  body: z.object({
-    source: z.enum(['customer', 'worker']),
-    material: z.string().min(1),
-    description: z.string().min(1),
-    decision: z.enum(['destroy', 'keep']).optional(),
-    reportedBy: z.string().min(1),
-    approvedBy: z.string().min(1).optional(),
-    claimDate: z.string().datetime().optional(),
-  }),
-});
-
-router.post('/requests/:requestId/claims', auth, validate(createClaimSchema), claimController.create);
 
 module.exports = router;

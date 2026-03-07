@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 
 const claimSchema = new mongoose.Schema({
-  request: {
+  order: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Request',
+    ref: 'Order',
     required: true,
   },
   source: {

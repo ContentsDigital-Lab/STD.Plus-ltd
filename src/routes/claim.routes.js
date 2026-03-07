@@ -6,18 +6,6 @@ const claimController = require('../controllers/claim.controller');
 
 const router = Router();
 
-const createSchema = z.object({
-  body: z.object({
-    source: z.enum(['customer', 'worker']),
-    material: z.string().min(1),
-    description: z.string().min(1),
-    decision: z.enum(['destroy', 'keep']).optional(),
-    reportedBy: z.string().min(1),
-    approvedBy: z.string().min(1).optional(),
-    claimDate: z.string().datetime().optional(),
-  }),
-});
-
 const updateSchema = z.object({
   body: z.object({
     source: z.enum(['customer', 'worker']).optional(),

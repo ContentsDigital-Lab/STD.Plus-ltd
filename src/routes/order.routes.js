@@ -3,6 +3,7 @@ const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const orderController = require('../controllers/order.controller');
+const claimController = require('../controllers/claim.controller');
 
 const router = Router();
 
@@ -42,9 +43,22 @@ const deleteManySchema = z.object({
   }),
 });
 
+const createClaimSchema = z.object({
+  body: z.object({
+    source: z.enum(['customer', 'worker']),
+    material: z.string().min(1),
+    description: z.string().min(1),
+    decision: z.enum(['destroy', 'keep']).optional(),
+    reportedBy: z.string().min(1),
+    approvedBy: z.string().min(1).optional(),
+    claimDate: z.string().datetime().optional(),
+  }),
+});
+
 router.get('/', auth, orderController.getAll);
 router.get('/:id', auth, orderController.getById);
 router.post('/', auth, validate(createSchema), orderController.create);
+router.post('/:orderId/claims', auth, validate(createClaimSchema), claimController.create);
 router.patch('/:id', auth, validate(updateSchema), orderController.update);
 router.delete('/', auth, validate(deleteManySchema), orderController.deleteMany);
 router.delete('/:id', auth, orderController.deleteOne);
