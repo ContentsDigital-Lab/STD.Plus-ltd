@@ -1,0 +1,70 @@
+---
+title: WebSocket Overview
+description: Real-time communication with Socket.IO
+---
+
+## Connection
+
+STD Plus uses **Socket.IO** for real-time WebSocket communication.
+
+| Setting | Value |
+|---|---|
+| Path | `/api/socket-entry` |
+| Namespace | `/` (default) |
+| Auth | JWT token via handshake |
+
+## Connecting
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  path: '/api/socket-entry',
+  auth: { token: 'your-jwt-token' },
+});
+
+socket.on('connect', () => {
+  console.log('Connected:', socket.id);
+});
+
+socket.on('connect_error', (err) => {
+  console.error('Connection failed:', err.message);
+});
+```
+
+## How Rooms Work
+
+The WebSocket uses a **room-based** architecture. Clients join rooms to subscribe to specific data events:
+
+```
+Client connects
+  └─ auto-joins: user:<userId>
+  └─ manually joins: dashboard, inventory, order, etc.
+```
+
+When data changes via the REST API, the server emits events to the relevant rooms. Only clients in that room receive the event.
+
+<Note>
+  You must join a room before you can receive its data events. Use `join_*` events when navigating to a page, and `leave_*` events when navigating away.
+</Note>
+
+## Event Directions
+
+| Direction | Meaning | Example |
+|---|---|---|
+| **OUTBOUND** | Client sends to server | `join_dashboard`, `leave_order` |
+| **INBOUND** | Server sends to client | `order:updated`, `notification` |
+
+## Room-to-Event Mapping
+
+| Room | Events received |
+|---|---|
+| `user:<id>` | `notification` |
+| `dashboard` | All `:updated` events |
+| `inventory` | `material:updated`, `inventory:updated` |
+| `log` | `log:updated` |
+| `request` | `request:updated` |
+| `withdrawal` | `withdrawal:updated` |
+| `order` | `order:updated` |
+| `claim` | `claim:updated` |
+| *(broadcast)* | `system_alert` |

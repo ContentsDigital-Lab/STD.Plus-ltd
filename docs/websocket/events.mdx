@@ -1,0 +1,175 @@
+---
+title: WebSocket Events
+description: Complete list of all WebSocket events
+---
+
+## System Events
+
+These are built-in Socket.IO events.
+
+| Event | Direction | Description |
+|---|---|---|
+| `connect` | INBOUND | Fired when connection is established |
+| `disconnect` | INBOUND | Fired when connection is lost |
+| `error` | INBOUND | Fired on system error |
+
+## Room Events
+
+Client sends these to join or leave rooms. All room events support an **acknowledgment callback** that returns `{ ok: true, room: "..." }`.
+
+### Join Events
+
+<CodeGroup>
+```javascript Join a room
+socket.emit('join_dashboard', (ack) => {
+  console.log(ack); // { ok: true, room: "dashboard" }
+});
+```
+
+```javascript Join personal room
+socket.emit('join_me', (ack) => {
+  console.log(ack); // { ok: true, room: "user:69a7fe45..." }
+});
+```
+</CodeGroup>
+
+| Event | Direction | Room joined | Description |
+|---|---|---|---|
+| `join_me` | OUTBOUND | `user:<id>` | Join personal room |
+| `join_dashboard` | OUTBOUND | `dashboard` | Join dashboard page |
+| `join_inventory` | OUTBOUND | `inventory` | Join inventory page |
+| `join_station` | OUTBOUND | `station` | Join station page |
+| `join_log` | OUTBOUND | `log` | Join material log page |
+| `join_request` | OUTBOUND | `request` | Join request page |
+| `join_withdrawal` | OUTBOUND | `withdrawal` | Join withdrawal page |
+| `join_order` | OUTBOUND | `order` | Join order page |
+| `join_claim` | OUTBOUND | `claim` | Join claim page |
+
+### Leave Events
+
+```javascript
+socket.emit('leave_dashboard', (ack) => {
+  console.log(ack); // { ok: true, room: "dashboard" }
+});
+```
+
+| Event | Direction | Room left | Description |
+|---|---|---|---|
+| `leave_dashboard` | OUTBOUND | `dashboard` | Leave dashboard page |
+| `leave_inventory` | OUTBOUND | `inventory` | Leave inventory page |
+| `leave_station` | OUTBOUND | `station` | Leave station page |
+| `leave_log` | OUTBOUND | `log` | Leave material log page |
+| `leave_request` | OUTBOUND | `request` | Leave request page |
+| `leave_withdrawal` | OUTBOUND | `withdrawal` | Leave withdrawal page |
+| `leave_order` | OUTBOUND | `order` | Leave order page |
+| `leave_claim` | OUTBOUND | `claim` | Leave claim page |
+
+## Data Events
+
+These events are emitted by the server when data changes via the REST API. You receive them only if you've joined the corresponding room.
+
+### Resource Updated Events
+
+All resource events include an `action` field (`created`, `updated`, or `deleted`) and a `data` field with the affected record.
+
+```javascript
+socket.on('order:updated', (payload) => {
+  console.log(payload.action); // "created" | "updated" | "deleted"
+  console.log(payload.data);   // the order object
+});
+```
+
+| Event | Direction | Emitted to rooms | Triggered by |
+|---|---|---|---|
+| `material:updated` | INBOUND | `dashboard`, `inventory` | Material create / update / delete |
+| `inventory:updated` | INBOUND | `dashboard`, `inventory` | Inventory create / update / delete |
+| `order:updated` | INBOUND | `dashboard`, `order` | Order create / update / delete |
+| `log:updated` | INBOUND | `dashboard`, `log` | Material log create / update / delete |
+| `request:updated` | INBOUND | `dashboard`, `request` | Request create / update / delete |
+| `withdrawal:updated` | INBOUND | `dashboard`, `withdrawal` | Withdrawal create / update / delete |
+| `claim:updated` | INBOUND | `dashboard`, `claim` | Claim create / update / delete |
+
+**Payload format:**
+
+```json
+{
+  "action": "created",
+  "data": {
+    "_id": "69a98ee25bb1d35efb8cc1ff",
+    "...": "..."
+  }
+}
+```
+
+### Notification
+
+Sent to a specific user's personal room when a notification is created via the REST API.
+
+```javascript
+socket.on('notification', (notification) => {
+  console.log(notification.title);
+  console.log(notification.message);
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `notification` | INBOUND | `user:<recipientId>` | POST `/api/notifications` |
+
+**Payload:** The full populated notification object.
+
+### System Alert
+
+Broadcast to **all** connected clients. Can be triggered by any authenticated user via the WebSocket.
+
+```javascript
+// Sending
+socket.emit('system_alert', { message: 'Server maintenance in 10 minutes' });
+
+// Receiving
+socket.on('system_alert', (data) => {
+  console.log(data.message);
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `system_alert` | INBOUND | All connected clients | Any authenticated socket client |
+
+## Full Example
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  path: '/api/socket-entry',
+  auth: { token: 'your-jwt-token' },
+});
+
+socket.on('connect', () => {
+  // Join the rooms you need
+  socket.emit('join_me');
+  socket.emit('join_dashboard');
+  socket.emit('join_order');
+});
+
+// Listen for data changes
+socket.on('order:updated', ({ action, data }) => {
+  if (action === 'created') console.log('New order:', data);
+  if (action === 'updated') console.log('Order changed:', data);
+  if (action === 'deleted') console.log('Order removed:', data);
+});
+
+// Listen for personal notifications
+socket.on('notification', (notif) => {
+  console.log(`[${notif.priority}] ${notif.title}: ${notif.message}`);
+});
+
+// Listen for system alerts
+socket.on('system_alert', (alert) => {
+  console.log('ALERT:', alert.message);
+});
+
+// When navigating away from orders page
+socket.emit('leave_order');
+```
