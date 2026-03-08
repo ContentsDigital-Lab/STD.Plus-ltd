@@ -6,7 +6,8 @@ const POPULATE_FIELDS = ['recipient'];
 
 exports.getAll = async (req, res, next) => {
   try {
-    const notifications = await Notification.find().populate(POPULATE_FIELDS);
+    const filter = req.user.role === 'worker' ? { recipient: req.user._id } : {};
+    const notifications = await Notification.find(filter).populate(POPULATE_FIELDS);
     success(res, notifications);
   } catch (err) {
     next(err);
@@ -17,6 +18,9 @@ exports.getById = async (req, res, next) => {
   try {
     const notification = await Notification.findById(req.params.id).populate(POPULATE_FIELDS);
     if (!notification) return fail(res, 'Notification not found', 404);
+    if (req.user.role === 'worker' && notification.recipient._id.toString() !== req.user._id.toString()) {
+      return fail(res, 'Not authorized', 403);
+    }
     success(res, notification);
   } catch (err) {
     next(err);
@@ -37,12 +41,17 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
-    const notification = await Notification.findByIdAndUpdate(req.params.id, req.validated.body, {
+    const notification = await Notification.findById(req.params.id);
+    if (!notification) return fail(res, 'Notification not found', 404);
+    if (req.user.role === 'worker' && notification.recipient.toString() !== req.user._id.toString()) {
+      return fail(res, 'Not authorized', 403);
+    }
+
+    const updated = await Notification.findByIdAndUpdate(req.params.id, req.body, {
       returnDocument: 'after',
       runValidators: true,
     }).populate(POPULATE_FIELDS);
-    if (!notification) return fail(res, 'Notification not found', 404);
-    success(res, notification, 'Notification updated');
+    success(res, updated, 'Notification updated');
   } catch (err) {
     next(err);
   }

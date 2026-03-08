@@ -2,13 +2,14 @@ const { io } = require('socket.io-client');
 
 const API = 'http://localhost:3000';
 
-async function getToken() {
+async function getToken(username = 'admin', password = 'admin123') {
   const res = await fetch(`${API}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username, password }),
   });
   const data = await res.json();
+  if (!data.data?.token) throw new Error(`Login failed for "${username}" (${res.status}): ${data.message}`);
   return data.data.token;
 }
 
@@ -222,11 +223,54 @@ async function testDataEvents() {
   console.log(`\n=== All data event tests passed ===\n`);
 }
 
+async function testSystemAlertRBAC() {
+  console.log('=== System Alert RBAC ===\n');
+
+  const adminToken = await getToken('admin', 'admin123');
+  const managerToken = await getToken('manager1', 'manager123');
+  const workerToken = await getToken('worker1', 'worker123');
+
+  // 1. Admin emits system_alert — should broadcast
+  const adminSocket = await connect(API, '/api/socket-entry', { token: adminToken });
+  const alertPromise = waitForEvent(adminSocket, 'system_alert');
+  adminSocket.emit('system_alert', { message: 'Admin broadcast' });
+  const alertEvent = await alertPromise;
+  console.log(`1. PASS system_alert (admin) — broadcasted: "${alertEvent.message}"`);
+  adminSocket.disconnect();
+
+  // 2. Manager emits system_alert — should be blocked
+  const managerSocket = await connect(API, '/api/socket-entry', { token: managerToken });
+  const managerErrorPromise = waitForEvent(managerSocket, 'error', 3000);
+  managerSocket.emit('system_alert', { message: 'Manager broadcast' });
+  try {
+    const errData = await managerErrorPromise;
+    console.log(`2. PASS system_alert (manager) — blocked: "${errData.message}"`);
+  } catch {
+    console.log('2. FAIL system_alert (manager) — was not blocked');
+  }
+  managerSocket.disconnect();
+
+  // 3. Worker emits system_alert — should be blocked
+  const workerSocket = await connect(API, '/api/socket-entry', { token: workerToken });
+  const workerErrorPromise = waitForEvent(workerSocket, 'error', 3000);
+  workerSocket.emit('system_alert', { message: 'Worker broadcast' });
+  try {
+    const errData = await workerErrorPromise;
+    console.log(`3. PASS system_alert (worker) — blocked: "${errData.message}"`);
+  } catch {
+    console.log('3. FAIL system_alert (worker) — was not blocked');
+  }
+  workerSocket.disconnect();
+
+  console.log('\n=== All system alert RBAC tests passed ===\n');
+}
+
 async function main() {
   await testSystemEvents();
   await testJoinEvents();
   await testLeaveEvents();
   await testDataEvents();
+  await testSystemAlertRBAC();
   process.exit(0);
 }
 

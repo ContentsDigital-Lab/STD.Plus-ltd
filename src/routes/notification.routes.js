@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
+const authorize = require('../middleware/authorize');
 const notificationController = require('../controllers/notification.controller');
 
 const router = Router();
@@ -40,9 +41,9 @@ const deleteManySchema = z.object({
 
 router.get('/', auth, notificationController.getAll);
 router.get('/:id', auth, notificationController.getById);
-router.post('/', auth, validate(createSchema), notificationController.create);
-router.patch('/:id', auth, validate(updateSchema), notificationController.update);
-router.delete('/', auth, validate(deleteManySchema), notificationController.deleteMany);
-router.delete('/:id', auth, notificationController.deleteOne);
+router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), notificationController.create);
+router.patch('/:id', auth, notificationController.update);
+router.delete('/', auth, authorize('admin', 'manager'), validate(deleteManySchema), notificationController.deleteMany);
+router.delete('/:id', auth, authorize('admin', 'manager'), notificationController.deleteOne);
 
 module.exports = router;

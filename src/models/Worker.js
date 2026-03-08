@@ -24,6 +24,11 @@ const workerSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  role: {
+    type: String,
+    enum: ['admin', 'manager', 'worker'],
+    default: 'worker',
+  },
 }, { timestamps: true });
 
 workerSchema.pre('save', async function () {

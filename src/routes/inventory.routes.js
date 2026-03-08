@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
+const authorize = require('../middleware/authorize');
 const inventoryController = require('../controllers/inventory.controller');
 
 const router = Router();
@@ -32,9 +33,9 @@ const deleteManySchema = z.object({
 
 router.get('/', auth, inventoryController.getAll);
 router.get('/:id', auth, inventoryController.getById);
-router.post('/', auth, validate(createSchema), inventoryController.create);
-router.patch('/:id', auth, validate(updateSchema), inventoryController.update);
-router.delete('/', auth, validate(deleteManySchema), inventoryController.deleteMany);
-router.delete('/:id', auth, inventoryController.deleteOne);
+router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), inventoryController.create);
+router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), inventoryController.update);
+router.delete('/', auth, authorize('admin'), validate(deleteManySchema), inventoryController.deleteMany);
+router.delete('/:id', auth, authorize('admin'), inventoryController.deleteOne);
 
 module.exports = router;

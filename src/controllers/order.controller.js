@@ -6,7 +6,8 @@ const POPULATE_FIELDS = ['request', 'customer', 'material', 'claim', 'withdrawal
 
 exports.getAll = async (req, res, next) => {
   try {
-    const orders = await Order.find().populate(POPULATE_FIELDS);
+    const filter = req.user.role === 'worker' ? { assignedTo: req.user._id } : {};
+    const orders = await Order.find(filter).populate(POPULATE_FIELDS);
     success(res, orders);
   } catch (err) {
     next(err);
@@ -17,6 +18,9 @@ exports.getById = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.id).populate(POPULATE_FIELDS);
     if (!order) return fail(res, 'Order not found', 404);
+    if (req.user.role === 'worker' && order.assignedTo?._id.toString() !== req.user._id.toString()) {
+      return fail(res, 'Not authorized', 403);
+    }
     success(res, order);
   } catch (err) {
     next(err);
@@ -36,6 +40,14 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
+    if (req.user.role === 'worker') {
+      const existing = await Order.findById(req.params.id);
+      if (!existing) return fail(res, 'Order not found', 404);
+      if (existing.assignedTo?.toString() !== req.user._id.toString()) {
+        return fail(res, 'Not authorized', 403);
+      }
+    }
+
     const order = await Order.findByIdAndUpdate(req.params.id, req.validated.body, {
       returnDocument: 'after',
       runValidators: true,

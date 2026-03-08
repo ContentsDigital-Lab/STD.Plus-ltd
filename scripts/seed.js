@@ -9,7 +9,9 @@ const seed = async () => {
 
   const exists = await Worker.findOne({ username: 'admin' });
   if (exists) {
-    console.log('Admin worker already exists. Skipping.');
+    exists.role = 'admin';
+    await exists.save();
+    console.log('Admin worker already exists — updated role to "admin".');
     process.exit(0);
   }
 
@@ -18,6 +20,7 @@ const seed = async () => {
     username: 'admin',
     password: 'admin123',
     position: 'admin',
+    role: 'admin',
   });
 
   console.log('Seed complete — admin worker created');

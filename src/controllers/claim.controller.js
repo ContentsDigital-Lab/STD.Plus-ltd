@@ -6,8 +6,8 @@ const POPULATE_FIELDS = ['order', 'material', 'reportedBy', 'approvedBy'];
 
 exports.getAll = async (req, res, next) => {
   try {
-    const claims = await Claim.find()
-      .populate(POPULATE_FIELDS);
+    const filter = req.user.role === 'worker' ? { reportedBy: req.user._id } : {};
+    const claims = await Claim.find(filter).populate(POPULATE_FIELDS);
     success(res, claims);
   } catch (err) {
     next(err);
@@ -16,9 +16,11 @@ exports.getAll = async (req, res, next) => {
 
 exports.getById = async (req, res, next) => {
   try {
-    const claim = await Claim.findById(req.params.id)
-      .populate(POPULATE_FIELDS);
+    const claim = await Claim.findById(req.params.id).populate(POPULATE_FIELDS);
     if (!claim) return fail(res, 'Claim not found', 404);
+    if (req.user.role === 'worker' && claim.reportedBy._id.toString() !== req.user._id.toString()) {
+      return fail(res, 'Not authorized', 403);
+    }
     success(res, claim);
   } catch (err) {
     next(err);
@@ -41,6 +43,14 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
+    if (req.user.role === 'worker') {
+      const existing = await Claim.findById(req.params.id);
+      if (!existing) return fail(res, 'Claim not found', 404);
+      if (existing.reportedBy.toString() !== req.user._id.toString()) {
+        return fail(res, 'Not authorized', 403);
+      }
+    }
+
     const claim = await Claim.findByIdAndUpdate(req.params.id, req.validated.body, {
       new: true,
       runValidators: true,

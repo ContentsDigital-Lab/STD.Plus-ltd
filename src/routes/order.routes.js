@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
+const authorize = require('../middleware/authorize');
 const orderController = require('../controllers/order.controller');
 const claimController = require('../controllers/claim.controller');
 
@@ -57,10 +58,10 @@ const createClaimSchema = z.object({
 
 router.get('/', auth, orderController.getAll);
 router.get('/:id', auth, orderController.getById);
-router.post('/', auth, validate(createSchema), orderController.create);
+router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), orderController.create);
 router.post('/:orderId/claims', auth, validate(createClaimSchema), claimController.create);
 router.patch('/:id', auth, validate(updateSchema), orderController.update);
-router.delete('/', auth, validate(deleteManySchema), orderController.deleteMany);
-router.delete('/:id', auth, orderController.deleteOne);
+router.delete('/', auth, authorize('admin', 'manager'), validate(deleteManySchema), orderController.deleteMany);
+router.delete('/:id', auth, authorize('admin', 'manager'), orderController.deleteOne);
 
 module.exports = router;

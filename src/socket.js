@@ -57,6 +57,9 @@ const setupSocket = (httpServer) => {
     }
 
     socket.on('system_alert', (data) => {
+      if (socket.user.role !== 'admin') {
+        return socket.emit('error', { message: 'Not authorized to send system alerts' });
+      }
       console.log(`[socket] system_alert from ${socket.user.name}:`, data);
       io.emit('system_alert', data);
     });

@@ -23,8 +23,8 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { name, username, password, position } = req.validated.body;
-    const worker = await Worker.create({ name, username, password, position });
+    const { name, username, password, position, role } = req.validated.body;
+    const worker = await Worker.create({ name, username, password, position, role });
     success(res, worker, 'Worker created', 201);
   } catch (err) {
     if (err.code === 11000) {

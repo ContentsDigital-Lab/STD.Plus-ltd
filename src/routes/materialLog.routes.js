@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
+const authorize = require('../middleware/authorize');
 const materialLogController = require('../controllers/materialLog.controller');
 
 const router = Router();
@@ -42,9 +43,9 @@ const deleteManySchema = z.object({
 
 router.get('/', auth, materialLogController.getAll);
 router.get('/:id', auth, materialLogController.getById);
-router.post('/', auth, validate(createSchema), materialLogController.create);
-router.patch('/:id', auth, validate(updateSchema), materialLogController.update);
-router.delete('/', auth, validate(deleteManySchema), materialLogController.deleteMany);
-router.delete('/:id', auth, materialLogController.deleteOne);
+router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), materialLogController.create);
+router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), materialLogController.update);
+router.delete('/', auth, authorize('admin'), validate(deleteManySchema), materialLogController.deleteMany);
+router.delete('/:id', auth, authorize('admin'), materialLogController.deleteOne);
 
 module.exports = router;

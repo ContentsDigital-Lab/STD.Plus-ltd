@@ -6,7 +6,8 @@ const POPULATE_FIELDS = ['customer', 'assignedTo'];
 
 exports.getAll = async (req, res, next) => {
   try {
-    const requests = await Request.find().populate(POPULATE_FIELDS);
+    const filter = req.user.role === 'worker' ? { assignedTo: req.user._id } : {};
+    const requests = await Request.find(filter).populate(POPULATE_FIELDS);
     success(res, requests);
   } catch (err) {
     next(err);
@@ -17,6 +18,9 @@ exports.getById = async (req, res, next) => {
   try {
     const request = await Request.findById(req.params.id).populate(POPULATE_FIELDS);
     if (!request) return fail(res, 'Request not found', 404);
+    if (req.user.role === 'worker' && request.assignedTo?._id.toString() !== req.user._id.toString()) {
+      return fail(res, 'Not authorized', 403);
+    }
     success(res, request);
   } catch (err) {
     next(err);
@@ -36,6 +40,14 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
+    if (req.user.role === 'worker') {
+      const existing = await Request.findById(req.params.id);
+      if (!existing) return fail(res, 'Request not found', 404);
+      if (existing.assignedTo?.toString() !== req.user._id.toString()) {
+        return fail(res, 'Not authorized', 403);
+      }
+    }
+
     const { details, ...rest } = req.validated.body;
     const updates = { ...rest };
 

@@ -6,7 +6,8 @@ const POPULATE_FIELDS = ['order', 'withdrawnBy', 'material'];
 
 exports.getAll = async (req, res, next) => {
   try {
-    const withdrawals = await Withdrawal.find().populate(POPULATE_FIELDS);
+    const filter = req.user.role === 'worker' ? { withdrawnBy: req.user._id } : {};
+    const withdrawals = await Withdrawal.find(filter).populate(POPULATE_FIELDS);
     success(res, withdrawals);
   } catch (err) {
     next(err);
@@ -17,6 +18,9 @@ exports.getById = async (req, res, next) => {
   try {
     const withdrawal = await Withdrawal.findById(req.params.id).populate(POPULATE_FIELDS);
     if (!withdrawal) return fail(res, 'Withdrawal not found', 404);
+    if (req.user.role === 'worker' && withdrawal.withdrawnBy._id.toString() !== req.user._id.toString()) {
+      return fail(res, 'Not authorized', 403);
+    }
     success(res, withdrawal);
   } catch (err) {
     next(err);
