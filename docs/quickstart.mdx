@@ -34,16 +34,17 @@ description: Get the STD Plus server running in minutes
     | `RATE_LIMIT_MAX` | `100` | Max requests per window |
     | `MONGODB_URI` | — | MongoDB connection string |
     | `JWT_SECRET` | — | Secret key for signing JWTs |
-    | `JWT_EXPIRES_IN` | `7d` | JWT expiration time |
+    | `JWT_EXPIRES_IN` | `1d` | JWT expiration time |
   </Step>
   <Step title="Seed the database">
     ```bash
-    node scripts/seed.js
+    npm run seed
     ```
 
     This creates a default admin worker:
     - **Username:** `admin`
     - **Password:** `admin123`
+    - **Role:** `admin`
   </Step>
   <Step title="Start the server">
     ```bash
@@ -74,11 +75,20 @@ curl http://localhost:3000/api/health
 }
 ```
 
-## Testing
+## Scripts
 
 ```bash
+# Reset the database (drops all collections)
+npm run reset
+
+# Seed the admin user
+npm run seed
+
+# Test RBAC on all endpoints
+npm run test:rbac
+
 # Test WebSocket events
-node scripts/test-socket.js
+npm run test:socket
 
 # Test rate limiting
 bash scripts/test-rate-limit.sh

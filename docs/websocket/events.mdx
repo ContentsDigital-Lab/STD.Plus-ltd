@@ -120,13 +120,13 @@ socket.on('notification', (notification) => {
 
 ### System Alert
 
-Broadcast to **all** connected clients. Can be triggered by any authenticated user via the WebSocket.
+Broadcast to **all** connected clients. Only **admin** users can emit this event. Non-admin users will receive an error.
 
 ```javascript
-// Sending
+// Sending (admin only)
 socket.emit('system_alert', { message: 'Server maintenance in 10 minutes' });
 
-// Receiving
+// Receiving (all users)
 socket.on('system_alert', (data) => {
   console.log(data.message);
 });
@@ -134,7 +134,11 @@ socket.on('system_alert', (data) => {
 
 | Event | Direction | Emitted to | Triggered by |
 |---|---|---|---|
-| `system_alert` | INBOUND | All connected clients | Any authenticated socket client |
+| `system_alert` | INBOUND | All connected clients | **Admin** socket client only |
+
+<Note>
+  If a non-admin user attempts to emit `system_alert`, they will receive an `error` event with `{ message: "Not authorized to send system alerts" }`.
+</Note>
 
 ## Full Example
 

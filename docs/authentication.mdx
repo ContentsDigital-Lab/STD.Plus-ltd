@@ -7,6 +7,34 @@ description: How authentication works in the STD Plus API
 
 STD Plus uses **JWT Bearer Token** authentication. All protected endpoints require a valid token in the `Authorization` header.
 
+## Roles & Authorization
+
+Every worker has a **role** that determines what they can do:
+
+| Role | Description |
+|---|---|
+| `admin` | Full access to all resources and actions |
+| `manager` | Can create and update most resources, but cannot manage workers or perform certain deletes |
+| `worker` | Can view resources and update their own assigned items only |
+
+### Permission Matrix
+
+| Resource | View | Create | Update | Delete |
+|---|---|---|---|---|
+| Workers | all | admin | admin | admin |
+| Customers | all | admin, manager | admin, manager | admin |
+| Materials | all | admin, manager | admin, manager | admin |
+| Inventories | all | admin, manager | admin, manager | admin |
+| Stations | all | admin, manager | admin, manager | admin |
+| Orders | all | admin, manager | all (own) | admin, manager |
+| Requests | all | all | all (own) | admin, manager |
+| Withdrawals | all | all | admin, manager | admin, manager |
+| Claims | all | all | all (own) | admin, manager |
+| Material Logs | all | admin, manager | admin, manager | admin |
+| Notifications | all | admin, manager | all (own) | admin, manager |
+
+**"all (own)"** means workers can only update resources assigned to or owned by them.
+
 ## Getting a Token
 
 Send a login request with valid credentials:
@@ -41,7 +69,8 @@ const token = data.token;
       "_id": "69a7fe4578410c57fad056f2",
       "name": "Admin",
       "username": "admin",
-      "position": "admin"
+      "position": "admin",
+      "role": "admin"
     }
   }
 }
@@ -61,7 +90,7 @@ curl http://localhost:3000/api/workers \
 | Property | Value |
 |---|---|
 | Algorithm | HS256 |
-| Expiration | Configurable via `JWT_EXPIRES_IN` (default: `7d`) |
+| Expiration | Configurable via `JWT_EXPIRES_IN` (default: `1d`) |
 | Payload | `{ id: "<worker_id>" }` |
 
 ## Error Responses
@@ -80,6 +109,14 @@ curl http://localhost:3000/api/workers \
     {
       "success": false,
       "message": "Invalid or expired token"
+    }
+    ```
+  </Accordion>
+  <Accordion title="Not authorized for this action (403)">
+    ```json
+    {
+      "success": false,
+      "message": "Not authorized for this action"
     }
     ```
   </Accordion>

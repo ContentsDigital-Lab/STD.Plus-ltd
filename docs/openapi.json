@@ -76,6 +76,7 @@
           "name": { "type": "string" },
           "username": { "type": "string" },
           "position": { "type": "string" },
+          "role": { "type": "string", "enum": ["admin", "manager", "worker"] },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
         }
@@ -87,7 +88,8 @@
           "name": { "type": "string", "minLength": 1 },
           "username": { "type": "string", "minLength": 1 },
           "password": { "type": "string", "minLength": 6 },
-          "position": { "type": "string", "minLength": 1 }
+          "position": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "enum": ["admin", "manager", "worker"], "default": "worker" }
         }
       },
       "WorkerUpdateBody": {
@@ -96,7 +98,8 @@
           "name": { "type": "string", "minLength": 1 },
           "username": { "type": "string", "minLength": 1 },
           "password": { "type": "string", "minLength": 6 },
-          "position": { "type": "string", "minLength": 1 }
+          "position": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "enum": ["admin", "manager", "worker"] }
         }
       },
       "Customer": {
@@ -500,7 +503,6 @@
       "NotificationUpdateBody": {
         "type": "object",
         "properties": {
-          "recipient": { "type": "string", "minLength": 1 },
           "type": { "type": "string", "minLength": 1 },
           "title": { "type": "string", "minLength": 1 },
           "message": { "type": "string" },
@@ -542,6 +544,14 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" }
+          }
+        }
+      },
+      "403": {
+        "description": "Not authorized for this action",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
           }
         }
       },
@@ -745,6 +755,7 @@
       "post": {
         "tags": ["Workers"],
         "summary": "Create a worker",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -766,12 +777,14 @@
           },
           "400": { "$ref": "#/components/responses/400" },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "409": { "description": "Username already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "delete": {
         "tags": ["Workers"],
         "summary": "Delete multiple workers",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -791,7 +804,8 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -822,6 +836,7 @@
       "patch": {
         "tags": ["Workers"],
         "summary": "Update a worker",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": {
@@ -843,6 +858,7 @@
             }
           },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" },
           "409": { "description": "Username already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
@@ -850,11 +866,13 @@
       "delete": {
         "tags": ["Workers"],
         "summary": "Delete a worker",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Worker deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -872,22 +890,26 @@
       "post": {
         "tags": ["Customers"],
         "summary": "Create a customer",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CustomerCreateBody" } } } },
         "responses": {
           "201": { "description": "Customer created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Customer" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "delete": {
         "tags": ["Customers"],
         "summary": "Delete multiple customers",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Customers deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -906,23 +928,27 @@
       "patch": {
         "tags": ["Customers"],
         "summary": "Update a customer",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CustomerUpdateBody" } } } },
         "responses": {
           "200": { "description": "Customer updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Customer" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Customers"],
         "summary": "Delete a customer",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Customer deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -940,22 +966,26 @@
       "post": {
         "tags": ["Materials"],
         "summary": "Create a material",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialCreateBody" } } } },
         "responses": {
           "201": { "description": "Material created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Material" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "delete": {
         "tags": ["Materials"],
         "summary": "Delete multiple materials",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Materials deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -974,23 +1004,27 @@
       "patch": {
         "tags": ["Materials"],
         "summary": "Update a material",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialUpdateBody" } } } },
         "responses": {
           "200": { "description": "Material updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Material" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Materials"],
         "summary": "Delete a material",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Material deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -1008,22 +1042,26 @@
       "post": {
         "tags": ["Inventories"],
         "summary": "Create an inventory",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InventoryCreateBody" } } } },
         "responses": {
           "201": { "description": "Inventory created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Inventory" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "delete": {
         "tags": ["Inventories"],
         "summary": "Delete multiple inventories",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Inventories deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -1042,23 +1080,27 @@
       "patch": {
         "tags": ["Inventories"],
         "summary": "Update an inventory",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InventoryUpdateBody" } } } },
         "responses": {
           "200": { "description": "Inventory updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Inventory" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Inventories"],
         "summary": "Delete an inventory",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Inventory deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -1076,22 +1118,26 @@
       "post": {
         "tags": ["Material Logs"],
         "summary": "Create a material log",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialLogCreateBody" } } } },
         "responses": {
           "201": { "description": "Material log created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/MaterialLog" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "delete": {
         "tags": ["Material Logs"],
         "summary": "Delete multiple material logs",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Material logs deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -1110,23 +1156,27 @@
       "patch": {
         "tags": ["Material Logs"],
         "summary": "Update a material log",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialLogUpdateBody" } } } },
         "responses": {
           "200": { "description": "Material log updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/MaterialLog" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Material Logs"],
         "summary": "Delete a material log",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Material log deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -1155,11 +1205,13 @@
       "delete": {
         "tags": ["Requests"],
         "summary": "Delete multiple requests",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Requests deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -1178,23 +1230,27 @@
       "patch": {
         "tags": ["Requests"],
         "summary": "Update a request",
+        "description": "Workers can only update their own assigned resources.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RequestUpdateBody" } } } },
         "responses": {
           "200": { "description": "Request updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Request" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Requests"],
         "summary": "Delete a request",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Request deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -1223,11 +1279,13 @@
       "delete": {
         "tags": ["Withdrawals"],
         "summary": "Delete multiple withdrawals",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Withdrawals deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -1246,23 +1304,27 @@
       "patch": {
         "tags": ["Withdrawals"],
         "summary": "Update a withdrawal",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WithdrawalUpdateBody" } } } },
         "responses": {
           "200": { "description": "Withdrawal updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Withdrawal" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Withdrawals"],
         "summary": "Delete a withdrawal",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Withdrawal deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -1280,22 +1342,26 @@
       "post": {
         "tags": ["Orders"],
         "summary": "Create an order",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderCreateBody" } } } },
         "responses": {
           "201": { "description": "Order created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Order" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "delete": {
         "tags": ["Orders"],
         "summary": "Delete multiple orders",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Orders deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -1314,23 +1380,27 @@
       "patch": {
         "tags": ["Orders"],
         "summary": "Update an order",
+        "description": "Workers can only update their own assigned resources.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderUpdateBody" } } } },
         "responses": {
           "200": { "description": "Order updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Order" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Orders"],
         "summary": "Delete an order",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Order deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -1370,11 +1440,13 @@
       "delete": {
         "tags": ["Claims"],
         "summary": "Delete multiple claims",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Claims deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -1393,23 +1465,27 @@
       "patch": {
         "tags": ["Claims"],
         "summary": "Update a claim",
+        "description": "Workers can only update their own assigned resources.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClaimUpdateBody" } } } },
         "responses": {
           "200": { "description": "Claim updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Claim" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Claims"],
         "summary": "Delete a claim",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Claim deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -1427,22 +1503,26 @@
       "post": {
         "tags": ["Stations"],
         "summary": "Create a station",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationCreateBody" } } } },
         "responses": {
           "201": { "description": "Station created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Station" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "delete": {
         "tags": ["Stations"],
         "summary": "Delete multiple stations",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Stations deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -1461,23 +1541,27 @@
       "patch": {
         "tags": ["Stations"],
         "summary": "Update a station",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationUpdateBody" } } } },
         "responses": {
           "200": { "description": "Station updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Station" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Stations"],
         "summary": "Delete a station",
+        "description": "Requires **admin** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Station deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
@@ -1495,22 +1579,26 @@
       "post": {
         "tags": ["Notifications"],
         "summary": "Create a notification",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationCreateBody" } } } },
         "responses": {
           "201": { "description": "Notification created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Notification" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "delete": {
         "tags": ["Notifications"],
         "summary": "Delete multiple notifications",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
           "200": { "description": "Notifications deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       }
     },
@@ -1529,23 +1617,27 @@
       "patch": {
         "tags": ["Notifications"],
         "summary": "Update a notification",
+        "description": "Workers can only update their own assigned resources.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationUpdateBody" } } } },
         "responses": {
           "200": { "description": "Notification updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Notification" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "delete": {
         "tags": ["Notifications"],
         "summary": "Delete a notification",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Notification deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       }
