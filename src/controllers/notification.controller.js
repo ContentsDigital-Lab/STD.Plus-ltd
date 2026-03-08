@@ -47,7 +47,7 @@ exports.update = async (req, res, next) => {
       return fail(res, 'Not authorized', 403);
     }
 
-    const updated = await Notification.findByIdAndUpdate(req.params.id, req.body, {
+    const updated = await Notification.findByIdAndUpdate(req.params.id, req.validated.body, {
       returnDocument: 'after',
       runValidators: true,
     }).populate(POPULATE_FIELDS);

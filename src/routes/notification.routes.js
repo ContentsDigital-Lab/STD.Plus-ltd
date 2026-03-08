@@ -22,7 +22,6 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   body: z.object({
-    recipient: z.string().min(1).optional(),
     type: z.string().min(1).optional(),
     title: z.string().min(1).optional(),
     message: z.string().optional(),
@@ -42,7 +41,7 @@ const deleteManySchema = z.object({
 router.get('/', auth, notificationController.getAll);
 router.get('/:id', auth, notificationController.getById);
 router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), notificationController.create);
-router.patch('/:id', auth, notificationController.update);
+router.patch('/:id', auth, validate(updateSchema), notificationController.update);
 router.delete('/', auth, authorize('admin', 'manager'), validate(deleteManySchema), notificationController.deleteMany);
 router.delete('/:id', auth, authorize('admin', 'manager'), notificationController.deleteOne);
 
