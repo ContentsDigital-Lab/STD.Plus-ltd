@@ -1,0 +1,144 @@
+---
+title: Authentication
+description: How authentication works in the STD Plus API
+---
+
+## Overview
+
+STD Plus uses **JWT Bearer Token** authentication. All protected endpoints require a valid token in the `Authorization` header.
+
+## Roles & Authorization
+
+Every worker has a **role** that determines what they can do:
+
+| Role | Description |
+|---|---|
+| `admin` | Full access to all resources and actions |
+| `manager` | Can create and update most resources, but cannot manage workers or perform certain deletes |
+| `worker` | Can view resources and update their own assigned items only |
+
+### Permission Matrix
+
+| Resource | View | Create | Update | Delete |
+|---|---|---|---|---|
+| Workers | all | admin | admin | admin |
+| Customers | all | admin, manager | admin, manager | admin |
+| Materials | all | admin, manager | admin, manager | admin |
+| Inventories | all | admin, manager | admin, manager | admin |
+| Stations | all | admin, manager | admin, manager | admin |
+| Orders | all | admin, manager | all (own) | admin, manager |
+| Requests | all | all | all (own) | admin, manager |
+| Withdrawals | all | all | admin, manager | admin, manager |
+| Claims | all | all | all (own) | admin, manager |
+| Material Logs | all | admin, manager | admin, manager | admin |
+| Notifications | all | admin, manager | all (own) | admin, manager |
+
+**"all (own)"** means workers can only update resources assigned to or owned by them.
+
+## Getting a Token
+
+Send a login request with valid credentials:
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}'
+```
+
+```javascript JavaScript
+const res = await fetch('http://localhost:3000/api/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+});
+const { data } = await res.json();
+const token = data.token;
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "worker": {
+      "_id": "69a7fe4578410c57fad056f2",
+      "name": "Admin",
+      "username": "admin",
+      "position": "admin",
+      "role": "admin"
+    }
+  }
+}
+```
+
+## Using the Token
+
+Include the token in every protected request:
+
+```bash
+curl http://localhost:3000/api/workers \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
+```
+
+## Token Details
+
+| Property | Value |
+|---|---|
+| Algorithm | HS256 |
+| Expiration | Configurable via `JWT_EXPIRES_IN` (default: `1d`) |
+| Payload | `{ id: "<worker_id>" }` |
+
+## Error Responses
+
+<AccordionGroup>
+  <Accordion title="Missing token (401)">
+    ```json
+    {
+      "success": false,
+      "message": "Not authenticated"
+    }
+    ```
+  </Accordion>
+  <Accordion title="Invalid or expired token (401)">
+    ```json
+    {
+      "success": false,
+      "message": "Invalid or expired token"
+    }
+    ```
+  </Accordion>
+  <Accordion title="Not authorized for this action (403)">
+    ```json
+    {
+      "success": false,
+      "message": "Not authorized for this action"
+    }
+    ```
+  </Accordion>
+  <Accordion title="Invalid credentials (401)">
+    ```json
+    {
+      "success": false,
+      "message": "Invalid username or password"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## WebSocket Authentication
+
+The same JWT is used for WebSocket connections. Pass it during the Socket.IO handshake:
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  path: '/api/socket-entry',
+  auth: { token: 'your-jwt-token' },
+});
+```

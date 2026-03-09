@@ -1,0 +1,1661 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "STD Plus API",
+    "version": "1.0.0",
+    "description": "Backend API for STD Plus — materials, inventory, orders, and workflow management."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string" },
+          "data": {}
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string" }
+        }
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string", "example": "Validation failed" },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": { "type": "string" },
+                "message": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "DeleteManyBody": {
+        "type": "object",
+        "required": ["ids"],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          }
+        }
+      },
+      "DeleteManyResult": {
+        "type": "object",
+        "properties": {
+          "deletedCount": { "type": "integer" }
+        }
+      },
+      "Worker": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "username": { "type": "string" },
+          "position": { "type": "string" },
+          "role": { "type": "string", "enum": ["admin", "manager", "worker"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "WorkerCreateBody": {
+        "type": "object",
+        "required": ["name", "username", "password", "position"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "username": { "type": "string", "minLength": 1 },
+          "password": { "type": "string", "minLength": 6 },
+          "position": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "enum": ["admin", "manager", "worker"], "default": "worker" }
+        }
+      },
+      "WorkerUpdateBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "username": { "type": "string", "minLength": 1 },
+          "password": { "type": "string", "minLength": 6 },
+          "position": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "enum": ["admin", "manager", "worker"] }
+        }
+      },
+      "Customer": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "address": { "type": "string" },
+          "phone": { "type": "string" },
+          "discount": { "type": "number", "minimum": 0, "maximum": 100 },
+          "notes": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CustomerCreateBody": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "address": { "type": "string" },
+          "phone": { "type": "string" },
+          "discount": { "type": "number", "minimum": 0, "maximum": 100 },
+          "notes": { "type": "string" }
+        }
+      },
+      "CustomerUpdateBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "address": { "type": "string" },
+          "phone": { "type": "string" },
+          "discount": { "type": "number", "minimum": 0, "maximum": 100 },
+          "notes": { "type": "string" }
+        }
+      },
+      "SpecDetails": {
+        "type": "object",
+        "properties": {
+          "thickness": { "type": "string" },
+          "color": { "type": "string" },
+          "glassType": { "type": "string" }
+        }
+      },
+      "Material": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "unit": { "type": "string" },
+          "reorderPoint": { "type": "number" },
+          "specDetails": { "$ref": "#/components/schemas/SpecDetails" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "MaterialCreateBody": {
+        "type": "object",
+        "required": ["name", "unit", "reorderPoint"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "unit": { "type": "string", "minLength": 1 },
+          "reorderPoint": { "type": "number", "minimum": 0 },
+          "specDetails": { "$ref": "#/components/schemas/SpecDetails" }
+        }
+      },
+      "MaterialUpdateBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "unit": { "type": "string", "minLength": 1 },
+          "reorderPoint": { "type": "number", "minimum": 0 },
+          "specDetails": { "$ref": "#/components/schemas/SpecDetails" }
+        }
+      },
+      "Inventory": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
+          "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "quantity": { "type": "number" },
+          "location": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "InventoryCreateBody": {
+        "type": "object",
+        "required": ["material", "stockType", "quantity", "location"],
+        "properties": {
+          "material": { "type": "string", "minLength": 1 },
+          "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "quantity": { "type": "number", "minimum": 0 },
+          "location": { "type": "string", "minLength": 1 }
+        }
+      },
+      "InventoryUpdateBody": {
+        "type": "object",
+        "properties": {
+          "material": { "type": "string", "minLength": 1 },
+          "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "quantity": { "type": "number", "minimum": 0 },
+          "location": { "type": "string", "minLength": 1 }
+        }
+      },
+      "RequestDetails": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "estimatedPrice": { "type": "number" },
+          "quantity": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "Request": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "details": { "$ref": "#/components/schemas/RequestDetails" },
+          "customer": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Customer" }] },
+          "deadline": { "type": "string", "format": "date-time", "nullable": true },
+          "deliveryLocation": { "type": "string" },
+          "assignedTo": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
+          "expectedDeliveryDate": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RequestCreateBody": {
+        "type": "object",
+        "required": ["details", "customer"],
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": ["type", "quantity"],
+            "properties": {
+              "type": { "type": "string", "minLength": 1 },
+              "estimatedPrice": { "type": "number", "minimum": 0 },
+              "quantity": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "customer": { "type": "string", "minLength": 1 },
+          "deadline": { "type": "string", "format": "date-time" },
+          "deliveryLocation": { "type": "string" },
+          "assignedTo": { "type": "string", "minLength": 1 },
+          "expectedDeliveryDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RequestUpdateBody": {
+        "type": "object",
+        "properties": {
+          "details": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "minLength": 1 },
+              "estimatedPrice": { "type": "number", "minimum": 0 },
+              "quantity": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "customer": { "type": "string", "minLength": 1 },
+          "deadline": { "type": "string", "format": "date-time" },
+          "deliveryLocation": { "type": "string" },
+          "assignedTo": { "type": "string", "minLength": 1 },
+          "expectedDeliveryDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "request": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Request" }] },
+          "priority": { "type": "number" },
+          "customer": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Customer" }] },
+          "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "stations": { "type": "array", "items": { "type": "string" } },
+          "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
+          "claim": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Claim" }] },
+          "withdrawal": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Withdrawal" }] },
+          "assignedTo": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "OrderCreateBody": {
+        "type": "object",
+        "required": ["customer", "material", "quantity"],
+        "properties": {
+          "request": { "type": "string", "minLength": 1 },
+          "priority": { "type": "number", "minimum": 0 },
+          "customer": { "type": "string", "minLength": 1 },
+          "material": { "type": "string", "minLength": 1 },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "stations": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
+          "claim": { "type": "string", "minLength": 1 },
+          "withdrawal": { "type": "string", "minLength": 1 },
+          "assignedTo": { "type": "string", "minLength": 1 }
+        }
+      },
+      "OrderUpdateBody": {
+        "type": "object",
+        "properties": {
+          "request": { "type": "string", "minLength": 1 },
+          "priority": { "type": "number", "minimum": 0 },
+          "customer": { "type": "string", "minLength": 1 },
+          "material": { "type": "string", "minLength": 1 },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "stations": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
+          "claim": { "type": "string", "minLength": 1 },
+          "withdrawal": { "type": "string", "minLength": 1 },
+          "assignedTo": { "type": "string", "minLength": 1 }
+        }
+      },
+      "Withdrawal": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }] },
+          "withdrawnBy": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
+          "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "withdrawnDate": { "type": "string", "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "WithdrawalCreateBody": {
+        "type": "object",
+        "required": ["withdrawnBy", "material", "quantity", "stockType"],
+        "properties": {
+          "order": { "type": "string", "minLength": 1 },
+          "withdrawnBy": { "type": "string", "minLength": 1 },
+          "material": { "type": "string", "minLength": 1 },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "withdrawnDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "WithdrawalUpdateBody": {
+        "type": "object",
+        "properties": {
+          "order": { "type": "string", "minLength": 1 },
+          "withdrawnBy": { "type": "string", "minLength": 1 },
+          "material": { "type": "string", "minLength": 1 },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "withdrawnDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Claim": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "order": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Order" }] },
+          "source": { "type": "string", "enum": ["customer", "worker"] },
+          "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
+          "description": { "type": "string" },
+          "decision": { "type": "string", "enum": ["destroy", "keep"], "nullable": true },
+          "reportedBy": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
+          "approvedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
+          "claimDate": { "type": "string", "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ClaimCreateBody": {
+        "type": "object",
+        "required": ["source", "material", "description", "reportedBy"],
+        "properties": {
+          "source": { "type": "string", "enum": ["customer", "worker"] },
+          "material": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "decision": { "type": "string", "enum": ["destroy", "keep"] },
+          "reportedBy": { "type": "string", "minLength": 1 },
+          "approvedBy": { "type": "string", "minLength": 1 },
+          "claimDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ClaimUpdateBody": {
+        "type": "object",
+        "properties": {
+          "source": { "type": "string", "enum": ["customer", "worker"] },
+          "material": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "decision": { "type": "string", "enum": ["destroy", "keep"] },
+          "reportedBy": { "type": "string", "minLength": 1 },
+          "approvedBy": { "type": "string", "minLength": 1 },
+          "claimDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Station": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "workType": { "type": "string" },
+          "variables": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "StationCreateBody": {
+        "type": "object",
+        "required": ["name", "workType"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "workType": { "type": "string", "minLength": 1 },
+          "variables": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "notes": { "type": "string" }
+        }
+      },
+      "StationUpdateBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "workType": { "type": "string", "minLength": 1 },
+          "variables": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "notes": { "type": "string" }
+        }
+      },
+      "MaterialLog": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
+          "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut"] },
+          "referenceId": { "type": "string", "nullable": true },
+          "referenceType": { "type": "string", "enum": ["claim", "withdrawal"], "nullable": true },
+          "quantityChanged": { "type": "number" },
+          "totalPrice": { "type": "number" },
+          "stockType": { "type": "string", "enum": ["Raw", "Reuse"], "nullable": true },
+          "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }] },
+          "parentLog": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/MaterialLog" }] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "MaterialLogCreateBody": {
+        "type": "object",
+        "required": ["material", "actionType", "quantityChanged"],
+        "properties": {
+          "material": { "type": "string", "minLength": 1 },
+          "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut"] },
+          "referenceId": { "type": "string", "minLength": 1 },
+          "referenceType": { "type": "string", "enum": ["claim", "withdrawal"] },
+          "quantityChanged": { "type": "number" },
+          "totalPrice": { "type": "number", "minimum": 0 },
+          "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "order": { "type": "string", "minLength": 1 },
+          "parentLog": { "type": "string", "minLength": 1 }
+        }
+      },
+      "MaterialLogUpdateBody": {
+        "type": "object",
+        "properties": {
+          "material": { "type": "string", "minLength": 1 },
+          "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut"] },
+          "referenceId": { "type": "string", "minLength": 1 },
+          "referenceType": { "type": "string", "enum": ["claim", "withdrawal"] },
+          "quantityChanged": { "type": "number" },
+          "totalPrice": { "type": "number", "minimum": 0 },
+          "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "order": { "type": "string", "minLength": 1 },
+          "parentLog": { "type": "string", "minLength": 1 }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "recipient": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
+          "type": { "type": "string" },
+          "title": { "type": "string" },
+          "message": { "type": "string" },
+          "referenceId": { "type": "string", "nullable": true },
+          "referenceType": { "type": "string", "nullable": true },
+          "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+          "readStatus": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "NotificationCreateBody": {
+        "type": "object",
+        "required": ["recipient", "type", "title"],
+        "properties": {
+          "recipient": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "message": { "type": "string" },
+          "referenceId": { "type": "string", "minLength": 1 },
+          "referenceType": { "type": "string", "minLength": 1 },
+          "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+          "readStatus": { "type": "boolean" }
+        }
+      },
+      "NotificationUpdateBody": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "message": { "type": "string" },
+          "referenceId": { "type": "string", "minLength": 1 },
+          "referenceType": { "type": "string", "minLength": 1 },
+          "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+          "readStatus": { "type": "boolean" }
+        }
+      }
+    },
+    "parameters": {
+      "IdParam": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "Resource ID"
+      }
+    },
+    "responses": {
+      "401": {
+        "description": "Not authenticated",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "404": {
+        "description": "Not found",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "400": {
+        "description": "Validation failed",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" }
+          }
+        }
+      },
+      "403": {
+        "description": "Not authorized for this action",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "429": {
+        "description": "Rate limited",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Server is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "status": { "type": "string", "example": "healthy" },
+                            "uptime": { "type": "integer" },
+                            "timestamp": { "type": "string", "format": "date-time" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login with username and password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": { "type": "string", "minLength": 1 },
+                  "password": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "token": { "type": "string" },
+                            "worker": { "$ref": "#/components/schemas/Worker" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Logged out",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current worker profile",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Current worker",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Worker" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "patch": {
+        "tags": ["Auth"],
+        "summary": "Update own profile",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 },
+                  "username": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Worker" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+    "/api/workers": {
+      "get": {
+        "tags": ["Workers"],
+        "summary": "List all workers",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "List of workers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Worker" } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Workers"],
+        "summary": "Create a worker",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkerCreateBody" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Worker created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Worker" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "description": "Username already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["Workers"],
+        "summary": "Delete multiple workers",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Workers deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/workers/{id}": {
+      "get": {
+        "tags": ["Workers"],
+        "summary": "Get worker by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "Worker found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Worker" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Workers"],
+        "summary": "Update a worker",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkerUpdateBody" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Worker updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Worker" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "description": "Username already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["Workers"],
+        "summary": "Delete a worker",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Worker deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/customers": {
+      "get": {
+        "tags": ["Customers"],
+        "summary": "List all customers",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of customers", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Customer" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Customers"],
+        "summary": "Create a customer",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CustomerCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Customer created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Customer" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Customers"],
+        "summary": "Delete multiple customers",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Customers deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/customers/{id}": {
+      "get": {
+        "tags": ["Customers"],
+        "summary": "Get customer by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Customer found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Customer" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Customers"],
+        "summary": "Update a customer",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CustomerUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Customer updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Customer" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Customers"],
+        "summary": "Delete a customer",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Customer deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/materials": {
+      "get": {
+        "tags": ["Materials"],
+        "summary": "List all materials",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of materials", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Material" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Materials"],
+        "summary": "Create a material",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Material created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Material" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Materials"],
+        "summary": "Delete multiple materials",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Materials deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/materials/{id}": {
+      "get": {
+        "tags": ["Materials"],
+        "summary": "Get material by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Material found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Material" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Materials"],
+        "summary": "Update a material",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Material updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Material" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Materials"],
+        "summary": "Delete a material",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Material deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/inventories": {
+      "get": {
+        "tags": ["Inventories"],
+        "summary": "List all inventories",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of inventories", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Inventory" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Inventories"],
+        "summary": "Create an inventory",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InventoryCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Inventory created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Inventory" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Inventories"],
+        "summary": "Delete multiple inventories",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Inventories deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/inventories/{id}": {
+      "get": {
+        "tags": ["Inventories"],
+        "summary": "Get inventory by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Inventory found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Inventory" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Inventories"],
+        "summary": "Update an inventory",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InventoryUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Inventory updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Inventory" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Inventories"],
+        "summary": "Delete an inventory",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Inventory deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/material-logs": {
+      "get": {
+        "tags": ["Material Logs"],
+        "summary": "List all material logs",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of material logs", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/MaterialLog" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Material Logs"],
+        "summary": "Create a material log",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialLogCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Material log created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/MaterialLog" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Material Logs"],
+        "summary": "Delete multiple material logs",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Material logs deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/material-logs/{id}": {
+      "get": {
+        "tags": ["Material Logs"],
+        "summary": "Get material log by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Material log found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/MaterialLog" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Material Logs"],
+        "summary": "Update a material log",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialLogUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Material log updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/MaterialLog" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Material Logs"],
+        "summary": "Delete a material log",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Material log deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/requests": {
+      "get": {
+        "tags": ["Requests"],
+        "summary": "List all requests",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of requests", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Request" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Requests"],
+        "summary": "Create a request",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RequestCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Request created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Request" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "delete": {
+        "tags": ["Requests"],
+        "summary": "Delete multiple requests",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Requests deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/requests/{id}": {
+      "get": {
+        "tags": ["Requests"],
+        "summary": "Get request by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Request found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Request" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Requests"],
+        "summary": "Update a request",
+        "description": "Workers can only update their own assigned resources.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RequestUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Request updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Request" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Requests"],
+        "summary": "Delete a request",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Request deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/withdrawals": {
+      "get": {
+        "tags": ["Withdrawals"],
+        "summary": "List all withdrawals",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of withdrawals", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Withdrawal" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Withdrawals"],
+        "summary": "Create a withdrawal",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WithdrawalCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Withdrawal created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Withdrawal" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "delete": {
+        "tags": ["Withdrawals"],
+        "summary": "Delete multiple withdrawals",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Withdrawals deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/withdrawals/{id}": {
+      "get": {
+        "tags": ["Withdrawals"],
+        "summary": "Get withdrawal by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Withdrawal found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Withdrawal" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Withdrawals"],
+        "summary": "Update a withdrawal",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WithdrawalUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Withdrawal updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Withdrawal" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Withdrawals"],
+        "summary": "Delete a withdrawal",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Withdrawal deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/orders": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "List all orders",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of orders", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Create an order",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Order created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Order" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Orders"],
+        "summary": "Delete multiple orders",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Orders deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/orders/{id}": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "Get order by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Order found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Order" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Orders"],
+        "summary": "Update an order",
+        "description": "Workers can only update their own assigned resources.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Order updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Order" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Orders"],
+        "summary": "Delete an order",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Order deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/orders/{id}/claims": {
+      "post": {
+        "tags": ["Claims"],
+        "summary": "Create a claim for an order",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Order ID"
+          }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClaimCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Claim created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Claim" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+    "/api/claims": {
+      "get": {
+        "tags": ["Claims"],
+        "summary": "List all claims",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of claims", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Claim" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "delete": {
+        "tags": ["Claims"],
+        "summary": "Delete multiple claims",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Claims deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/claims/{id}": {
+      "get": {
+        "tags": ["Claims"],
+        "summary": "Get claim by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Claim found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Claim" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Claims"],
+        "summary": "Update a claim",
+        "description": "Workers can only update their own assigned resources.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClaimUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Claim updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Claim" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Claims"],
+        "summary": "Delete a claim",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Claim deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/stations": {
+      "get": {
+        "tags": ["Stations"],
+        "summary": "List all stations",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of stations", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Station" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Stations"],
+        "summary": "Create a station",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Station created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Station" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Stations"],
+        "summary": "Delete multiple stations",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Stations deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/stations/{id}": {
+      "get": {
+        "tags": ["Stations"],
+        "summary": "Get station by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Station found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Station" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Stations"],
+        "summary": "Update a station",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Station updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Station" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Stations"],
+        "summary": "Delete a station",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Station deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "List all notifications",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of notifications", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Notification" } } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Notifications"],
+        "summary": "Create a notification",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Notification created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Notification" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Notifications"],
+        "summary": "Delete multiple notifications",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Notifications deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/notifications/{id}": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get notification by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Notification found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Notification" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Update a notification",
+        "description": "Workers can only update their own assigned resources.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Notification updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Notification" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Notifications"],
+        "summary": "Delete a notification",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Notification deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "Workers" },
+    { "name": "Customers" },
+    { "name": "Materials" },
+    { "name": "Inventories" },
+    { "name": "Material Logs" },
+    { "name": "Requests" },
+    { "name": "Withdrawals" },
+    { "name": "Orders" },
+    { "name": "Claims" },
+    { "name": "Stations" },
+    { "name": "Notifications" }
+  ]
+}

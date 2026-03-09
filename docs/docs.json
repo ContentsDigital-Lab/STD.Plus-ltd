@@ -1,0 +1,177 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "STD Plus",
+  "colors": {
+    "primary": "#0D9373",
+    "light": "#07C983",
+    "dark": "#0D9373"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": ["index", "quickstart", "authentication"]
+          },
+          {
+            "group": "WebSocket",
+            "pages": ["websocket/overview", "websocket/events"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "openapi": "openapi.json",
+        "groups": [
+          {
+            "group": "Health",
+            "pages": ["api-reference/health/health-check"]
+          },
+          {
+            "group": "Auth",
+            "pages": [
+              "api-reference/auth/login-with-username-and-password",
+              "api-reference/auth/logout",
+              "api-reference/auth/get-current-worker-profile",
+              "api-reference/auth/update-own-profile"
+            ]
+          },
+          {
+            "group": "Workers",
+            "pages": [
+              "api-reference/workers/list-all-workers",
+              "api-reference/workers/create-a-worker",
+              "api-reference/workers/delete-multiple-workers",
+              "api-reference/workers/get-worker-by-id",
+              "api-reference/workers/update-a-worker",
+              "api-reference/workers/delete-a-worker"
+            ]
+          },
+          {
+            "group": "Customers",
+            "pages": [
+              "api-reference/customers/list-all-customers",
+              "api-reference/customers/create-a-customer",
+              "api-reference/customers/delete-multiple-customers",
+              "api-reference/customers/get-customer-by-id",
+              "api-reference/customers/update-a-customer",
+              "api-reference/customers/delete-a-customer"
+            ]
+          },
+          {
+            "group": "Materials",
+            "pages": [
+              "api-reference/materials/list-all-materials",
+              "api-reference/materials/create-a-material",
+              "api-reference/materials/delete-multiple-materials",
+              "api-reference/materials/get-material-by-id",
+              "api-reference/materials/update-a-material",
+              "api-reference/materials/delete-a-material"
+            ]
+          },
+          {
+            "group": "Inventories",
+            "pages": [
+              "api-reference/inventories/list-all-inventories",
+              "api-reference/inventories/create-an-inventory",
+              "api-reference/inventories/delete-multiple-inventories",
+              "api-reference/inventories/get-inventory-by-id",
+              "api-reference/inventories/update-an-inventory",
+              "api-reference/inventories/delete-an-inventory"
+            ]
+          },
+          {
+            "group": "Material Logs",
+            "pages": [
+              "api-reference/material-logs/list-all-material-logs",
+              "api-reference/material-logs/create-a-material-log",
+              "api-reference/material-logs/delete-multiple-material-logs",
+              "api-reference/material-logs/get-material-log-by-id",
+              "api-reference/material-logs/update-a-material-log",
+              "api-reference/material-logs/delete-a-material-log"
+            ]
+          },
+          {
+            "group": "Requests",
+            "pages": [
+              "api-reference/requests/list-all-requests",
+              "api-reference/requests/create-a-request",
+              "api-reference/requests/delete-multiple-requests",
+              "api-reference/requests/get-request-by-id",
+              "api-reference/requests/update-a-request",
+              "api-reference/requests/delete-a-request"
+            ]
+          },
+          {
+            "group": "Withdrawals",
+            "pages": [
+              "api-reference/withdrawals/list-all-withdrawals",
+              "api-reference/withdrawals/create-a-withdrawal",
+              "api-reference/withdrawals/delete-multiple-withdrawals",
+              "api-reference/withdrawals/get-withdrawal-by-id",
+              "api-reference/withdrawals/update-a-withdrawal",
+              "api-reference/withdrawals/delete-a-withdrawal"
+            ]
+          },
+          {
+            "group": "Orders",
+            "pages": [
+              "api-reference/orders/list-all-orders",
+              "api-reference/orders/create-an-order",
+              "api-reference/orders/delete-multiple-orders",
+              "api-reference/orders/get-order-by-id",
+              "api-reference/orders/update-an-order",
+              "api-reference/orders/delete-an-order"
+            ]
+          },
+          {
+            "group": "Claims",
+            "pages": [
+              "api-reference/claims/create-a-claim-for-an-order",
+              "api-reference/claims/list-all-claims",
+              "api-reference/claims/delete-multiple-claims",
+              "api-reference/claims/get-claim-by-id",
+              "api-reference/claims/update-a-claim",
+              "api-reference/claims/delete-a-claim"
+            ]
+          },
+          {
+            "group": "Stations",
+            "pages": [
+              "api-reference/stations/list-all-stations",
+              "api-reference/stations/create-a-station",
+              "api-reference/stations/delete-multiple-stations",
+              "api-reference/stations/get-station-by-id",
+              "api-reference/stations/update-a-station",
+              "api-reference/stations/delete-a-station"
+            ]
+          },
+          {
+            "group": "Notifications",
+            "pages": [
+              "api-reference/notifications/list-all-notifications",
+              "api-reference/notifications/create-a-notification",
+              "api-reference/notifications/delete-multiple-notifications",
+              "api-reference/notifications/get-notification-by-id",
+              "api-reference/notifications/update-a-notification",
+              "api-reference/notifications/delete-a-notification"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "api": {
+    "baseUrl": "http://localhost:3000",
+    "auth": {
+      "method": "bearer"
+    },
+    "playground": {
+      "mode": "simple"
+    }
+  }
+}

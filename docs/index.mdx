@@ -1,0 +1,62 @@
+---
+title: Introduction
+description: Backend API documentation for STD Plus
+---
+
+# STD Plus API
+
+STD Plus is a backend API for managing materials, inventory, orders, and workflow in a glass manufacturing operation.
+
+## Tech Stack
+
+| Technology | Purpose |
+|---|---|
+| Node.js + Express 5 | HTTP server and routing |
+| MongoDB + Mongoose | Database and ODM |
+| JWT | Authentication (Bearer Token) |
+| Socket.IO | Real-time WebSocket events |
+| Zod | Request validation |
+| Helmet / CORS / Rate Limiting | Security |
+
+## Base URL
+
+```
+http://localhost:3000
+```
+
+All REST API routes are prefixed with `/api`.
+
+## Features
+
+<Columns cols={2}>
+  <Card title="REST API" icon="server" href="/quickstart">
+    Full CRUD for 11 resource types with Zod validation and JWT auth.
+  </Card>
+  <Card title="Real-time WebSocket" icon="bolt" href="/websocket/overview">
+    Live data events via Socket.IO with room-based subscriptions.
+  </Card>
+  <Card title="Auth & RBAC" icon="lock" href="/authentication">
+    JWT authentication with role-based access control (admin, manager, worker).
+  </Card>
+  <Card title="API Reference" icon="terminal" href="/api-reference/health/health-check">
+    71 endpoints across 13 resource groups with interactive playground.
+  </Card>
+</Columns>
+
+## Resources
+
+The API manages the following resources:
+
+| Resource | Description |
+|---|---|
+| **Workers** | Staff accounts with authentication |
+| **Customers** | Client records with discount tracking |
+| **Materials** | Material definitions with spec details |
+| **Inventories** | Stock levels by material and type |
+| **Material Logs** | Audit trail for material movements |
+| **Requests** | Customer purchase requests |
+| **Withdrawals** | Material withdrawal records |
+| **Orders** | Production orders |
+| **Claims** | Defect/claim reports tied to orders |
+| **Stations** | Work stations in the production line |
+| **Notifications** | Real-time alerts for workers |
