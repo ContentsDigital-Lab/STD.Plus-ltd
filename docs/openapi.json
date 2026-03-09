@@ -150,7 +150,9 @@
         "properties": {
           "thickness": { "type": "string" },
           "color": { "type": "string" },
-          "glassType": { "type": "string" }
+          "glassType": { "type": "string" },
+          "width": { "type": "string" },
+          "length": { "type": "string" }
         }
       },
       "Material": {

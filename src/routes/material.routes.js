@@ -11,6 +11,8 @@ const specDetailsSchema = z.object({
   thickness: z.string().optional(),
   color: z.string().optional(),
   glassType: z.string().optional(),
+  width: z.string().optional(),
+  length: z.string().optional(),
 }).optional();
 
 const createSchema = z.object({
