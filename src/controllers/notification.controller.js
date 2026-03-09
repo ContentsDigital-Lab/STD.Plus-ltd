@@ -1,6 +1,8 @@
 const Notification = require('../models/Notification');
+const Worker = require('../models/Worker');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
+const { verifyReferences } = require('../services/integrity');
 
 const POPULATE_FIELDS = ['recipient'];
 
@@ -29,6 +31,10 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
+    await verifyReferences([
+      { model: Worker, id: req.validated.body.recipient, label: 'Recipient (Worker)' },
+    ]);
+
     const notification = await Notification.create(req.validated.body);
     const recipientId = notification.recipient;
     const populated = await notification.populate(POPULATE_FIELDS);

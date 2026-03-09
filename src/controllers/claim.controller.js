@@ -1,6 +1,10 @@
 const Claim = require('../models/Claim');
+const Order = require('../models/Order');
+const Material = require('../models/Material');
+const Worker = require('../models/Worker');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
+const { verifyReferences } = require('../services/integrity');
 
 const POPULATE_FIELDS = ['order', 'material', 'reportedBy', 'approvedBy'];
 
@@ -29,6 +33,14 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
+    const { material, reportedBy, approvedBy } = req.validated.body;
+    await verifyReferences([
+      { model: Order, id: req.params.orderId, label: 'Order' },
+      { model: Material, id: material, label: 'Material' },
+      { model: Worker, id: reportedBy, label: 'Worker (reportedBy)' },
+      { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
+    ]);
+
     const claim = await Claim.create({
       ...req.validated.body,
       order: req.params.orderId,
@@ -50,6 +62,13 @@ exports.update = async (req, res, next) => {
         return fail(res, 'Not authorized', 403);
       }
     }
+
+    const { material, reportedBy, approvedBy } = req.validated.body;
+    await verifyReferences([
+      { model: Material, id: material, label: 'Material' },
+      { model: Worker, id: reportedBy, label: 'Worker (reportedBy)' },
+      { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
+    ]);
 
     const claim = await Claim.findByIdAndUpdate(req.params.id, req.validated.body, {
       new: true,

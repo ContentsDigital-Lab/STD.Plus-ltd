@@ -1,6 +1,20 @@
 const Material = require('../models/Material');
+const Inventory = require('../models/Inventory');
+const Order = require('../models/Order');
+const Claim = require('../models/Claim');
+const Withdrawal = require('../models/Withdrawal');
+const MaterialLog = require('../models/MaterialLog');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
+const { blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
+
+const MATERIAL_DEPENDENTS = [
+  { model: Inventory, field: 'material', label: 'inventory record(s)' },
+  { model: Order, field: 'material', label: 'order(s)' },
+  { model: Claim, field: 'material', label: 'claim(s)' },
+  { model: Withdrawal, field: 'material', label: 'withdrawal(s)' },
+  { model: MaterialLog, field: 'material', label: 'material log(s)' },
+];
 
 exports.getAll = async (req, res, next) => {
   try {
@@ -47,6 +61,7 @@ exports.update = async (req, res, next) => {
 
 exports.deleteOne = async (req, res, next) => {
   try {
+    await blockDeleteIfReferenced(req.params.id, MATERIAL_DEPENDENTS);
     const material = await Material.findByIdAndDelete(req.params.id);
     if (!material) return fail(res, 'Material not found', 404);
     emit(req, 'material:updated', { action: 'deleted', data: material }, ['dashboard', 'inventory']);
@@ -59,6 +74,7 @@ exports.deleteOne = async (req, res, next) => {
 exports.deleteMany = async (req, res, next) => {
   try {
     const { ids } = req.validated.body;
+    await blockDeleteManyIfReferenced(ids, MATERIAL_DEPENDENTS);
     const result = await Material.deleteMany({ _id: { $in: ids } });
     emit(req, 'material:updated', { action: 'deleted', data: { ids } }, ['dashboard', 'inventory']);
     success(res, { deletedCount: result.deletedCount }, 'Materials deleted');
