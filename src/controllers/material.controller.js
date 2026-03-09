@@ -7,6 +7,7 @@ const MaterialLog = require('../models/MaterialLog');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
+const paginate = require('../utils/paginate');
 
 const MATERIAL_DEPENDENTS = [
   { model: Inventory, field: 'material', label: 'inventory record(s)' },
@@ -18,8 +19,12 @@ const MATERIAL_DEPENDENTS = [
 
 exports.getAll = async (req, res, next) => {
   try {
-    const materials = await Material.find();
-    success(res, materials);
+    const { data, pagination } = await paginate(Material, {
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }

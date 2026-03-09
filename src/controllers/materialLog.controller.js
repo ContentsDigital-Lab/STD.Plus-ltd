@@ -4,6 +4,7 @@ const Order = require('../models/Order');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
+const paginate = require('../utils/paginate');
 
 const POPULATE_FIELDS = ['material', 'order', 'parentLog'];
 
@@ -13,8 +14,13 @@ const LOG_DEPENDENTS = [
 
 exports.getAll = async (req, res, next) => {
   try {
-    const logs = await MaterialLog.find().populate(POPULATE_FIELDS);
-    success(res, logs);
+    const { data, pagination } = await paginate(MaterialLog, {
+      populate: POPULATE_FIELDS,
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }

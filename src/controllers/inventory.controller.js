@@ -3,11 +3,17 @@ const Material = require('../models/Material');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
+const paginate = require('../utils/paginate');
 
 exports.getAll = async (req, res, next) => {
   try {
-    const inventories = await Inventory.find().populate('material');
-    success(res, inventories);
+    const { data, pagination } = await paginate(Inventory, {
+      populate: ['material'],
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }

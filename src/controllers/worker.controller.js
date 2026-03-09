@@ -6,6 +6,7 @@ const Claim = require('../models/Claim');
 const Notification = require('../models/Notification');
 const { success, fail } = require('../utils/response');
 const { blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
+const paginate = require('../utils/paginate');
 
 const WORKER_DEPENDENTS = [
   { model: Order, field: 'assignedTo', label: 'order(s)' },
@@ -17,8 +18,12 @@ const WORKER_DEPENDENTS = [
 
 exports.getAll = async (req, res, next) => {
   try {
-    const workers = await Worker.find();
-    success(res, workers);
+    const { data, pagination } = await paginate(Worker, {
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }

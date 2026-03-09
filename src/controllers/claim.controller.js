@@ -5,14 +5,21 @@ const Worker = require('../models/Worker');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
+const paginate = require('../utils/paginate');
 
 const POPULATE_FIELDS = ['order', 'material', 'reportedBy', 'approvedBy'];
 
 exports.getAll = async (req, res, next) => {
   try {
     const filter = req.user.role === 'worker' ? { reportedBy: req.user._id } : {};
-    const claims = await Claim.find(filter).populate(POPULATE_FIELDS);
-    success(res, claims);
+    const { data, pagination } = await paginate(Claim, {
+      filter,
+      populate: POPULATE_FIELDS,
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }
