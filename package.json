@@ -8,6 +8,8 @@
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:rbac": "node scripts/test-rbac.js",
+    "test:integrity": "node scripts/test-integrity.js",
+    "test:pagination": "node scripts/test-pagination.js",
     "test:socket": "node scripts/test-socket.js",
     "seed": "node scripts/seed.js",
     "reset": "node scripts/reset.js",

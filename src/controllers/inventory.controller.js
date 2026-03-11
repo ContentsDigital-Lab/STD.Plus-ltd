@@ -1,11 +1,19 @@
 const Inventory = require('../models/Inventory');
+const Material = require('../models/Material');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
+const { verifyReferences } = require('../services/integrity');
+const paginate = require('../utils/paginate');
 
 exports.getAll = async (req, res, next) => {
   try {
-    const inventories = await Inventory.find().populate('material');
-    success(res, inventories);
+    const { data, pagination } = await paginate(Inventory, {
+      populate: ['material'],
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -23,6 +31,10 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
+    await verifyReferences([
+      { model: Material, id: req.validated.body.material, label: 'Material' },
+    ]);
+
     const inventory = await Inventory.create(req.validated.body);
     const populated = await inventory.populate('material');
     emit(req, 'inventory:updated', { action: 'created', data: populated }, ['dashboard', 'inventory']);
@@ -34,6 +46,10 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
+    await verifyReferences([
+      { model: Material, id: req.validated.body.material, label: 'Material' },
+    ]);
+
     const inventory = await Inventory.findByIdAndUpdate(req.params.id, req.validated.body, {
       new: true,
       runValidators: true,

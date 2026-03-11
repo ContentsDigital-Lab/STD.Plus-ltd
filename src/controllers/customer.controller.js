@@ -1,10 +1,23 @@
 const Customer = require('../models/Customer');
+const Order = require('../models/Order');
+const Request = require('../models/Request');
 const { success, fail } = require('../utils/response');
+const { blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
+const paginate = require('../utils/paginate');
+
+const CUSTOMER_DEPENDENTS = [
+  { model: Order, field: 'customer', label: 'order(s)' },
+  { model: Request, field: 'customer', label: 'request(s)' },
+];
 
 exports.getAll = async (req, res, next) => {
   try {
-    const customers = await Customer.find();
-    success(res, customers);
+    const { data, pagination } = await paginate(Customer, {
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -44,6 +57,7 @@ exports.update = async (req, res, next) => {
 
 exports.deleteOne = async (req, res, next) => {
   try {
+    await blockDeleteIfReferenced(req.params.id, CUSTOMER_DEPENDENTS);
     const customer = await Customer.findByIdAndDelete(req.params.id);
     if (!customer) return fail(res, 'Customer not found', 404);
     success(res, null, 'Customer deleted');
@@ -55,6 +69,7 @@ exports.deleteOne = async (req, res, next) => {
 exports.deleteMany = async (req, res, next) => {
   try {
     const { ids } = req.validated.body;
+    await blockDeleteManyIfReferenced(ids, CUSTOMER_DEPENDENTS);
     const result = await Customer.deleteMany({ _id: { $in: ids } });
     success(res, { deletedCount: result.deletedCount }, 'Customers deleted');
   } catch (err) {

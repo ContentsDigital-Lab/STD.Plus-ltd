@@ -1,10 +1,15 @@
 const Station = require('../models/Station');
 const { success, fail } = require('../utils/response');
+const paginate = require('../utils/paginate');
 
 exports.getAll = async (req, res, next) => {
   try {
-    const stations = await Station.find();
-    success(res, stations);
+    const { data, pagination } = await paginate(Station, {
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }

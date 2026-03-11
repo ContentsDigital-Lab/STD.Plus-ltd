@@ -20,6 +20,8 @@ const materialSchema = new mongoose.Schema({
     thickness: { type: String, default: '' },
     color: { type: String, default: '' },
     glassType: { type: String, default: '' },
+    width: { type: String, default: '' },
+    length: { type: String, default: '' },
   },
 }, { timestamps: true });
 

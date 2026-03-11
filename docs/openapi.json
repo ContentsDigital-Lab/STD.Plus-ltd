@@ -69,6 +69,15 @@
           "deletedCount": { "type": "integer" }
         }
       },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer", "example": 1 },
+          "limit": { "type": "integer", "example": 20 },
+          "total": { "type": "integer", "example": 45 },
+          "totalPages": { "type": "integer", "example": 3 }
+        }
+      },
       "Worker": {
         "type": "object",
         "properties": {
@@ -141,7 +150,9 @@
         "properties": {
           "thickness": { "type": "string" },
           "color": { "type": "string" },
-          "glassType": { "type": "string" }
+          "glassType": { "type": "string" },
+          "width": { "type": "string" },
+          "length": { "type": "string" }
         }
       },
       "Material": {
@@ -520,6 +531,24 @@
         "required": true,
         "schema": { "type": "string" },
         "description": "Resource ID"
+      },
+      "PageParam": {
+        "name": "page",
+        "in": "query",
+        "schema": { "type": "integer", "minimum": 1, "default": 1 },
+        "description": "Page number (1-indexed)"
+      },
+      "LimitParam": {
+        "name": "limit",
+        "in": "query",
+        "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 },
+        "description": "Items per page (clamped to 1–100)"
+      },
+      "SortParam": {
+        "name": "sort",
+        "in": "query",
+        "schema": { "type": "string", "default": "-createdAt" },
+        "description": "Sort field. Prefix with - for descending (e.g. -createdAt, name)"
       }
     },
     "responses": {
@@ -549,6 +578,14 @@
       },
       "403": {
         "description": "Not authorized for this action",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "409": {
+        "description": "Cannot delete — referenced by other records",
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/ErrorResponse" }
@@ -735,6 +772,11 @@
         "tags": ["Workers"],
         "summary": "List all workers",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
           "200": {
             "description": "List of workers",
@@ -743,7 +785,7 @@
                 "schema": {
                   "allOf": [
                     { "$ref": "#/components/schemas/SuccessResponse" },
-                    { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Worker" } } } }
+                    { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Worker" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }
                   ]
                 }
               }
@@ -805,7 +847,8 @@
             }
           },
           "401": { "$ref": "#/components/responses/401" },
-          "403": { "$ref": "#/components/responses/403" }
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -873,7 +916,8 @@
           "200": { "description": "Worker deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" },
-          "404": { "$ref": "#/components/responses/404" }
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -882,8 +926,13 @@
         "tags": ["Customers"],
         "summary": "List all customers",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of customers", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Customer" } } } }] } } } },
+          "200": { "description": "List of customers", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Customer" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -909,7 +958,8 @@
         "responses": {
           "200": { "description": "Customers deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
-          "403": { "$ref": "#/components/responses/403" }
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -949,7 +999,8 @@
           "200": { "description": "Customer deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" },
-          "404": { "$ref": "#/components/responses/404" }
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -958,8 +1009,13 @@
         "tags": ["Materials"],
         "summary": "List all materials",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of materials", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Material" } } } }] } } } },
+          "200": { "description": "List of materials", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Material" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -985,7 +1041,8 @@
         "responses": {
           "200": { "description": "Materials deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
-          "403": { "$ref": "#/components/responses/403" }
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1025,7 +1082,8 @@
           "200": { "description": "Material deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" },
-          "404": { "$ref": "#/components/responses/404" }
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1034,8 +1092,13 @@
         "tags": ["Inventories"],
         "summary": "List all inventories",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of inventories", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Inventory" } } } }] } } } },
+          "200": { "description": "List of inventories", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Inventory" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -1110,8 +1173,13 @@
         "tags": ["Material Logs"],
         "summary": "List all material logs",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of material logs", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/MaterialLog" } } } }] } } } },
+          "200": { "description": "List of material logs", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/MaterialLog" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -1137,7 +1205,8 @@
         "responses": {
           "200": { "description": "Material logs deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
-          "403": { "$ref": "#/components/responses/403" }
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1177,7 +1246,8 @@
           "200": { "description": "Material log deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" },
-          "404": { "$ref": "#/components/responses/404" }
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1186,8 +1256,13 @@
         "tags": ["Requests"],
         "summary": "List all requests",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of requests", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Request" } } } }] } } } },
+          "200": { "description": "List of requests", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Request" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -1211,7 +1286,8 @@
         "responses": {
           "200": { "description": "Requests deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
-          "403": { "$ref": "#/components/responses/403" }
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1251,7 +1327,8 @@
           "200": { "description": "Request deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" },
-          "404": { "$ref": "#/components/responses/404" }
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1260,14 +1337,20 @@
         "tags": ["Withdrawals"],
         "summary": "List all withdrawals",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of withdrawals", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Withdrawal" } } } }] } } } },
+          "200": { "description": "List of withdrawals", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Withdrawal" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
       "post": {
         "tags": ["Withdrawals"],
         "summary": "Create a withdrawal",
+        "description": "Automatically deducts from matching inventory. Returns 400 if insufficient stock.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WithdrawalCreateBody" } } } },
         "responses": {
@@ -1334,8 +1417,13 @@
         "tags": ["Orders"],
         "summary": "List all orders",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of orders", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } } } }] } } } },
+          "200": { "description": "List of orders", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -1361,7 +1449,8 @@
         "responses": {
           "200": { "description": "Orders deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
-          "403": { "$ref": "#/components/responses/403" }
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1401,7 +1490,8 @@
           "200": { "description": "Order deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" },
-          "404": { "$ref": "#/components/responses/404" }
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1432,8 +1522,13 @@
         "tags": ["Claims"],
         "summary": "List all claims",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of claims", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Claim" } } } }] } } } },
+          "200": { "description": "List of claims", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Claim" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -1495,8 +1590,13 @@
         "tags": ["Stations"],
         "summary": "List all stations",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of stations", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Station" } } } }] } } } },
+          "200": { "description": "List of stations", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Station" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -1522,7 +1622,8 @@
         "responses": {
           "200": { "description": "Stations deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
-          "403": { "$ref": "#/components/responses/403" }
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1562,7 +1663,8 @@
           "200": { "description": "Station deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" },
-          "404": { "$ref": "#/components/responses/404" }
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "$ref": "#/components/responses/409" }
         }
       }
     },
@@ -1571,8 +1673,13 @@
         "tags": ["Notifications"],
         "summary": "List all notifications",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
         "responses": {
-          "200": { "description": "List of notifications", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Notification" } } } }] } } } },
+          "200": { "description": "List of notifications", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Notification" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },

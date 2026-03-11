@@ -1,14 +1,23 @@
 const Notification = require('../models/Notification');
+const Worker = require('../models/Worker');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
+const { verifyReferences } = require('../services/integrity');
+const paginate = require('../utils/paginate');
 
 const POPULATE_FIELDS = ['recipient'];
 
 exports.getAll = async (req, res, next) => {
   try {
     const filter = req.user.role === 'worker' ? { recipient: req.user._id } : {};
-    const notifications = await Notification.find(filter).populate(POPULATE_FIELDS);
-    success(res, notifications);
+    const { data, pagination } = await paginate(Notification, {
+      filter,
+      populate: POPULATE_FIELDS,
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -29,6 +38,10 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
+    await verifyReferences([
+      { model: Worker, id: req.validated.body.recipient, label: 'Recipient (Worker)' },
+    ]);
+
     const notification = await Notification.create(req.validated.body);
     const recipientId = notification.recipient;
     const populated = await notification.populate(POPULATE_FIELDS);

@@ -1,14 +1,25 @@
 const Claim = require('../models/Claim');
+const Order = require('../models/Order');
+const Material = require('../models/Material');
+const Worker = require('../models/Worker');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
+const { verifyReferences } = require('../services/integrity');
+const paginate = require('../utils/paginate');
 
 const POPULATE_FIELDS = ['order', 'material', 'reportedBy', 'approvedBy'];
 
 exports.getAll = async (req, res, next) => {
   try {
     const filter = req.user.role === 'worker' ? { reportedBy: req.user._id } : {};
-    const claims = await Claim.find(filter).populate(POPULATE_FIELDS);
-    success(res, claims);
+    const { data, pagination } = await paginate(Claim, {
+      filter,
+      populate: POPULATE_FIELDS,
+      page: req.query.page,
+      limit: req.query.limit,
+      sort: req.query.sort,
+    });
+    success(res, data, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -29,6 +40,14 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
+    const { material, reportedBy, approvedBy } = req.validated.body;
+    await verifyReferences([
+      { model: Order, id: req.params.orderId, label: 'Order' },
+      { model: Material, id: material, label: 'Material' },
+      { model: Worker, id: reportedBy, label: 'Worker (reportedBy)' },
+      { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
+    ]);
+
     const claim = await Claim.create({
       ...req.validated.body,
       order: req.params.orderId,
@@ -50,6 +69,13 @@ exports.update = async (req, res, next) => {
         return fail(res, 'Not authorized', 403);
       }
     }
+
+    const { material, reportedBy, approvedBy } = req.validated.body;
+    await verifyReferences([
+      { model: Material, id: material, label: 'Material' },
+      { model: Worker, id: reportedBy, label: 'Worker (reportedBy)' },
+      { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
+    ]);
 
     const claim = await Claim.findByIdAndUpdate(req.params.id, req.validated.body, {
       new: true,

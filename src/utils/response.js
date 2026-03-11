@@ -1,9 +1,11 @@
-const success = (res, data = null, message = 'Success', statusCode = 200) => {
-  return res.status(statusCode).json({
+const success = (res, data = null, message = 'Success', statusCode = 200, pagination = null) => {
+  const body = {
     success: true,
     message,
     data,
-  });
+  };
+  if (pagination) body.pagination = pagination;
+  return res.status(statusCode).json(body);
 };
 
 const fail = (res, message = 'Something went wrong', statusCode = 500, errors = null) => {
