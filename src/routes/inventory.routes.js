@@ -13,6 +13,7 @@ const createSchema = z.object({
     stockType: z.enum(['Raw', 'Reuse']),
     quantity: z.number().min(0),
     location: z.string().min(1),
+    storageColor: z.string().optional(),
   }),
 });
 
@@ -22,6 +23,7 @@ const updateSchema = z.object({
     stockType: z.enum(['Raw', 'Reuse']).optional(),
     quantity: z.number().min(0).optional(),
     location: z.string().min(1).optional(),
+    storageColor: z.string().optional(),
   }),
 });
 

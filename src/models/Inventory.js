@@ -21,6 +21,11 @@ const inventorySchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  storageColor: {
+    type: String,
+    default: '',
+    trim: true,
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Inventory', inventorySchema);
