@@ -24,8 +24,9 @@ npm run dev             # starts dev server on http://localhost:3000
 | `JWT_EXPIRES_IN` | `1d` | JWT expiration time |
 | `PORT` | `3000` | Server port |
 | `CORS_ORIGIN` | `*` | Allowed CORS origin |
-| `RATE_LIMIT_WINDOW_MS` | `900000` | Rate limit window (ms) |
+| `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window (ms) |
 | `RATE_LIMIT_MAX` | `100` | Max requests per window |
+| `RATE_LIMIT_BAN_MS` | `10000` | Cooldown after hitting the limit (ms) |
 
 ## Authentication
 
