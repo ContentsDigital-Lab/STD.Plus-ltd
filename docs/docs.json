@@ -139,6 +139,17 @@
             ]
           },
           {
+            "group": "Station Templates",
+            "pages": [
+              "api-reference/station-templates/list-all-station-templates",
+              "api-reference/station-templates/create-a-station-template",
+              "api-reference/station-templates/delete-multiple-station-templates",
+              "api-reference/station-templates/get-station-template-by-id",
+              "api-reference/station-templates/update-a-station-template",
+              "api-reference/station-templates/delete-a-station-template"
+            ]
+          },
+          {
             "group": "Stations",
             "pages": [
               "api-reference/stations/list-all-stations",

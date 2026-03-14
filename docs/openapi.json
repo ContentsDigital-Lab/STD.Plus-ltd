@@ -416,13 +416,38 @@
           "claimDate": { "type": "string", "format": "date-time" }
         }
       },
+      "StationTemplate": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "uiSchema": { "type": "object" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "StationTemplateCreateBody": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "uiSchema": { "type": "object" }
+        }
+      },
+      "StationTemplateUpdateBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "uiSchema": { "type": "object" }
+        }
+      },
       "Station": {
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
           "name": { "type": "string" },
-          "workType": { "type": "string" },
-          "variables": { "type": "array", "items": { "type": "string" } },
+          "templateId": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/StationTemplate" }] },
+          "status": { "type": "string", "enum": ["online", "offline", "maintenance"], "default": "offline" },
           "notes": { "type": "string" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
@@ -430,11 +455,11 @@
       },
       "StationCreateBody": {
         "type": "object",
-        "required": ["name", "workType"],
+        "required": ["name", "templateId"],
         "properties": {
           "name": { "type": "string", "minLength": 1 },
-          "workType": { "type": "string", "minLength": 1 },
-          "variables": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "templateId": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["online", "offline", "maintenance"] },
           "notes": { "type": "string" }
         }
       },
@@ -442,8 +467,8 @@
         "type": "object",
         "properties": {
           "name": { "type": "string", "minLength": 1 },
-          "workType": { "type": "string", "minLength": 1 },
-          "variables": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "templateId": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["online", "offline", "maintenance"] },
           "notes": { "type": "string" }
         }
       },
@@ -1597,6 +1622,89 @@
         }
       }
     },
+    "/api/station-templates": {
+      "get": {
+        "tags": ["Station Templates"],
+        "summary": "List all station templates",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
+        "responses": {
+          "200": { "description": "List of station templates", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/StationTemplate" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Station Templates"],
+        "summary": "Create a station template",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationTemplateCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Station template created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/StationTemplate" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Station Templates"],
+        "summary": "Delete multiple station templates",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Station templates deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "$ref": "#/components/responses/409" }
+        }
+      }
+    },
+    "/api/station-templates/{id}": {
+      "get": {
+        "tags": ["Station Templates"],
+        "summary": "Get station template by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Station template found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/StationTemplate" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Station Templates"],
+        "summary": "Update a station template",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationTemplateUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Station template updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/StationTemplate" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Station Templates"],
+        "summary": "Delete a station template",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Station template deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "$ref": "#/components/responses/409" }
+        }
+      }
+    },
     "/api/stations": {
       "get": {
         "tags": ["Stations"],
@@ -1774,6 +1882,7 @@
     { "name": "Withdrawals" },
     { "name": "Orders" },
     { "name": "Claims" },
+    { "name": "Station Templates" },
     { "name": "Stations" },
     { "name": "Notifications" }
   ]
