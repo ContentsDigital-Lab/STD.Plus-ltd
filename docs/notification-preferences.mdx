@@ -1,0 +1,117 @@
+---
+title: Notification Preferences
+description: Per-worker customization of notification sounds and behavior
+---
+
+## Overview
+
+Each worker has a `notificationPreferences` object stored on their profile. It controls whether they receive notifications, the playback volume, and which sound is used for each priority level.
+
+Defaults are applied automatically when a worker is created — no setup required.
+
+## Schema
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Master toggle for notifications |
+| `volume` | `number` | `0.6` | Playback volume (`0` = mute, `1` = max) |
+| `sounds.low` | `string` | `"soft_pop"` | Sound for low-priority notifications |
+| `sounds.medium` | `string` | `"ding"` | Sound for medium-priority notifications |
+| `sounds.high` | `string` | `"alert"` | Sound for high-priority notifications |
+| `sounds.urgent` | `string` | `"alert"` | Sound for urgent-priority notifications |
+
+## Reading Preferences
+
+A worker's current preferences are returned whenever you fetch their profile:
+
+```bash
+curl http://localhost:3000/api/auth/me \
+  -H "Authorization: Bearer <token>"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "...",
+    "name": "John",
+    "notificationPreferences": {
+      "enabled": true,
+      "volume": 0.6,
+      "sounds": {
+        "low": "soft_pop",
+        "medium": "ding",
+        "high": "alert",
+        "urgent": "alert"
+      }
+    }
+  }
+}
+```
+
+## Updating Preferences
+
+Workers update their own preferences via `PATCH /api/auth/me`. Only the fields you send are updated — everything else is preserved.
+
+### Change volume only
+
+```bash
+curl -X PATCH http://localhost:3000/api/auth/me \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "notificationPreferences": { "volume": 0.9 } }'
+```
+
+### Change a single sound
+
+```bash
+curl -X PATCH http://localhost:3000/api/auth/me \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "notificationPreferences": { "sounds": { "high": "siren" } } }'
+```
+
+### Disable notifications entirely
+
+```bash
+curl -X PATCH http://localhost:3000/api/auth/me \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "notificationPreferences": { "enabled": false } }'
+```
+
+<Note>
+  Partial updates are supported at every level. Changing `volume` will not reset `sounds`, and changing `sounds.high` will not reset `sounds.low`.
+</Note>
+
+## Admin Override
+
+Admins can set or override any worker's notification preferences via `PATCH /api/workers/:id`:
+
+```bash
+curl -X PATCH http://localhost:3000/api/workers/<worker_id> \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "notificationPreferences": { "volume": 0.3, "enabled": true } }'
+```
+
+Admins can also set initial preferences when creating a worker via `POST /api/workers`.
+
+## Validation
+
+| Rule | Behavior |
+|---|---|
+| `volume < 0` | Rejected (400) |
+| `volume > 1` | Rejected (400) |
+| `volume = 0` | Accepted (mute) |
+| `volume = 1` | Accepted (max) |
+| Empty sound string | Rejected (400) |
+
+## Frontend Integration
+
+When the backend is ready, the frontend should:
+
+1. **Load** preferences from `GET /api/auth/me` on login
+2. **Save** changes via `PATCH /api/auth/me` with only the changed fields
+3. **Use** the `sounds` mapping to select the correct audio file per notification priority
+4. **Respect** the `enabled` flag to skip playback entirely when `false`

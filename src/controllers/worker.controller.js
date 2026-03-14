@@ -41,8 +41,8 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { name, username, password, position, role } = req.validated.body;
-    const worker = await Worker.create({ name, username, password, position, role });
+    const { name, username, password, position, role, notificationPreferences } = req.validated.body;
+    const worker = await Worker.create({ name, username, password, position, role, notificationPreferences });
     success(res, worker, 'Worker created', 201);
   } catch (err) {
     if (err.code === 11000) {
@@ -54,7 +54,14 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
-    const updates = { ...req.validated.body };
+    const { notificationPreferences, ...rest } = req.validated.body;
+    const updates = { ...rest };
+
+    if (notificationPreferences) {
+      for (const [key, value] of Object.entries(notificationPreferences)) {
+        updates[`notificationPreferences.${key}`] = value;
+      }
+    }
 
     if (updates.password) {
       const bcrypt = require('bcrypt');

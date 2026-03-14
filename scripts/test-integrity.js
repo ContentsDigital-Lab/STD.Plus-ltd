@@ -444,6 +444,77 @@ async function testStationTemplateCascade(token) {
 }
 
 // ──────────────────────────────────────────────
+// 7. NOTIFICATION PREFERENCES VALIDATION
+// ──────────────────────────────────────────────
+
+async function testNotificationPreferences(token) {
+  console.log('\n=== Notification Preferences Validation ===\n');
+
+  // Defaults are applied on worker creation
+  const w = await api('POST', '/api/workers', token, {
+    name: 'Prefs Test', username: 'prefs_test', password: 'prefs123456', position: 'tester',
+  });
+  check('CREATE worker has default notifPrefs', w.status, 201);
+  const wId = w.data.data._id;
+  const prefs = w.data.data.notificationPreferences;
+  check('  default enabled', prefs.enabled, true);
+  check('  default volume', prefs.volume, 0.6);
+  check('  default sounds.low', prefs.sounds.low, 'soft_pop');
+  check('  default sounds.medium', prefs.sounds.medium, 'ding');
+  check('  default sounds.high', prefs.sounds.high, 'alert');
+  check('  default sounds.urgent', prefs.sounds.urgent, 'alert');
+
+  // Volume out of range — should fail validation (> 1)
+  const r1 = await api('PATCH', `/api/workers/${wId}`, token, {
+    notificationPreferences: { volume: 1.5 },
+  });
+  check('UPDATE notifPrefs volume > 1', r1.status, 400);
+
+  // Volume out of range — should fail validation (< 0)
+  const r2 = await api('PATCH', `/api/workers/${wId}`, token, {
+    notificationPreferences: { volume: -0.5 },
+  });
+  check('UPDATE notifPrefs volume < 0', r2.status, 400);
+
+  // Valid edge values
+  const r3 = await api('PATCH', `/api/workers/${wId}`, token, {
+    notificationPreferences: { volume: 0 },
+  });
+  check('UPDATE notifPrefs volume = 0 (mute)', r3.status, 200);
+
+  const r4 = await api('PATCH', `/api/workers/${wId}`, token, {
+    notificationPreferences: { volume: 1 },
+  });
+  check('UPDATE notifPrefs volume = 1 (max)', r4.status, 200);
+
+  // Admin can create worker with custom notifPrefs
+  const w2 = await api('POST', '/api/workers', token, {
+    name: 'Custom Prefs', username: 'custom_prefs', password: 'custom123456', position: 'tester',
+    notificationPreferences: { enabled: false, volume: 0.1, sounds: { low: 'chime' } },
+  });
+  check('CREATE worker with custom notifPrefs', w2.status, 201);
+  const w2Id = w2.data.data._id;
+  check('  custom enabled', w2.data.data.notificationPreferences.enabled, false);
+  check('  custom volume', w2.data.data.notificationPreferences.volume, 0.1);
+  check('  custom sounds.low', w2.data.data.notificationPreferences.sounds.low, 'chime');
+
+  // Partial update via PATCH /auth/me — login as the worker
+  // (Only admin test here since worker login needs password)
+  const r5 = await api('PATCH', `/api/workers/${wId}`, token, {
+    notificationPreferences: { sounds: { medium: 'bell' } },
+  });
+  check('UPDATE partial sounds via admin', r5.status, 200);
+
+  const r6 = await api('GET', `/api/workers/${wId}`, token);
+  check('  sounds.medium updated', r6.data.data.notificationPreferences.sounds.medium, 'bell');
+  check('  volume preserved', r6.data.data.notificationPreferences.volume, 1);
+
+  // Clean up
+  await api('DELETE', `/api/workers/${wId}`, token);
+  await api('DELETE', `/api/workers/${w2Id}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -459,6 +530,7 @@ async function main() {
   await testMaterialLogCascade(token);
   await testRequestCascade(token);
   await testStationTemplateCascade(token);
+  await testNotificationPreferences(token);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

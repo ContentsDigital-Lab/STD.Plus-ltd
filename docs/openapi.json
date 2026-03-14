@@ -78,6 +78,22 @@
           "totalPages": { "type": "integer", "example": 3 }
         }
       },
+      "NotificationPreferences": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true },
+          "volume": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.6 },
+          "sounds": {
+            "type": "object",
+            "properties": {
+              "low": { "type": "string", "default": "soft_pop" },
+              "medium": { "type": "string", "default": "ding" },
+              "high": { "type": "string", "default": "alert" },
+              "urgent": { "type": "string", "default": "alert" }
+            }
+          }
+        }
+      },
       "Worker": {
         "type": "object",
         "properties": {
@@ -86,6 +102,7 @@
           "username": { "type": "string" },
           "position": { "type": "string" },
           "role": { "type": "string", "enum": ["admin", "manager", "worker"] },
+          "notificationPreferences": { "$ref": "#/components/schemas/NotificationPreferences" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
         }
@@ -98,7 +115,8 @@
           "username": { "type": "string", "minLength": 1 },
           "password": { "type": "string", "minLength": 6 },
           "position": { "type": "string", "minLength": 1 },
-          "role": { "type": "string", "enum": ["admin", "manager", "worker"], "default": "worker" }
+          "role": { "type": "string", "enum": ["admin", "manager", "worker"], "default": "worker" },
+          "notificationPreferences": { "$ref": "#/components/schemas/NotificationPreferences" }
         }
       },
       "WorkerUpdateBody": {
@@ -108,7 +126,8 @@
           "username": { "type": "string", "minLength": 1 },
           "password": { "type": "string", "minLength": 6 },
           "position": { "type": "string", "minLength": 1 },
-          "role": { "type": "string", "enum": ["admin", "manager", "worker"] }
+          "role": { "type": "string", "enum": ["admin", "manager", "worker"] },
+          "notificationPreferences": { "$ref": "#/components/schemas/NotificationPreferences" }
         }
       },
       "Customer": {
@@ -780,7 +799,8 @@
                 "type": "object",
                 "properties": {
                   "name": { "type": "string", "minLength": 1 },
-                  "username": { "type": "string", "minLength": 1 }
+                  "username": { "type": "string", "minLength": 1 },
+                  "notificationPreferences": { "$ref": "#/components/schemas/NotificationPreferences" }
                 }
               }
             }
