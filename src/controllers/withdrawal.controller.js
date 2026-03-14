@@ -9,7 +9,7 @@ const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['order', 'withdrawnBy', 'material'];
+const POPULATE_FIELDS = ['order', 'withdrawnBy', 'material', 'approvedBy'];
 
 const deductInventory = async (materialId, stockType, quantity) => {
   const inventories = await Inventory.find({ material: materialId, stockType }).sort({ createdAt: 1 });
@@ -66,10 +66,11 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { material, withdrawnBy, order, quantity, stockType } = req.validated.body;
+    const { material, withdrawnBy, order, approvedBy, quantity, stockType } = req.validated.body;
     await verifyReferences([
       { model: Material, id: material, label: 'Material' },
       { model: Worker, id: withdrawnBy, label: 'Worker (withdrawnBy)' },
+      { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
       { model: Order, id: order, label: 'Order' },
     ]);
 
@@ -94,6 +95,7 @@ exports.update = async (req, res, next) => {
     const refs = [];
     if (updates.material) refs.push({ model: Material, id: updates.material, label: 'Material' });
     if (updates.withdrawnBy) refs.push({ model: Worker, id: updates.withdrawnBy, label: 'Worker (withdrawnBy)' });
+    if (updates.approvedBy) refs.push({ model: Worker, id: updates.approvedBy, label: 'Worker (approvedBy)' });
     if (updates.order) refs.push({ model: Order, id: updates.order, label: 'Order' });
     if (refs.length) await verifyReferences(refs);
 

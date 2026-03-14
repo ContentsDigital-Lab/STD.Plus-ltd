@@ -49,6 +49,7 @@ const createClaimSchema = z.object({
     source: z.enum(['customer', 'worker']),
     material: z.string().min(1),
     description: z.string().min(1),
+    status: z.enum(['pending', 'approved', 'rejected']).optional(),
     decision: z.enum(['destroy', 'keep']).optional(),
     reportedBy: z.string().min(1),
     approvedBy: z.string().min(1).optional(),

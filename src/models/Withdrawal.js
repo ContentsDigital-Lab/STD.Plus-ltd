@@ -26,6 +26,16 @@ const withdrawalSchema = new mongoose.Schema({
     enum: ['Raw', 'Reuse'],
     required: true,
   },
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
+  },
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Worker',
+    default: null,
+  },
   withdrawnDate: {
     type: Date,
     default: Date.now,

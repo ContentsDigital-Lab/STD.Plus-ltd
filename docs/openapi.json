@@ -338,6 +338,8 @@
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
           "quantity": { "type": "integer", "minimum": 1 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "default": "pending" },
+          "approvedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
           "withdrawnDate": { "type": "string", "format": "date-time" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
@@ -352,6 +354,8 @@
           "material": { "type": "string", "minLength": 1 },
           "quantity": { "type": "integer", "minimum": 1 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+          "approvedBy": { "type": "string", "minLength": 1 },
           "withdrawnDate": { "type": "string", "format": "date-time" }
         }
       },
@@ -363,6 +367,8 @@
           "material": { "type": "string", "minLength": 1 },
           "quantity": { "type": "integer", "minimum": 1 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+          "approvedBy": { "type": "string", "minLength": 1 },
           "withdrawnDate": { "type": "string", "format": "date-time" }
         }
       },
@@ -376,6 +382,7 @@
           "description": { "type": "string" },
           "decision": { "type": "string", "enum": ["destroy", "keep"], "nullable": true },
           "reportedBy": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "default": "pending" },
           "approvedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
           "claimDate": { "type": "string", "format": "date-time" },
           "createdAt": { "type": "string", "format": "date-time" },
@@ -389,6 +396,7 @@
           "source": { "type": "string", "enum": ["customer", "worker"] },
           "material": { "type": "string", "minLength": 1 },
           "description": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "decision": { "type": "string", "enum": ["destroy", "keep"] },
           "reportedBy": { "type": "string", "minLength": 1 },
           "approvedBy": { "type": "string", "minLength": 1 },
@@ -401,6 +409,7 @@
           "source": { "type": "string", "enum": ["customer", "worker"] },
           "material": { "type": "string", "minLength": 1 },
           "description": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "decision": { "type": "string", "enum": ["destroy", "keep"] },
           "reportedBy": { "type": "string", "minLength": 1 },
           "approvedBy": { "type": "string", "minLength": 1 },
