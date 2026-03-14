@@ -1,6 +1,7 @@
 #!/bin/bash
 
-URL="http://localhost:3000/api/health"
+PORT="${PORT:-3000}"
+URL="http://localhost:${PORT}/api/health"
 MAX=200
 
 echo "Sending $MAX requests to $URL..."

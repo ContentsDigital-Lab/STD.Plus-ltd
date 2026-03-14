@@ -1,4 +1,5 @@
-const API = 'http://localhost:3000';
+require('dotenv').config();
+const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
 let failed = 0;
@@ -219,7 +220,26 @@ async function testReferentialChecks(token) {
   const r10 = await api('POST', '/api/withdrawals', token, { withdrawnBy: fakeId, material: fakeId, quantity: 1, stockType: 'Raw' });
   check('CREATE withdrawal with fake material', r10.status, 400);
 
+  // Station with fake templateId
+  const r11 = await api('POST', '/api/stations', token, { name: 'Fake Station', templateId: fakeId });
+  check('CREATE station with fake templateId', r11.status, 400);
+  checkIncludes('  message says Station template', r11.data.message, 'Station template not found');
+
+  // Station with valid templateId
+  const tmpl = await api('POST', '/api/station-templates', token, { name: 'Ref Template' });
+  const tmplId = tmpl.data.data._id;
+  const r12 = await api('POST', '/api/stations', token, { name: 'Valid Station', templateId: tmplId });
+  check('CREATE station with valid templateId', r12.status, 201);
+  const stationId = r12.data.data._id;
+
+  // Update station with fake templateId
+  const r13 = await api('PATCH', `/api/stations/${stationId}`, token, { templateId: fakeId });
+  check('UPDATE station with fake templateId', r13.status, 400);
+  checkIncludes('  message says Station template', r13.data.message, 'Station template not found');
+
   // Clean up
+  await api('DELETE', `/api/stations/${stationId}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
   await api('DELETE', `/api/orders/${ordId}`, token);
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
@@ -382,6 +402,48 @@ async function testRequestCascade(token) {
 }
 
 // ──────────────────────────────────────────────
+// 6. STATION TEMPLATE CASCADE
+// ──────────────────────────────────────────────
+
+async function testStationTemplateCascade(token) {
+  console.log('\n=== Station Template Cascade ===\n');
+
+  const tmpl = await api('POST', '/api/station-templates', token, { name: 'Cascade Template', uiSchema: { test: true } });
+  const tmplId = tmpl.data.data._id;
+
+  const station = await api('POST', '/api/stations', token, { name: 'Cascade Station', templateId: tmplId });
+  const stationId = station.data.data._id;
+
+  // Try delete template — should be blocked (referenced by station)
+  const r1 = await api('DELETE', `/api/station-templates/${tmplId}`, token);
+  check('DELETE template with station ref', r1.status, 409);
+  checkIncludes('  message mentions station', r1.data.message, 'station(s)');
+
+  // Delete station first, then template should succeed
+  await api('DELETE', `/api/stations/${stationId}`, token);
+  const r2 = await api('DELETE', `/api/station-templates/${tmplId}`, token);
+  check('DELETE template after station removed', r2.status, 200);
+
+  // Bulk delete protection
+  const tmpl2 = await api('POST', '/api/station-templates', token, { name: 'Bulk A' });
+  const tmpl3 = await api('POST', '/api/station-templates', token, { name: 'Bulk B' });
+  const tmplId2 = tmpl2.data.data._id;
+  const tmplId3 = tmpl3.data.data._id;
+
+  const station2 = await api('POST', '/api/stations', token, { name: 'Ref Station', templateId: tmplId2 });
+  const stationId2 = station2.data.data._id;
+
+  // Bulk delete both templates — should be blocked (tmplId2 has station)
+  const r3 = await api('DELETE', '/api/station-templates', token, { ids: [tmplId2, tmplId3] });
+  check('DELETE MANY templates with ref', r3.status, 409);
+
+  // Clean up and retry
+  await api('DELETE', `/api/stations/${stationId2}`, token);
+  const r4 = await api('DELETE', '/api/station-templates', token, { ids: [tmplId2, tmplId3] });
+  check('DELETE MANY templates after cleanup', r4.status, 200);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -396,6 +458,7 @@ async function main() {
   await testInventoryDeduction(token);
   await testMaterialLogCascade(token);
   await testRequestCascade(token);
+  await testStationTemplateCascade(token);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

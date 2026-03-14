@@ -1,4 +1,5 @@
-const API = 'http://localhost:3000';
+require('dotenv').config();
+const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
 let failed = 0;
@@ -157,6 +158,7 @@ async function main() {
     '/api/requests',
     '/api/withdrawals',
     '/api/claims',
+    '/api/station-templates',
     '/api/stations',
     '/api/material-logs',
     '/api/notifications',

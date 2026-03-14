@@ -1,6 +1,7 @@
 const { io } = require('socket.io-client');
 
-const API = 'http://localhost:3000';
+require('dotenv').config();
+const API = `http://localhost:${process.env.PORT || 3000}`;
 
 async function getToken(username = 'admin', password = 'admin123') {
   const res = await fetch(`${API}/api/auth/login`, {

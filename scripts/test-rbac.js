@@ -1,4 +1,5 @@
-const API = 'http://localhost:3000';
+require('dotenv').config();
+const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
 let failed = 0;
@@ -390,23 +391,27 @@ async function main() {
   // Test Workers
   await testWorkers(tokens);
 
-  // Test Customers, Materials, Inventories, Stations (same pattern)
+  // Test Customers, Materials, Station Templates (same pattern)
   const custResult = await testResource(tokens, 'Customers', '/api/customers',
     { name: 'Test Customer', phone: '0812345678' });
   const matResult = await testResource(tokens, 'Materials', '/api/materials',
     { name: 'Test Glass', unit: 'sheet', reorderPoint: 5 });
-  await testResource(tokens, 'Stations', '/api/stations',
-    { name: 'Cutting Station', workType: 'cut' });
+  await testResource(tokens, 'Station Templates', '/api/station-templates',
+    { name: 'Test Template', uiSchema: {} });
 
-  // Need a material for inventory
+  // Need a material for inventory, a template for stations
   const mat = await api('POST', '/api/materials', adminToken,
     { name: 'RBAC Test Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data.data._id;
   const cust = await api('POST', '/api/customers', adminToken, { name: 'RBAC Test Customer' });
   const custId = cust.data.data._id;
+  const tmpl = await api('POST', '/api/station-templates', adminToken, { name: 'RBAC Test Template' });
+  const tmplId = tmpl.data.data._id;
 
   await testResource(tokens, 'Inventories', '/api/inventories',
     { material: matId, stockType: 'Raw', quantity: 100, location: 'Warehouse A' });
+  await testResource(tokens, 'Stations', '/api/stations',
+    { name: 'Cutting Station', templateId: tmplId });
 
   // Test resources with ownership
   await testMaterialLogs(tokens, matId);
@@ -419,6 +424,7 @@ async function main() {
   // Cleanup shared test data
   await api('DELETE', `/api/materials/${matId}`, adminToken);
   await api('DELETE', `/api/customers/${custId}`, adminToken);
+  await api('DELETE', `/api/station-templates/${tmplId}`, adminToken);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);
