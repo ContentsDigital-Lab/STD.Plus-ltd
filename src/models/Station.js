@@ -6,14 +6,15 @@ const stationSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
-  workType: {
-    type: String,
+  templateId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'StationTemplate',
     required: true,
-    trim: true,
   },
-  variables: {
-    type: [String],
-    default: [],
+  status: {
+    type: String,
+    enum: ['online', 'offline', 'maintenance'],
+    default: 'offline',
   },
   notes: {
     type: String,

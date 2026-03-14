@@ -14,6 +14,8 @@ const createSchema = z.object({
     material: z.string().min(1),
     quantity: z.number().min(1),
     stockType: z.enum(['Raw', 'Reuse']),
+    status: z.enum(['pending', 'approved', 'rejected']).optional(),
+    approvedBy: z.string().min(1).optional(),
     withdrawnDate: z.string().datetime().optional(),
   }),
 });
@@ -25,6 +27,8 @@ const updateSchema = z.object({
     material: z.string().min(1).optional(),
     quantity: z.number().min(1).optional(),
     stockType: z.enum(['Raw', 'Reuse']).optional(),
+    status: z.enum(['pending', 'approved', 'rejected']).optional(),
+    approvedBy: z.string().min(1).optional(),
     withdrawnDate: z.string().datetime().optional(),
   }),
 });

@@ -12,6 +12,7 @@ const updateSchema = z.object({
     source: z.enum(['customer', 'worker']).optional(),
     material: z.string().min(1).optional(),
     description: z.string().min(1).optional(),
+    status: z.enum(['pending', 'approved', 'rejected']).optional(),
     decision: z.enum(['destroy', 'keep']).optional(),
     reportedBy: z.string().min(1).optional(),
     approvedBy: z.string().min(1).optional(),

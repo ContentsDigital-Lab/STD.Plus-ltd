@@ -7,6 +7,17 @@ const workerController = require('../controllers/worker.controller');
 
 const router = Router();
 
+const notificationPreferencesSchema = z.object({
+  enabled: z.boolean().optional(),
+  volume: z.number().min(0).max(1).optional(),
+  sounds: z.object({
+    low: z.string().min(1).optional(),
+    medium: z.string().min(1).optional(),
+    high: z.string().min(1).optional(),
+    urgent: z.string().min(1).optional(),
+  }).optional(),
+}).optional();
+
 const createSchema = z.object({
   body: z.object({
     name: z.string().min(1),
@@ -14,6 +25,7 @@ const createSchema = z.object({
     password: z.string().min(6),
     position: z.string().min(1),
     role: z.enum(['admin', 'manager', 'worker']).optional(),
+    notificationPreferences: notificationPreferencesSchema,
   }),
 });
 
@@ -24,6 +36,7 @@ const updateSchema = z.object({
     password: z.string().min(6).optional(),
     position: z.string().min(1).optional(),
     role: z.enum(['admin', 'manager', 'worker']).optional(),
+    notificationPreferences: notificationPreferencesSchema,
   }),
 });
 

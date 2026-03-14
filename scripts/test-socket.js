@@ -1,6 +1,7 @@
 const { io } = require('socket.io-client');
 
-const API = 'http://localhost:3000';
+require('dotenv').config();
+const API = `http://localhost:${process.env.PORT || 3000}`;
 
 async function getToken(username = 'admin', password = 'admin123') {
   const res = await fetch(`${API}/api/auth/login`, {
@@ -144,7 +145,7 @@ async function testDataEvents() {
   const socket = await connect(API, '/api/socket-entry', { token });
 
   // join rooms to receive events
-  const rooms = ['dashboard', 'inventory', 'log', 'request', 'withdrawal', 'order', 'claim'];
+  const rooms = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim'];
   for (const room of rooms) {
     await emitWithAck(socket, `join_${room}`);
   }
@@ -200,19 +201,34 @@ async function testDataEvents() {
   const logEvent = await logPromise;
   console.log(`${n++}. PASS log:updated — action: ${logEvent.action}`);
 
-  // 8. notification
+  // 8. station-template:updated
+  const tmplPromise = waitForEvent(socket, 'station-template:updated');
+  const tmpl = await apiCall('POST', '/api/station-templates', token, { name: 'Socket Test Template' });
+  const tmplEvent = await tmplPromise;
+  console.log(`${n++}. PASS station-template:updated — action: ${tmplEvent.action}`);
+  const tmplId = tmpl.data._id;
+
+  // 9. station:updated
+  const stationPromise = waitForEvent(socket, 'station:updated');
+  const station = await apiCall('POST', '/api/stations', token, { name: 'Socket Test Station', templateId: tmplId });
+  const stationEvent = await stationPromise;
+  console.log(`${n++}. PASS station:updated — action: ${stationEvent.action}`);
+
+  // 10. notification
   const notifPromise = waitForEvent(socket, 'notification');
   await apiCall('POST', '/api/notifications', token, { recipient: workerId, type: 'info', title: 'Test notification' });
   const notifEvent = await notifPromise;
   console.log(`${n++}. PASS notification — title: ${notifEvent.title}`);
 
-  // 9. system_alert
+  // 11. system_alert
   const alertPromise = waitForEvent(socket, 'system_alert');
   socket.emit('system_alert', { message: 'Test system alert' });
   const alertEvent = await alertPromise;
   console.log(`${n++}. PASS system_alert — message: ${alertEvent.message}`);
 
   // Cleanup test data
+  await apiCall('DELETE', `/api/stations/${station.data._id}`, token);
+  await apiCall('DELETE', `/api/station-templates/${tmplId}`, token);
   await apiCall('DELETE', `/api/materials/${matId}`, token);
   await apiCall('DELETE', `/api/inventories/${inv.data._id}`, token);
   await apiCall('DELETE', `/api/orders/${ordId}`, token);

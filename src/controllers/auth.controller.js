@@ -34,11 +34,16 @@ exports.getMe = async (req, res) => {
 
 exports.updateMe = async (req, res, next) => {
   try {
-    const { name, username } = req.validated.body;
+    const { name, username, notificationPreferences } = req.validated.body;
 
     const updates = {};
     if (name !== undefined) updates.name = name;
     if (username !== undefined) updates.username = username;
+    if (notificationPreferences !== undefined) {
+      for (const [key, value] of Object.entries(notificationPreferences)) {
+        updates[`notificationPreferences.${key}`] = value;
+      }
+    }
 
     const worker = await Worker.findByIdAndUpdate(req.user._id, updates, {
       new: true,

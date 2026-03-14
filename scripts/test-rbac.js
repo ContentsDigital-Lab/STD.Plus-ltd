@@ -1,4 +1,5 @@
-const API = 'http://localhost:3000';
+require('dotenv').config();
+const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
 let failed = 0;
@@ -367,6 +368,66 @@ async function testNotifications(tokens, workerId) {
   if (notifId2) await api('DELETE', `${path}/${notifId2}`, tokens.admin);
 }
 
+async function testNotificationPreferences(tokens) {
+  console.log('\n=== Notification Preferences (self-update via /auth/me) ===\n');
+
+  // Worker can read their own preferences via GET /auth/me
+  const r1 = await api('GET', '/api/auth/me', tokens.worker);
+  check('GET    /auth/me has notificationPreferences', r1.data.data.notificationPreferences !== undefined, true);
+  check('  defaults — enabled', r1.data.data.notificationPreferences.enabled, true);
+  check('  defaults — volume', r1.data.data.notificationPreferences.volume, 0.6);
+  check('  defaults — sounds.low', r1.data.data.notificationPreferences.sounds.low, 'soft_pop');
+  check('  defaults — sounds.medium', r1.data.data.notificationPreferences.sounds.medium, 'ding');
+  check('  defaults — sounds.high', r1.data.data.notificationPreferences.sounds.high, 'alert');
+
+  // Worker can update their own preferences (partial update)
+  const r2 = await api('PATCH', '/api/auth/me', tokens.worker, {
+    notificationPreferences: { volume: 0.9 },
+  });
+  check('PATCH  /auth/me notifPrefs volume  (worker)', r2.status, 200);
+
+  // Verify volume changed but sounds stayed
+  const r3 = await api('GET', '/api/auth/me', tokens.worker);
+  check('  volume updated', r3.data.data.notificationPreferences.volume, 0.9);
+  check('  sounds.low preserved', r3.data.data.notificationPreferences.sounds.low, 'soft_pop');
+
+  // Worker can update sounds partially
+  const r4 = await api('PATCH', '/api/auth/me', tokens.worker, {
+    notificationPreferences: { sounds: { high: 'siren' } },
+  });
+  check('PATCH  /auth/me notifPrefs sounds  (worker)', r4.status, 200);
+
+  const r5 = await api('GET', '/api/auth/me', tokens.worker);
+  check('  sounds.high updated', r5.data.data.notificationPreferences.sounds.high, 'siren');
+  check('  volume still 0.9', r5.data.data.notificationPreferences.volume, 0.9);
+
+  // Worker can disable notifications
+  const r6 = await api('PATCH', '/api/auth/me', tokens.worker, {
+    notificationPreferences: { enabled: false },
+  });
+  check('PATCH  /auth/me disable notifs     (worker)', r6.status, 200);
+
+  const r7 = await api('GET', '/api/auth/me', tokens.worker);
+  check('  enabled is false', r7.data.data.notificationPreferences.enabled, false);
+
+  // Admin can update worker's preferences via /api/workers/:id
+  const me = await api('GET', '/api/auth/me', tokens.worker);
+  const workerId = me.data.data._id;
+
+  const r8 = await api('PATCH', `/api/workers/${workerId}`, tokens.admin, {
+    notificationPreferences: { volume: 0.3 },
+  });
+  check('PATCH  /workers/:id notifPrefs     (admin)', r8.status, 200);
+
+  const r9 = await api('GET', '/api/auth/me', tokens.worker);
+  check('  volume set by admin', r9.data.data.notificationPreferences.volume, 0.3);
+
+  // Restore defaults for worker
+  await api('PATCH', `/api/workers/${workerId}`, tokens.admin, {
+    notificationPreferences: { enabled: true, volume: 0.6, sounds: { low: 'soft_pop', medium: 'ding', high: 'alert', urgent: 'alert' } },
+  });
+}
+
 async function main() {
   console.log('=== RBAC Test Suite ===\n');
   console.log('Setting up users...');
@@ -390,23 +451,27 @@ async function main() {
   // Test Workers
   await testWorkers(tokens);
 
-  // Test Customers, Materials, Inventories, Stations (same pattern)
+  // Test Customers, Materials, Station Templates (same pattern)
   const custResult = await testResource(tokens, 'Customers', '/api/customers',
     { name: 'Test Customer', phone: '0812345678' });
   const matResult = await testResource(tokens, 'Materials', '/api/materials',
     { name: 'Test Glass', unit: 'sheet', reorderPoint: 5 });
-  await testResource(tokens, 'Stations', '/api/stations',
-    { name: 'Cutting Station', workType: 'cut' });
+  await testResource(tokens, 'Station Templates', '/api/station-templates',
+    { name: 'Test Template', uiSchema: {} });
 
-  // Need a material for inventory
+  // Need a material for inventory, a template for stations
   const mat = await api('POST', '/api/materials', adminToken,
     { name: 'RBAC Test Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data.data._id;
   const cust = await api('POST', '/api/customers', adminToken, { name: 'RBAC Test Customer' });
   const custId = cust.data.data._id;
+  const tmpl = await api('POST', '/api/station-templates', adminToken, { name: 'RBAC Test Template' });
+  const tmplId = tmpl.data.data._id;
 
   await testResource(tokens, 'Inventories', '/api/inventories',
     { material: matId, stockType: 'Raw', quantity: 100, location: 'Warehouse A' });
+  await testResource(tokens, 'Stations', '/api/stations',
+    { name: 'Cutting Station', templateId: tmplId });
 
   // Test resources with ownership
   await testMaterialLogs(tokens, matId);
@@ -415,10 +480,12 @@ async function main() {
   await testWithdrawals(tokens, matId, workerId);
   await testClaims(tokens, custId, matId, workerId, adminId);
   await testNotifications(tokens, workerId);
+  await testNotificationPreferences(tokens);
 
   // Cleanup shared test data
   await api('DELETE', `/api/materials/${matId}`, adminToken);
   await api('DELETE', `/api/customers/${custId}`, adminToken);
+  await api('DELETE', `/api/station-templates/${tmplId}`, adminToken);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

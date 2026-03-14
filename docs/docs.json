@@ -15,7 +15,7 @@
         "groups": [
           {
             "group": "Getting Started",
-            "pages": ["index", "quickstart", "authentication"]
+            "pages": ["index", "quickstart", "authentication", "notification-preferences"]
           },
           {
             "group": "WebSocket",
@@ -136,6 +136,17 @@
               "api-reference/claims/get-claim-by-id",
               "api-reference/claims/update-a-claim",
               "api-reference/claims/delete-a-claim"
+            ]
+          },
+          {
+            "group": "Station Templates",
+            "pages": [
+              "api-reference/station-templates/list-all-station-templates",
+              "api-reference/station-templates/create-a-station-template",
+              "api-reference/station-templates/delete-multiple-station-templates",
+              "api-reference/station-templates/get-station-template-by-id",
+              "api-reference/station-templates/update-a-station-template",
+              "api-reference/station-templates/delete-a-station-template"
             ]
           },
           {

@@ -13,10 +13,22 @@ const loginSchema = z.object({
   }),
 });
 
+const notificationPreferencesSchema = z.object({
+  enabled: z.boolean().optional(),
+  volume: z.number().min(0).max(1).optional(),
+  sounds: z.object({
+    low: z.string().min(1).optional(),
+    medium: z.string().min(1).optional(),
+    high: z.string().min(1).optional(),
+    urgent: z.string().min(1).optional(),
+  }).optional(),
+}).optional();
+
 const updateMeSchema = z.object({
   body: z.object({
     name: z.string().min(1).optional(),
     username: z.string().min(1).optional(),
+    notificationPreferences: notificationPreferencesSchema,
   }),
 });
 

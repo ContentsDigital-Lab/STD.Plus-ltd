@@ -29,6 +29,16 @@ const workerSchema = new mongoose.Schema({
     enum: ['admin', 'manager', 'worker'],
     default: 'worker',
   },
+  notificationPreferences: {
+    enabled: { type: Boolean, default: true },
+    volume: { type: Number, default: 0.6, min: 0, max: 1 },
+    sounds: {
+      low: { type: String, default: 'soft_pop', trim: true },
+      medium: { type: String, default: 'ding', trim: true },
+      high: { type: String, default: 'alert', trim: true },
+      urgent: { type: String, default: 'alert', trim: true },
+    },
+  },
 }, { timestamps: true });
 
 workerSchema.pre('save', async function () {

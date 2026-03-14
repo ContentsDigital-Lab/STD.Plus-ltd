@@ -10,8 +10,8 @@ const router = Router();
 const createSchema = z.object({
   body: z.object({
     name: z.string().min(1),
-    workType: z.string().min(1),
-    variables: z.array(z.string().min(1)).optional(),
+    templateId: z.string().min(1),
+    status: z.enum(['online', 'offline', 'maintenance']).optional(),
     notes: z.string().optional(),
   }),
 });
@@ -19,8 +19,8 @@ const createSchema = z.object({
 const updateSchema = z.object({
   body: z.object({
     name: z.string().min(1).optional(),
-    workType: z.string().min(1).optional(),
-    variables: z.array(z.string().min(1)).optional(),
+    templateId: z.string().min(1).optional(),
+    status: z.enum(['online', 'offline', 'maintenance']).optional(),
     notes: z.string().optional(),
   }),
 });
