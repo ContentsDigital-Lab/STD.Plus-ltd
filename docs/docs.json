@@ -15,7 +15,7 @@
         "groups": [
           {
             "group": "Getting Started",
-            "pages": ["index", "quickstart", "authentication", "notification-preferences"]
+            "pages": ["index", "quickstart", "authentication"]
           },
           {
             "group": "WebSocket",
