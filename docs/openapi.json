@@ -299,6 +299,15 @@
           "expectedDeliveryDate": { "type": "string", "format": "date-time" }
         }
       },
+      "StationHistoryEntry": {
+        "type": "object",
+        "properties": {
+          "station": { "type": "string" },
+          "enteredAt": { "type": "string", "format": "date-time" },
+          "exitedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "completedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] }
+        }
+      },
       "Order": {
         "type": "object",
         "properties": {
@@ -309,6 +318,10 @@
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
           "quantity": { "type": "integer", "minimum": 1 },
           "stations": { "type": "array", "items": { "type": "string" } },
+          "currentStationIndex": { "type": "integer", "minimum": 0 },
+          "stationHistory": { "type": "array", "items": { "$ref": "#/components/schemas/StationHistoryEntry" } },
+          "stationData": { "type": "object", "additionalProperties": true },
+          "notes": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
           "claim": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Claim" }] },
           "withdrawal": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Withdrawal" }] },
@@ -327,6 +340,22 @@
           "material": { "type": "string", "minLength": 1 },
           "quantity": { "type": "integer", "minimum": 1 },
           "stations": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "currentStationIndex": { "type": "integer", "minimum": 0 },
+          "stationHistory": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["station"],
+              "properties": {
+                "station": { "type": "string", "minLength": 1 },
+                "enteredAt": { "type": "string", "format": "date-time" },
+                "exitedAt": { "type": "string", "format": "date-time", "nullable": true },
+                "completedBy": { "type": "string", "minLength": 1, "nullable": true }
+              }
+            }
+          },
+          "stationData": { "type": "object", "additionalProperties": true },
+          "notes": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
           "claim": { "type": "string", "minLength": 1 },
           "withdrawal": { "type": "string", "minLength": 1 },
@@ -342,6 +371,22 @@
           "material": { "type": "string", "minLength": 1 },
           "quantity": { "type": "integer", "minimum": 1 },
           "stations": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "currentStationIndex": { "type": "integer", "minimum": 0 },
+          "stationHistory": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["station"],
+              "properties": {
+                "station": { "type": "string", "minLength": 1 },
+                "enteredAt": { "type": "string", "format": "date-time" },
+                "exitedAt": { "type": "string", "format": "date-time", "nullable": true },
+                "completedBy": { "type": "string", "minLength": 1, "nullable": true }
+              }
+            }
+          },
+          "stationData": { "type": "object", "additionalProperties": true },
+          "notes": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
           "claim": { "type": "string", "minLength": 1 },
           "withdrawal": { "type": "string", "minLength": 1 },
@@ -359,6 +404,7 @@
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "default": "pending" },
           "approvedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
+          "notes": { "type": "string" },
           "withdrawnDate": { "type": "string", "format": "date-time" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
@@ -375,6 +421,7 @@
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "approvedBy": { "type": "string", "minLength": 1 },
+          "notes": { "type": "string" },
           "withdrawnDate": { "type": "string", "format": "date-time" }
         }
       },
@@ -388,6 +435,7 @@
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "approvedBy": { "type": "string", "minLength": 1 },
+          "notes": { "type": "string" },
           "withdrawnDate": { "type": "string", "format": "date-time" }
         }
       },

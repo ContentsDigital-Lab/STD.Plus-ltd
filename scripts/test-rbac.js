@@ -130,7 +130,14 @@ async function testResource(tokens, name, path, createBody) {
 async function testOrders(tokens, customerId, materialId, workerId) {
   console.log('\n=== Orders (admin+manager CD, all update, worker sees own) ===\n');
   const path = '/api/orders';
-  const body = { customer: customerId, material: materialId, quantity: 5 };
+  const body = {
+    customer: customerId,
+    material: materialId,
+    quantity: 5,
+    stations: ['cutting', 'polishing'],
+    currentStationIndex: 0,
+    notes: 'RBAC test order',
+  };
 
   const r1 = await api('POST', path, tokens.admin, { ...body, assignedTo: workerId });
   check('POST   /orders              (admin)', r1.status, 201);
@@ -150,8 +157,14 @@ async function testOrders(tokens, customerId, materialId, workerId) {
   console.log(`          worker sees ${r5.data.data?.length || 0} order(s), admin sees ${r4.data.data?.length || 0}`);
 
   if (ordId) {
-    const r6 = await api('PATCH', `${path}/${ordId}`, tokens.worker, { status: 'in_progress' });
-    check('PATCH  /orders/:id          (worker — assigned)', r6.status, 200);
+    const r6 = await api('PATCH', `${path}/${ordId}`, tokens.worker, {
+      status: 'in_progress',
+      currentStationIndex: 1,
+      stationHistory: [{ station: 'cutting', enteredAt: new Date().toISOString(), completedBy: workerId }],
+      stationData: { cutting: { result: 'pass' } },
+      notes: 'Started production',
+    });
+    check('PATCH  /orders/:id          (worker — assigned, new fields)', r6.status, 200);
 
     if (ordId2) {
       const r7 = await api('PATCH', `${path}/${ordId2}`, tokens.worker, { status: 'in_progress' });
@@ -216,7 +229,7 @@ async function testRequests(tokens, customerId, workerId) {
 async function testWithdrawals(tokens, materialId, workerId) {
   console.log('\n=== Withdrawals (all create, admin+manager update/delete, worker sees own) ===\n');
   const path = '/api/withdrawals';
-  const body = { withdrawnBy: workerId, material: materialId, quantity: 2, stockType: 'Raw' };
+  const body = { withdrawnBy: workerId, material: materialId, quantity: 2, stockType: 'Raw', notes: 'RBAC test withdrawal' };
 
   const r1 = await api('POST', path, tokens.admin, body);
   check('POST   /withdrawals         (admin)', r1.status, 201);
@@ -238,8 +251,8 @@ async function testWithdrawals(tokens, materialId, workerId) {
   if (wdId) {
     const r6 = await api('PATCH', `${path}/${wdId}`, tokens.worker, { quantity: 99 });
     check('PATCH  /withdrawals/:id     (worker)', r6.status, 403);
-    const r7 = await api('PATCH', `${path}/${wdId}`, tokens.manager, { quantity: 10 });
-    check('PATCH  /withdrawals/:id     (manager)', r7.status, 200);
+    const r7 = await api('PATCH', `${path}/${wdId}`, tokens.manager, { quantity: 10, notes: 'Updated by manager' });
+    check('PATCH  /withdrawals/:id     (manager, with notes)', r7.status, 200);
 
     const r8 = await api('DELETE', `${path}/${wdId}`, tokens.worker);
     check('DELETE /withdrawals/:id     (worker)', r8.status, 403);
