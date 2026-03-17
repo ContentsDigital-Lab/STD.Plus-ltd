@@ -1,4 +1,5 @@
 const Request = require('../models/Request');
+const Counter = require('../models/Counter');
 const Customer = require('../models/Customer');
 const Worker = require('../models/Worker');
 const Order = require('../models/Order');
@@ -50,7 +51,8 @@ exports.create = async (req, res, next) => {
       { model: Worker, id: assignedTo, label: 'Worker (assignedTo)' },
     ]);
 
-    const request = await Request.create(req.validated.body);
+    const requestNumber = await Counter.getNext('request', 'REQ');
+    const request = await Request.create({ ...req.validated.body, requestNumber });
     const populated = await request.populate(POPULATE_FIELDS);
     emit(req, 'request:updated', { action: 'created', data: populated }, ['dashboard', 'request']);
     success(res, populated, 'Request created', 201);

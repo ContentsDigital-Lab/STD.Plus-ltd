@@ -14,6 +14,7 @@
     "test:rate-limit": "node scripts/test-rate-limit.js",
     "seed": "node scripts/seed.js",
     "reset": "node scripts/reset.js",
+    "backfill": "node scripts/backfill-auto-numbers.js",
     "docs": "cd docs && npx mintlify dev"
   },
   "repository": {
