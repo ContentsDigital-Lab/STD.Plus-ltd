@@ -653,6 +653,102 @@ async function testWithdrawalNotes(token) {
 }
 
 // ──────────────────────────────────────────────
+// 10. REQUEST AUTO-NUMBERING
+// ──────────────────────────────────────────────
+
+async function testRequestNumbering(token) {
+  console.log('\n=== Request Auto-Numbering ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'Numbering Cust' });
+  const custId = cust.data.data._id;
+
+  // Create first request — should get a requestNumber
+  const r1 = await api('POST', '/api/requests', token, { details: { type: 'cut', quantity: 5 }, customer: custId });
+  check('CREATE request has requestNumber', r1.status, 201);
+  const num1 = r1.data.data.requestNumber;
+  check('  requestNumber is a string', typeof num1, 'string');
+  check('  requestNumber starts with REQ-', num1.startsWith('REQ-'), true);
+  console.log(`          got: ${num1}`);
+
+  // Create second request — should get a different (incremented) number
+  const r2 = await api('POST', '/api/requests', token, { details: { type: 'polish', quantity: 3 }, customer: custId });
+  check('CREATE second request has requestNumber', r2.status, 201);
+  const num2 = r2.data.data.requestNumber;
+  check('  requestNumber is different from first', num1 !== num2, true);
+  console.log(`          got: ${num2}`);
+
+  // Verify the number is sequential (second > first)
+  const seq1 = parseInt(num1.split('-')[1]);
+  const seq2 = parseInt(num2.split('-')[1]);
+  check('  second number is sequential', seq2, seq1 + 1);
+
+  // GET should include requestNumber
+  const r3 = await api('GET', `/api/requests/${r1.data.data._id}`, token);
+  check('GET request includes requestNumber', r3.data.data.requestNumber, num1);
+
+  // GET all should include requestNumber
+  const r4 = await api('GET', '/api/requests?limit=100', token);
+  const withNumbers = r4.data.data.filter((r) => r.requestNumber);
+  check('GET all — created requests have requestNumber', withNumbers.length >= 2, true);
+
+  // Update should NOT change requestNumber
+  const r5 = await api('PATCH', `/api/requests/${r1.data.data._id}`, token, { deliveryLocation: 'Updated' });
+  check('UPDATE does not change requestNumber', r5.data.data.requestNumber, num1);
+
+  // Clean up
+  await api('DELETE', `/api/requests/${r1.data.data._id}`, token);
+  await api('DELETE', `/api/requests/${r2.data.data._id}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 11. ORDER AUTO-NUMBERING
+// ──────────────────────────────────────────────
+
+async function testOrderNumbering(token) {
+  console.log('\n=== Order Auto-Numbering ===\n');
+
+  const mat = await api('POST', '/api/materials', token, { name: 'OrdNum Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'OrdNum Cust' });
+  const custId = cust.data.data._id;
+
+  // Create first order — should get an orderNumber
+  const r1 = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 5 });
+  check('CREATE order has orderNumber', r1.status, 201);
+  const num1 = r1.data.data.orderNumber;
+  check('  orderNumber is a string', typeof num1, 'string');
+  check('  orderNumber starts with ORD-', num1.startsWith('ORD-'), true);
+  console.log(`          got: ${num1}`);
+
+  // Create second order — should get a different (incremented) number
+  const r2 = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 3 });
+  check('CREATE second order has orderNumber', r2.status, 201);
+  const num2 = r2.data.data.orderNumber;
+  check('  orderNumber is different from first', num1 !== num2, true);
+  console.log(`          got: ${num2}`);
+
+  // Verify sequential
+  const seq1 = parseInt(num1.split('-')[1]);
+  const seq2 = parseInt(num2.split('-')[1]);
+  check('  second number is sequential', seq2, seq1 + 1);
+
+  // GET should include orderNumber
+  const r3 = await api('GET', `/api/orders/${r1.data.data._id}`, token);
+  check('GET order includes orderNumber', r3.data.data.orderNumber, num1);
+
+  // Update should NOT change orderNumber
+  const r4 = await api('PATCH', `/api/orders/${r1.data.data._id}`, token, { notes: 'Updated' });
+  check('UPDATE does not change orderNumber', r4.data.data.orderNumber, num1);
+
+  // Clean up
+  await api('DELETE', `/api/orders/${r1.data.data._id}`, token);
+  await api('DELETE', `/api/orders/${r2.data.data._id}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -671,6 +767,8 @@ async function main() {
   await testNotificationPreferences(token);
   await testOrderNewFields(token);
   await testWithdrawalNotes(token);
+  await testRequestNumbering(token);
+  await testOrderNumbering(token);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const requestSchema = new mongoose.Schema({
+  requestNumber: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
   details: {
     type: {
       type: String,

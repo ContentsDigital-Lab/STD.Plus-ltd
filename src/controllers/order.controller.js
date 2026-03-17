@@ -1,4 +1,5 @@
 const Order = require('../models/Order');
+const Counter = require('../models/Counter');
 const Customer = require('../models/Customer');
 const Material = require('../models/Material');
 const Worker = require('../models/Worker');
@@ -61,7 +62,8 @@ exports.create = async (req, res, next) => {
   try {
     await verifyReferences(buildRefs(req.validated.body));
 
-    const order = await Order.create(req.validated.body);
+    const orderNumber = await Counter.getNext('order', 'ORD');
+    const order = await Order.create({ ...req.validated.body, orderNumber });
     const populated = await order.populate(POPULATE_FIELDS);
     emit(req, 'order:updated', { action: 'created', data: populated }, ['dashboard', 'order']);
     success(res, populated, 'Order created', 201);

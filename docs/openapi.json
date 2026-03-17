@@ -251,6 +251,7 @@
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
+          "requestNumber": { "type": "string", "description": "Auto-generated unique identifier (e.g. REQ-0001)", "example": "REQ-0001" },
           "details": { "$ref": "#/components/schemas/RequestDetails" },
           "customer": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Customer" }] },
           "deadline": { "type": "string", "format": "date-time", "nullable": true },
@@ -312,6 +313,7 @@
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
+          "orderNumber": { "type": "string", "description": "Auto-generated unique identifier (e.g. ORD-0001)", "example": "ORD-0001" },
           "request": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Request" }] },
           "priority": { "type": "number" },
           "customer": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Customer" }] },
