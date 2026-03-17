@@ -25,8 +25,9 @@ npm run dev             # starts dev server on http://localhost:3000
 | `PORT` | `3000` | Server port |
 | `CORS_ORIGIN` | `*` | Allowed CORS origin |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window (ms) |
-| `RATE_LIMIT_MAX` | `100` | Max requests per window |
-| `RATE_LIMIT_BAN_MS` | `10000` | Cooldown after hitting the limit (ms) |
+| `RATE_LIMIT_MAX` | `100` | Max requests per window (per IP) |
+| `RATE_LIMIT_AUTH_MAX` | `1000` | Max requests per window (per authenticated user) |
+| `RATE_LIMIT_BAN_MS` | `10000` | Cooldown after hitting the IP limit (ms) |
 
 ## Authentication
 
@@ -67,6 +68,7 @@ npm run test:rbac        # test role-based access control
 npm run test:socket      # test WebSocket events
 npm run test:integrity   # test data integrity enforcement
 npm run test:pagination  # test pagination
+npm run test:rate-limit  # test rate limiting (IP + user-based)
 ```
 
 ## Full Documentation

@@ -31,8 +31,9 @@ description: Get the STD Plus server running in minutes
     | `PORT` | `3000` | Server port |
     | `CORS_ORIGIN` | `*` | Allowed CORS origin |
     | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window (ms) |
-    | `RATE_LIMIT_MAX` | `100` | Max requests per window |
-    | `RATE_LIMIT_BAN_MS` | `10000` | Cooldown after hitting the limit (ms) |
+    | `RATE_LIMIT_MAX` | `1000` | Max requests per window (per IP, public routes) |
+    | `RATE_LIMIT_AUTH_MAX` | `1000` | Max requests per window (per authenticated user) |
+    | `RATE_LIMIT_BAN_MS` | `10000` | Cooldown after hitting the IP limit (ms) |
     | `MONGODB_URI` | — | MongoDB connection string |
     | `JWT_SECRET` | — | Secret key for signing JWTs |
     | `JWT_EXPIRES_IN` | `1d` | JWT expiration time |
@@ -97,6 +98,6 @@ npm run test:integrity
 # Test pagination
 npm run test:pagination
 
-# Test rate limiting
-bash scripts/test-rate-limit.sh
+# Test rate limiting (IP + user-based)
+npm run test:rate-limit
 ```
