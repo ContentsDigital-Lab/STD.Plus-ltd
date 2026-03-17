@@ -8,6 +8,13 @@ const claimController = require('../controllers/claim.controller');
 
 const router = Router();
 
+const stationHistoryEntry = z.object({
+  station: z.string().min(1),
+  enteredAt: z.string().datetime().optional(),
+  exitedAt: z.string().datetime().nullable().optional(),
+  completedBy: z.string().min(1).nullable().optional(),
+});
+
 const createSchema = z.object({
   body: z.object({
     request: z.string().min(1).optional(),
@@ -16,6 +23,10 @@ const createSchema = z.object({
     material: z.string().min(1),
     quantity: z.number().min(1),
     stations: z.array(z.string().min(1)).optional(),
+    currentStationIndex: z.number().min(0).optional(),
+    stationHistory: z.array(stationHistoryEntry).optional(),
+    stationData: z.record(z.string(), z.any()).optional(),
+    notes: z.string().optional(),
     status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
     claim: z.string().min(1).optional(),
     withdrawal: z.string().min(1).optional(),
@@ -31,6 +42,10 @@ const updateSchema = z.object({
     material: z.string().min(1).optional(),
     quantity: z.number().min(1).optional(),
     stations: z.array(z.string().min(1)).optional(),
+    currentStationIndex: z.number().min(0).optional(),
+    stationHistory: z.array(stationHistoryEntry).optional(),
+    stationData: z.record(z.string(), z.any()).optional(),
+    notes: z.string().optional(),
     status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
     claim: z.string().min(1).optional(),
     withdrawal: z.string().min(1).optional(),

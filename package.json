@@ -11,6 +11,7 @@
     "test:integrity": "node scripts/test-integrity.js",
     "test:pagination": "node scripts/test-pagination.js",
     "test:socket": "node scripts/test-socket.js",
+    "test:rate-limit": "node scripts/test-rate-limit.js",
     "seed": "node scripts/seed.js",
     "reset": "node scripts/reset.js",
     "docs": "cd docs && npx mintlify dev"

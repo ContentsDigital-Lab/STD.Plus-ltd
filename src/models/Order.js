@@ -29,6 +29,28 @@ const orderSchema = new mongoose.Schema({
     type: [String],
     default: [],
   },
+  currentStationIndex: {
+    type: Number,
+    default: 0,
+  },
+  stationHistory: {
+    type: [{
+      station: { type: String, required: true },
+      enteredAt: { type: Date, default: Date.now },
+      exitedAt: { type: Date, default: null },
+      completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker', default: null },
+    }],
+    default: [],
+  },
+  stationData: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: () => new Map(),
+  },
+  notes: {
+    type: String,
+    default: '',
+  },
   status: {
     type: String,
     enum: ['pending', 'in_progress', 'completed', 'cancelled'],

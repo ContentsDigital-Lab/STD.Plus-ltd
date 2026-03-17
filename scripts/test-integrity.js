@@ -515,6 +515,144 @@ async function testNotificationPreferences(token) {
 }
 
 // ──────────────────────────────────────────────
+// 8. ORDER NEW FIELDS (currentStationIndex, stationHistory, stationData, notes)
+// ──────────────────────────────────────────────
+
+async function testOrderNewFields(token) {
+  console.log('\n=== Order New Fields (currentStationIndex, stationHistory, stationData, notes) ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const mat = await api('POST', '/api/materials', token, { name: 'Station Flow Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'Station Flow Customer' });
+  const custId = cust.data.data._id;
+
+  // Create order with new fields
+  const r1 = await api('POST', '/api/orders', token, {
+    customer: custId,
+    material: matId,
+    quantity: 10,
+    stations: ['cutting', 'polishing', 'inspection'],
+    currentStationIndex: 0,
+    stationHistory: [
+      { station: 'cutting', enteredAt: new Date().toISOString(), completedBy: workerId },
+    ],
+    stationData: { cutting: { temperature: 350, blade: 'diamond' } },
+    notes: 'Rush order — customer VIP',
+  });
+  check('CREATE order with new fields', r1.status, 201);
+  const ordId = r1.data.data._id;
+
+  // Verify fields persisted
+  const r2 = await api('GET', `/api/orders/${ordId}`, token);
+  check('  currentStationIndex persisted', r2.data.data.currentStationIndex, 0);
+  check('  stationHistory length', r2.data.data.stationHistory.length, 1);
+  check('  stationHistory[0].station', r2.data.data.stationHistory[0].station, 'cutting');
+  check('  stationData.cutting exists', r2.data.data.stationData.cutting !== undefined, true);
+  check('  stationData.cutting.temperature', r2.data.data.stationData.cutting.temperature, 350);
+  check('  notes persisted', r2.data.data.notes, 'Rush order — customer VIP');
+
+  // Update: advance station, add history entry, add stationData
+  const r3 = await api('PATCH', `/api/orders/${ordId}`, token, {
+    currentStationIndex: 1,
+    stationHistory: [
+      ...r2.data.data.stationHistory,
+      { station: 'polishing', enteredAt: new Date().toISOString() },
+    ],
+    stationData: {
+      ...r2.data.data.stationData,
+      polishing: { grit: 400, passes: 3 },
+    },
+    notes: 'Rush order — customer VIP. Polishing started.',
+  });
+  check('UPDATE order advance station', r3.status, 200);
+
+  const r4 = await api('GET', `/api/orders/${ordId}`, token);
+  check('  currentStationIndex updated', r4.data.data.currentStationIndex, 1);
+  check('  stationHistory length after update', r4.data.data.stationHistory.length, 2);
+  check('  stationHistory[1].station', r4.data.data.stationHistory[1].station, 'polishing');
+  check('  stationData.polishing.grit', r4.data.data.stationData.polishing.grit, 400);
+  check('  stationData.cutting preserved', r4.data.data.stationData.cutting.temperature, 350);
+  checkIncludes('  notes updated', r4.data.data.notes, 'Polishing started');
+
+  // Create order with defaults — new fields should have sensible defaults
+  const r5 = await api('POST', '/api/orders', token, {
+    customer: custId,
+    material: matId,
+    quantity: 1,
+  });
+  check('CREATE order without new fields (defaults)', r5.status, 201);
+  const ordId2 = r5.data.data._id;
+
+  const r6 = await api('GET', `/api/orders/${ordId2}`, token);
+  check('  default currentStationIndex', r6.data.data.currentStationIndex, 0);
+  check('  default stationHistory empty', r6.data.data.stationHistory.length, 0);
+  check('  default notes empty', r6.data.data.notes, '');
+
+  // Clean up
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/orders/${ordId2}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 9. WITHDRAWAL NOTES FIELD
+// ──────────────────────────────────────────────
+
+async function testWithdrawalNotes(token) {
+  console.log('\n=== Withdrawal Notes Field ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const mat = await api('POST', '/api/materials', token, { name: 'Notes Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const inv = await api('POST', '/api/inventories', token, { material: matId, stockType: 'Raw', quantity: 100, location: 'WH' });
+  const invId = inv.data.data._id;
+
+  // Create withdrawal with notes
+  const r1 = await api('POST', '/api/withdrawals', token, {
+    withdrawnBy: workerId,
+    material: matId,
+    quantity: 5,
+    stockType: 'Raw',
+    notes: 'Needed for urgent repair job',
+  });
+  check('CREATE withdrawal with notes', r1.status, 201);
+  const wdId = r1.data.data._id;
+  check('  notes persisted', r1.data.data.notes, 'Needed for urgent repair job');
+
+  // Update notes
+  const r2 = await api('PATCH', `/api/withdrawals/${wdId}`, token, {
+    notes: 'Updated: repair completed, leftover returned',
+  });
+  check('UPDATE withdrawal notes', r2.status, 200);
+
+  const r3 = await api('GET', `/api/withdrawals/${wdId}`, token);
+  check('  notes updated', r3.data.data.notes, 'Updated: repair completed, leftover returned');
+
+  // Create withdrawal without notes — should default to empty
+  const r4 = await api('POST', '/api/withdrawals', token, {
+    withdrawnBy: workerId,
+    material: matId,
+    quantity: 3,
+    stockType: 'Raw',
+  });
+  check('CREATE withdrawal without notes (default)', r4.status, 201);
+  const wdId2 = r4.data.data._id;
+  check('  default notes empty', r4.data.data.notes, '');
+
+  // Clean up
+  await api('DELETE', `/api/withdrawals/${wdId}`, token);
+  await api('DELETE', `/api/withdrawals/${wdId2}`, token);
+  await api('DELETE', `/api/inventories/${invId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -531,6 +669,8 @@ async function main() {
   await testRequestCascade(token);
   await testStationTemplateCascade(token);
   await testNotificationPreferences(token);
+  await testOrderNewFields(token);
+  await testWithdrawalNotes(token);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

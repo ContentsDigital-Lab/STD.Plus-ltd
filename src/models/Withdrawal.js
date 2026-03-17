@@ -36,6 +36,10 @@ const withdrawalSchema = new mongoose.Schema({
     ref: 'Worker',
     default: null,
   },
+  notes: {
+    type: String,
+    default: '',
+  },
   withdrawnDate: {
     type: Date,
     default: Date.now,
