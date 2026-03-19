@@ -11,11 +11,15 @@ const updateSchema = z.object({
   body: z.object({
     source: z.enum(['customer', 'worker']).optional(),
     material: z.string().min(1).optional(),
+    pane: z.string().min(1).optional(),
     description: z.string().min(1).optional(),
+    defectCode: z.enum(['broken', 'chipped', 'dimension_wrong', 'scratch', 'other']).optional(),
+    defectStation: z.string().optional(),
     status: z.enum(['pending', 'approved', 'rejected']).optional(),
     decision: z.enum(['destroy', 'keep']).optional(),
     reportedBy: z.string().min(1).optional(),
     approvedBy: z.string().min(1).optional(),
+    remadePane: z.string().min(1).optional(),
     claimDate: z.string().datetime().optional(),
   }),
 });

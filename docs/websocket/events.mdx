@@ -44,6 +44,8 @@ socket.emit('join_me', (ack) => {
 | `join_withdrawal` | OUTBOUND | `withdrawal` | Join withdrawal page |
 | `join_order` | OUTBOUND | `order` | Join order page |
 | `join_claim` | OUTBOUND | `claim` | Join claim page |
+| `join_pane` | OUTBOUND | `pane` | Join pane page |
+| `join_production` | OUTBOUND | `production` | Join production tracking page |
 | `join_station_room` | OUTBOUND | `station:<stationId>` | Join a specific station's work view |
 | `leave_station_room` | OUTBOUND | `station:<stationId>` | Leave a specific station's work view |
 
@@ -94,6 +96,8 @@ socket.emit('leave_dashboard', (ack) => {
 | `leave_withdrawal` | OUTBOUND | `withdrawal` | Leave withdrawal page |
 | `leave_order` | OUTBOUND | `order` | Leave order page |
 | `leave_claim` | OUTBOUND | `claim` | Leave claim page |
+| `leave_pane` | OUTBOUND | `pane` | Leave pane page |
+| `leave_production` | OUTBOUND | `production` | Leave production tracking page |
 | `leave_station_room` | OUTBOUND | `station:<stationId>` | Leave a specific station's work view |
 
 ## Data Events
@@ -121,6 +125,8 @@ socket.on('order:updated', (payload) => {
 | `withdrawal:updated` | INBOUND | `dashboard`, `withdrawal` | Withdrawal create / update / delete |
 | `claim:updated` | INBOUND | `dashboard`, `claim` | Claim create / update / delete |
 | `station:updated` | INBOUND | `dashboard`, `station` | Station create / update / delete |
+| `pane:updated` | INBOUND | `dashboard`, `pane`, `production` | Pane create / update / delete |
+| `production-log:updated` | INBOUND | `dashboard`, `production` | Production log create / update / delete |
 | `station-template:updated` | INBOUND | `dashboard`, `station` | Station template create / update / delete |
 | `station:check_in` | INBOUND | `station:<stationId>` | Order update with station changes |
 

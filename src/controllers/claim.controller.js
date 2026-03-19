@@ -3,12 +3,13 @@ const Counter = require('../models/Counter');
 const Order = require('../models/Order');
 const Material = require('../models/Material');
 const Worker = require('../models/Worker');
+const GlassPane = require('../models/GlassPane');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['order', 'material', 'reportedBy', 'approvedBy'];
+const POPULATE_FIELDS = ['order', 'material', 'pane', 'reportedBy', 'approvedBy', 'remadePane'];
 
 exports.getAll = async (req, res, next) => {
   try {
@@ -41,12 +42,14 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { material, reportedBy, approvedBy } = req.validated.body;
+    const { material, reportedBy, approvedBy, pane, remadePane } = req.validated.body;
     await verifyReferences([
       { model: Order, id: req.params.orderId, label: 'Order' },
       { model: Material, id: material, label: 'Material' },
       { model: Worker, id: reportedBy, label: 'Worker (reportedBy)' },
       { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
+      { model: GlassPane, id: pane, label: 'GlassPane' },
+      { model: GlassPane, id: remadePane, label: 'GlassPane (remadePane)' },
     ]);
 
     const claimNumber = await Counter.getNext('claim', 'CLM');
@@ -73,11 +76,13 @@ exports.update = async (req, res, next) => {
       }
     }
 
-    const { material, reportedBy, approvedBy } = req.validated.body;
+    const { material, reportedBy, approvedBy, pane, remadePane } = req.validated.body;
     await verifyReferences([
       { model: Material, id: material, label: 'Material' },
       { model: Worker, id: reportedBy, label: 'Worker (reportedBy)' },
       { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
+      { model: GlassPane, id: pane, label: 'GlassPane' },
+      { model: GlassPane, id: remadePane, label: 'GlassPane (remadePane)' },
     ]);
 
     const claim = await Claim.findByIdAndUpdate(req.params.id, req.validated.body, {

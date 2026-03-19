@@ -1,6 +1,6 @@
 const AppError = require('../utils/AppError');
 
-const ID_FIELDS = ['orderNumber', 'requestNumber', 'claimNumber'];
+const ID_FIELDS = ['orderNumber', 'requestNumber', 'claimNumber', 'paneNumber'];
 
 const getIdentifiers = async (model, filter) => {
   const docs = await model.find(filter).select([...ID_FIELDS, '_id']).lean();

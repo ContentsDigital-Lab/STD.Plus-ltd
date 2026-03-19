@@ -377,6 +377,103 @@ async function testNotifications(tokens, workerId) {
   if (notifId2) await api('DELETE', `${path}/${notifId2}`, tokens.admin);
 }
 
+async function testPanes(tokens, customerId, materialId) {
+  console.log('\n=== Panes (admin+manager CU, admin-only D) ===\n');
+  const path = '/api/panes';
+
+  const ord = await api('POST', '/api/orders', tokens.admin, { customer: customerId, material: materialId, quantity: 5 });
+  const ordId = ord.data.data._id;
+  const body = { order: ordId, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' };
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /panes               (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /panes               (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /panes               (worker)', r3.status, 200);
+
+  const r4 = await api('POST', path, tokens.admin, body);
+  check('POST   /panes               (admin)', r4.status, 201);
+  const paneId = r4.data.data?._id;
+  check('  has paneNumber', typeof r4.data.data?.paneNumber, 'string');
+  check('  has qrCode', typeof r4.data.data?.qrCode, 'string');
+
+  const r5 = await api('POST', path, tokens.manager, body);
+  check('POST   /panes               (manager)', r5.status, 201);
+  const paneId2 = r5.data.data?._id;
+
+  const r6 = await api('POST', path, tokens.worker, body);
+  check('POST   /panes               (worker)', r6.status, 403);
+
+  if (paneId) {
+    const r7 = await api('PATCH', `${path}/${paneId}`, tokens.manager, { currentStation: 'cutting' });
+    check('PATCH  /panes/:id           (manager)', r7.status, 200);
+    const r8 = await api('PATCH', `${path}/${paneId}`, tokens.worker, { currentStation: 'edging' });
+    check('PATCH  /panes/:id           (worker)', r8.status, 403);
+
+    const r9 = await api('DELETE', `${path}/${paneId}`, tokens.worker);
+    check('DELETE /panes/:id           (worker)', r9.status, 403);
+    const r10 = await api('DELETE', `${path}/${paneId}`, tokens.manager);
+    check('DELETE /panes/:id           (manager)', r10.status, 403);
+    const r11 = await api('DELETE', `${path}/${paneId}`, tokens.admin);
+    check('DELETE /panes/:id           (admin)', r11.status, 200);
+  }
+
+  if (paneId2) await api('DELETE', `${path}/${paneId2}`, tokens.admin);
+  await api('DELETE', `/api/orders/${ordId}`, tokens.admin);
+}
+
+async function testProductionLogs(tokens, customerId, materialId) {
+  console.log('\n=== Production Logs (all create, admin+manager update, admin-only delete) ===\n');
+  const path = '/api/production-logs';
+
+  const me = await api('GET', '/api/auth/me', tokens.worker);
+  const workerId = me.data.data._id;
+
+  const ord = await api('POST', '/api/orders', tokens.admin, { customer: customerId, material: materialId, quantity: 1 });
+  const ordId = ord.data.data._id;
+  const pane = await api('POST', '/api/panes', tokens.admin, { order: ordId });
+  const paneId = pane.data.data._id;
+
+  const body = { pane: paneId, order: ordId, station: 'cutting', action: 'scan_in', operator: workerId };
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /production-logs     (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.worker);
+  check('GET    /production-logs     (worker)', r2.status, 200);
+
+  const r3 = await api('POST', path, tokens.admin, body);
+  check('POST   /production-logs     (admin)', r3.status, 201);
+  const logId = r3.data.data?._id;
+
+  const r4 = await api('POST', path, tokens.manager, { ...body, action: 'start' });
+  check('POST   /production-logs     (manager)', r4.status, 201);
+  const logId2 = r4.data.data?._id;
+
+  const r5 = await api('POST', path, tokens.worker, { ...body, action: 'complete' });
+  check('POST   /production-logs     (worker)', r5.status, 201);
+  const logId3 = r5.data.data?._id;
+
+  if (logId) {
+    const r6 = await api('PATCH', `${path}/${logId}`, tokens.manager, { status: 'pass' });
+    check('PATCH  /production-logs/:id (manager)', r6.status, 200);
+    const r7 = await api('PATCH', `${path}/${logId}`, tokens.worker, { status: 'fail' });
+    check('PATCH  /production-logs/:id (worker)', r7.status, 403);
+
+    const r8 = await api('DELETE', `${path}/${logId}`, tokens.worker);
+    check('DELETE /production-logs/:id (worker)', r8.status, 403);
+    const r9 = await api('DELETE', `${path}/${logId}`, tokens.manager);
+    check('DELETE /production-logs/:id (manager)', r9.status, 403);
+    const r10 = await api('DELETE', `${path}/${logId}`, tokens.admin);
+    check('DELETE /production-logs/:id (admin)', r10.status, 200);
+  }
+
+  if (logId2) await api('DELETE', `${path}/${logId2}`, tokens.admin);
+  if (logId3) await api('DELETE', `${path}/${logId3}`, tokens.admin);
+  await api('DELETE', `/api/panes/${paneId}`, tokens.admin);
+  await api('DELETE', `/api/orders/${ordId}`, tokens.admin);
+}
+
 async function testNotificationPreferences(tokens) {
   console.log('\n=== Notification Preferences (self-update via /auth/me) ===\n');
 
@@ -488,6 +585,8 @@ async function main() {
   await testRequests(tokens, custId);
   await testWithdrawals(tokens, matId, workerId);
   await testClaims(tokens, custId, matId, workerId, adminId);
+  await testPanes(tokens, custId, matId);
+  await testProductionLogs(tokens, custId, matId);
   await testNotifications(tokens, workerId);
   await testNotificationPreferences(tokens);
 

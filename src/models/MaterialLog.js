@@ -6,9 +6,14 @@ const materialLogSchema = new mongoose.Schema({
     ref: 'Material',
     required: true,
   },
+  pane: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'GlassPane',
+    default: null,
+  },
   actionType: {
     type: String,
-    enum: ['withdraw', 'claim', 'import', 'cut'],
+    enum: ['withdraw', 'claim', 'import', 'cut', 'remake'],
     required: true,
   },
   referenceId: {

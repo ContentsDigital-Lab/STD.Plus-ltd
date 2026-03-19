@@ -139,6 +139,28 @@
             ]
           },
           {
+            "group": "Panes",
+            "pages": [
+              "api-reference/panes/list-all-panes",
+              "api-reference/panes/create-a-pane",
+              "api-reference/panes/delete-multiple-panes",
+              "api-reference/panes/get-pane-by-id",
+              "api-reference/panes/update-a-pane",
+              "api-reference/panes/delete-a-pane"
+            ]
+          },
+          {
+            "group": "Production Logs",
+            "pages": [
+              "api-reference/production-logs/list-all-production-logs",
+              "api-reference/production-logs/create-a-production-log",
+              "api-reference/production-logs/delete-multiple-production-logs",
+              "api-reference/production-logs/get-production-log-by-id",
+              "api-reference/production-logs/update-a-production-log",
+              "api-reference/production-logs/delete-a-production-log"
+            ]
+          },
+          {
             "group": "Station Templates",
             "pages": [
               "api-reference/station-templates/list-all-station-templates",

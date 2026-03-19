@@ -91,7 +91,7 @@ async function testJoinEvents() {
   const token = await getToken();
   const socket = await connect(API, '/api/socket-entry', { token });
 
-  const rooms = ['me', 'dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim'];
+  const rooms = ['me', 'dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production'];
   let n = 1;
 
   for (const room of rooms) {
@@ -121,7 +121,7 @@ async function testLeaveEvents() {
   const token = await getToken();
   const socket = await connect(API, '/api/socket-entry', { token });
 
-  const rooms = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim'];
+  const rooms = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production'];
 
   for (const room of rooms) {
     await emitWithAck(socket, `join_${room}`);
@@ -178,7 +178,7 @@ async function testDataEvents() {
   const socket = await connect(API, '/api/socket-entry', { token });
 
   // join rooms to receive events
-  const rooms = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim'];
+  const rooms = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production'];
   for (const room of rooms) {
     await emitWithAck(socket, `join_${room}`);
   }
@@ -280,6 +280,28 @@ async function testDataEvents() {
   console.log(`${n++}. PASS station:check_in — orderId: ${checkInEvent.orderId}, stationId: ${checkInEvent.stationId}, action: ${checkInEvent.action}`);
 
   await emitWithAckData(socket, 'leave_station_room', { stationId });
+
+  // 13. pane:updated
+  const paneOrd = await apiCall('POST', '/api/orders', token, { customer: cust.data._id, material: matId, quantity: 1 });
+  const paneOrdId = paneOrd.data._id;
+  const panePromise = waitForEvent(socket, 'pane:updated');
+  const paneData = await apiCall('POST', '/api/panes', token, { order: paneOrdId });
+  const paneEvent = await panePromise;
+  console.log(`${n++}. PASS pane:updated — action: ${paneEvent.action}`);
+  const paneId = paneData.data._id;
+
+  // 14. production-log:updated
+  const prodLogPromise = waitForEvent(socket, 'production-log:updated');
+  const prodLogData = await apiCall('POST', '/api/production-logs', token, {
+    pane: paneId, order: paneOrdId, station: 'cutting', action: 'scan_in', operator: workerId,
+  });
+  const prodLogEvent = await prodLogPromise;
+  console.log(`${n++}. PASS production-log:updated — action: ${prodLogEvent.action}`);
+
+  // Cleanup pane test data
+  await apiCall('DELETE', `/api/production-logs/${prodLogData.data._id}`, token);
+  await apiCall('DELETE', `/api/panes/${paneId}`, token);
+  await apiCall('DELETE', `/api/orders/${paneOrdId}`, token);
 
   // Cleanup test data
   await apiCall('DELETE', `/api/orders/${checkInOrderId}`, token);

@@ -52,6 +52,23 @@ const orderSchema = new mongoose.Schema({
     of: mongoose.Schema.Types.Mixed,
     default: () => new Map(),
   },
+  paneCount: {
+    type: Number,
+    default: 0,
+  },
+  panesCompleted: {
+    type: Number,
+    default: 0,
+  },
+  progressPercent: {
+    type: Number,
+    default: 0,
+  },
+  stationBreakdown: {
+    type: Map,
+    of: Number,
+    default: () => new Map(),
+  },
   notes: {
     type: String,
     default: '',

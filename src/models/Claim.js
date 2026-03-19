@@ -21,10 +21,24 @@ const claimSchema = new mongoose.Schema({
     ref: 'Material',
     required: true,
   },
+  pane: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'GlassPane',
+    default: null,
+  },
   description: {
     type: String,
     required: true,
     trim: true,
+  },
+  defectCode: {
+    type: String,
+    enum: ['broken', 'chipped', 'dimension_wrong', 'scratch', 'other'],
+    default: null,
+  },
+  defectStation: {
+    type: String,
+    default: null,
   },
   status: {
     type: String,
@@ -44,6 +58,11 @@ const claimSchema = new mongoose.Schema({
   approvedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Worker',
+    default: null,
+  },
+  remadePane: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'GlassPane',
     default: null,
   },
   claimDate: {

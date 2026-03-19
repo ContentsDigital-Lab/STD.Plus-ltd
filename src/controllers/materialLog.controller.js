@@ -1,12 +1,13 @@
 const MaterialLog = require('../models/MaterialLog');
 const Material = require('../models/Material');
 const Order = require('../models/Order');
+const GlassPane = require('../models/GlassPane');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['material', 'order', 'parentLog'];
+const POPULATE_FIELDS = ['material', 'pane', 'order', 'parentLog'];
 
 const LOG_DEPENDENTS = [
   { model: MaterialLog, field: 'parentLog', label: 'child log(s)' },
@@ -38,11 +39,12 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { material, order, parentLog } = req.validated.body;
+    const { material, order, parentLog, pane } = req.validated.body;
     await verifyReferences([
       { model: Material, id: material, label: 'Material' },
       { model: Order, id: order, label: 'Order' },
       { model: MaterialLog, id: parentLog, label: 'Parent log' },
+      { model: GlassPane, id: pane, label: 'GlassPane' },
     ]);
 
     const log = await MaterialLog.create(req.validated.body);
@@ -56,11 +58,12 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
-    const { material, order, parentLog } = req.validated.body;
+    const { material, order, parentLog, pane } = req.validated.body;
     await verifyReferences([
       { model: Material, id: material, label: 'Material' },
       { model: Order, id: order, label: 'Order' },
       { model: MaterialLog, id: parentLog, label: 'Parent log' },
+      { model: GlassPane, id: pane, label: 'GlassPane' },
     ]);
 
     const log = await MaterialLog.findByIdAndUpdate(req.params.id, req.validated.body, {

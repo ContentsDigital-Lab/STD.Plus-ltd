@@ -14,10 +14,15 @@ const paginate = require('../utils/paginate');
 
 const POPULATE_FIELDS = ['request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo'];
 
+const GlassPane = require('../models/GlassPane');
+const ProductionLog = require('../models/ProductionLog');
+
 const ORDER_DEPENDENTS = [
   { model: Claim, field: 'order', label: 'claim(s)' },
   { model: Withdrawal, field: 'order', label: 'withdrawal(s)' },
   { model: MaterialLog, field: 'order', label: 'material log(s)' },
+  { model: GlassPane, field: 'order', label: 'pane(s)' },
+  { model: ProductionLog, field: 'order', label: 'production log(s)' },
 ];
 
 const buildRefs = (body) => [

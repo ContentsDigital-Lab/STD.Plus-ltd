@@ -7,15 +7,23 @@ const withdrawalController = require('../controllers/withdrawal.controller');
 
 const router = Router();
 
+const withdrawnDimensionsSchema = z.object({
+  width: z.number().min(0).optional(),
+  height: z.number().min(0).optional(),
+  thickness: z.number().min(0).optional(),
+}).optional();
+
 const createSchema = z.object({
   body: z.object({
     order: z.string().min(1).optional(),
+    pane: z.string().min(1).optional(),
     withdrawnBy: z.string().min(1),
     material: z.string().min(1),
     quantity: z.number().min(1),
     stockType: z.enum(['Raw', 'Reuse']),
     status: z.enum(['pending', 'approved', 'rejected']).optional(),
     approvedBy: z.string().min(1).optional(),
+    withdrawnDimensions: withdrawnDimensionsSchema,
     notes: z.string().optional(),
     withdrawnDate: z.string().datetime().optional(),
   }),
@@ -24,12 +32,14 @@ const createSchema = z.object({
 const updateSchema = z.object({
   body: z.object({
     order: z.string().min(1).optional(),
+    pane: z.string().min(1).optional(),
     withdrawnBy: z.string().min(1).optional(),
     material: z.string().min(1).optional(),
     quantity: z.number().min(1).optional(),
     stockType: z.enum(['Raw', 'Reuse']).optional(),
     status: z.enum(['pending', 'approved', 'rejected']).optional(),
     approvedBy: z.string().min(1).optional(),
+    withdrawnDimensions: withdrawnDimensionsSchema,
     notes: z.string().optional(),
     withdrawnDate: z.string().datetime().optional(),
   }),
