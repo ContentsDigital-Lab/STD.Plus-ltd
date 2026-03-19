@@ -749,6 +749,63 @@ async function testOrderNumbering(token) {
 }
 
 // ──────────────────────────────────────────────
+// 12. CLAIM AUTO-NUMBERING
+// ──────────────────────────────────────────────
+
+async function testClaimNumbering(token) {
+  console.log('\n=== Claim Auto-Numbering ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const mat = await api('POST', '/api/materials', token, { name: 'ClmNum Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'ClmNum Cust' });
+  const custId = cust.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 5 });
+  const ordId = ord.data.data._id;
+
+  // Create first claim — should get a claimNumber
+  const r1 = await api('POST', `/api/orders/${ordId}/claims`, token, {
+    source: 'worker', material: matId, description: 'Claim 1', reportedBy: workerId,
+  });
+  check('CREATE claim has claimNumber', r1.status, 201);
+  const num1 = r1.data.data.claimNumber;
+  check('  claimNumber is a string', typeof num1, 'string');
+  check('  claimNumber starts with CLM-', num1.startsWith('CLM-'), true);
+  console.log(`          got: ${num1}`);
+
+  // Create second claim — should get a different (incremented) number
+  const r2 = await api('POST', `/api/orders/${ordId}/claims`, token, {
+    source: 'customer', material: matId, description: 'Claim 2', reportedBy: workerId,
+  });
+  check('CREATE second claim has claimNumber', r2.status, 201);
+  const num2 = r2.data.data.claimNumber;
+  check('  claimNumber is different from first', num1 !== num2, true);
+  console.log(`          got: ${num2}`);
+
+  // Verify sequential
+  const seq1 = parseInt(num1.split('-')[1]);
+  const seq2 = parseInt(num2.split('-')[1]);
+  check('  second number is sequential', seq2, seq1 + 1);
+
+  // GET should include claimNumber
+  const r3 = await api('GET', `/api/claims/${r1.data.data._id}`, token);
+  check('GET claim includes claimNumber', r3.data.data.claimNumber, num1);
+
+  // Update should NOT change claimNumber
+  const r4 = await api('PATCH', `/api/claims/${r1.data.data._id}`, token, { description: 'Updated' });
+  check('UPDATE does not change claimNumber', r4.data.data.claimNumber, num1);
+
+  // Clean up
+  await api('DELETE', `/api/claims/${r1.data.data._id}`, token);
+  await api('DELETE', `/api/claims/${r2.data.data._id}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -769,6 +826,7 @@ async function main() {
   await testWithdrawalNotes(token);
   await testRequestNumbering(token);
   await testOrderNumbering(token);
+  await testClaimNumbering(token);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

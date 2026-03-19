@@ -8,7 +8,9 @@ const errorHandler = (err, req, res, next) => {
     console.error(err.stack);
   }
 
-  return fail(res, message, statusCode);
+  const body = { success: false, message };
+  if (err.data) body.data = err.data;
+  return res.status(statusCode).json(body);
 };
 
 module.exports = errorHandler;

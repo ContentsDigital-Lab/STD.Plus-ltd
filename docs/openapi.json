@@ -445,6 +445,7 @@
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
+          "claimNumber": { "type": "string", "description": "Auto-generated unique identifier (e.g. CLM-0001)", "example": "CLM-0001" },
           "order": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Order" }] },
           "source": { "type": "string", "enum": ["customer", "worker"] },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
@@ -1362,6 +1363,7 @@
       "get": {
         "tags": ["Requests"],
         "summary": "List all requests",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           { "$ref": "#/components/parameters/PageParam" },
@@ -1370,18 +1372,21 @@
         ],
         "responses": {
           "200": { "description": "List of requests", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Request" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "post": {
         "tags": ["Requests"],
         "summary": "Create a request",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RequestCreateBody" } } } },
         "responses": {
           "201": { "description": "Request created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Request" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "delete": {
@@ -1402,18 +1407,20 @@
       "get": {
         "tags": ["Requests"],
         "summary": "Get request by ID",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Request found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Request" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "patch": {
         "tags": ["Requests"],
         "summary": "Update a request",
-        "description": "Workers can only update their own assigned resources.",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RequestUpdateBody" } } } },

@@ -40,6 +40,7 @@ The WebSocket uses a **room-based** architecture. Clients join rooms to subscrib
 Client connects
   └─ auto-joins: user:<userId>
   └─ manually joins: dashboard, inventory, order, etc.
+  └─ dynamic rooms: station:<stationId> (per-station)
 ```
 
 When data changes via the REST API, the server emits events to the relevant rooms. Only clients in that room receive the event.
@@ -68,4 +69,5 @@ When data changes via the REST API, the server emits events to the relevant room
 | `order` | `order:updated` |
 | `claim` | `claim:updated` |
 | `station` | `station:updated`, `station-template:updated` |
+| `station:<stationId>` | `station:check_in` |
 | *(broadcast)* | `system_alert` |

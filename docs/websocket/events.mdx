@@ -44,6 +44,37 @@ socket.emit('join_me', (ack) => {
 | `join_withdrawal` | OUTBOUND | `withdrawal` | Join withdrawal page |
 | `join_order` | OUTBOUND | `order` | Join order page |
 | `join_claim` | OUTBOUND | `claim` | Join claim page |
+| `join_station_room` | OUTBOUND | `station:<stationId>` | Join a specific station's work view |
+| `leave_station_room` | OUTBOUND | `station:<stationId>` | Leave a specific station's work view |
+
+### Station Room Events
+
+Join or leave a **specific station's room** to receive real-time check-in/check-out events for that station only.
+
+<CodeGroup>
+```javascript Join a station room
+socket.emit('join_station_room', { stationId: '69a98ee25bb1d35efb8cc1ff' }, (ack) => {
+  console.log(ack); // { ok: true, room: "station:69a98ee..." }
+});
+```
+
+```javascript Leave a station room
+socket.emit('leave_station_room', { stationId: '69a98ee25bb1d35efb8cc1ff' }, (ack) => {
+  console.log(ack); // { ok: true, room: "station:69a98ee..." }
+});
+```
+</CodeGroup>
+
+| Event | Direction | Room joined/left | Description |
+|---|---|---|---|
+| `join_station_room` | OUTBOUND | `station:<stationId>` | Join a specific station's room |
+| `leave_station_room` | OUTBOUND | `station:<stationId>` | Leave a specific station's room |
+
+**Payload:** `{ stationId: "<station _id>" }`
+
+<Note>
+  These are **dynamic rooms** scoped to individual stations, unlike `join_station` which joins a single shared room for the stations page. `stationId` is required — the callback returns `{ ok: false, error: "stationId is required" }` if omitted.
+</Note>
 
 ### Leave Events
 
@@ -63,6 +94,7 @@ socket.emit('leave_dashboard', (ack) => {
 | `leave_withdrawal` | OUTBOUND | `withdrawal` | Leave withdrawal page |
 | `leave_order` | OUTBOUND | `order` | Leave order page |
 | `leave_claim` | OUTBOUND | `claim` | Leave claim page |
+| `leave_station_room` | OUTBOUND | `station:<stationId>` | Leave a specific station's work view |
 
 ## Data Events
 
@@ -90,6 +122,7 @@ socket.on('order:updated', (payload) => {
 | `claim:updated` | INBOUND | `dashboard`, `claim` | Claim create / update / delete |
 | `station:updated` | INBOUND | `dashboard`, `station` | Station create / update / delete |
 | `station-template:updated` | INBOUND | `dashboard`, `station` | Station template create / update / delete |
+| `station:check_in` | INBOUND | `station:<stationId>` | Order update with station changes |
 
 **Payload format:**
 
@@ -102,6 +135,38 @@ socket.on('order:updated', (payload) => {
   }
 }
 ```
+
+### Station Check-In
+
+Emitted to a **specific station's room** when an order enters or exits that station (triggered by order updates that modify `stationHistory` or `currentStationIndex`).
+
+```javascript
+socket.on('station:check_in', (payload) => {
+  console.log(payload.orderId);   // "69a98ee25bb1d35efb8cc1ff"
+  console.log(payload.stationId); // "69b12cd35bb1d35efb8cc200"
+  console.log(payload.action);    // "entered" | "exited"
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `station:check_in` | INBOUND | `station:<stationId>` | Order update with station changes |
+
+**Payload:**
+
+```json
+{
+  "orderId": "69a98ee25bb1d35efb8cc1ff",
+  "stationId": "69b12cd35bb1d35efb8cc200",
+  "action": "entered"
+}
+```
+
+| Field | Description |
+|---|---|
+| `orderId` | The order that moved |
+| `stationId` | The station where it happened |
+| `action` | `entered` (order arrived) or `exited` (order completed/left) |
 
 ### Notification
 

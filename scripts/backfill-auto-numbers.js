@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const env = require('../src/config/env');
 const Request = require('../src/models/Request');
 const Order = require('../src/models/Order');
+const Claim = require('../src/models/Claim');
 const Counter = require('../src/models/Counter');
 
 async function backfillCollection(Model, field, counterName, prefix) {
@@ -31,6 +32,7 @@ const backfill = async () => {
 
   await backfillCollection(Request, 'requestNumber', 'request', 'REQ');
   await backfillCollection(Order, 'orderNumber', 'order', 'ORD');
+  await backfillCollection(Claim, 'claimNumber', 'claim', 'CLM');
 
   console.log('\nBackfill complete.');
   process.exit(0);

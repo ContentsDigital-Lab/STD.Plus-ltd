@@ -75,6 +75,16 @@ function emitWithAck(socket, event, timeout = 3000) {
   });
 }
 
+function emitWithAckData(socket, event, data, timeout = 3000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timeout waiting for ack on ${event}`)), timeout);
+    socket.emit(event, data, (response) => {
+      clearTimeout(timer);
+      resolve(response);
+    });
+  });
+}
+
 async function testJoinEvents() {
   console.log('=== Room Join Events ===\n');
 
@@ -82,13 +92,24 @@ async function testJoinEvents() {
   const socket = await connect(API, '/api/socket-entry', { token });
 
   const rooms = ['me', 'dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim'];
+  let n = 1;
 
-  for (let i = 0; i < rooms.length; i++) {
-    const room = rooms[i];
+  for (const room of rooms) {
     const ack = await emitWithAck(socket, `join_${room}`);
     if (!ack.ok) throw new Error(`join_${room} failed`);
-    console.log(`${i + 1}. PASS join_${room} — joined room "${ack.room}"`);
+    console.log(`${n++}. PASS join_${room} — joined room "${ack.room}"`);
   }
+
+  // Station room (dynamic)
+  const fakeStationId = '000000000000000000000001';
+  const joinAck = await emitWithAckData(socket, 'join_station_room', { stationId: fakeStationId });
+  if (!joinAck.ok) throw new Error('join_station_room failed');
+  console.log(`${n++}. PASS join_station_room — joined room "${joinAck.room}"`);
+
+  // Station room without stationId (should fail)
+  const badAck = await emitWithAckData(socket, 'join_station_room', {});
+  if (badAck.ok) throw new Error('join_station_room should have failed without stationId');
+  console.log(`${n++}. PASS join_station_room (no stationId) — rejected: "${badAck.error}"`);
 
   socket.disconnect();
   console.log(`\n=== All room join event tests passed ===\n`);
@@ -105,14 +126,26 @@ async function testLeaveEvents() {
   for (const room of rooms) {
     await emitWithAck(socket, `join_${room}`);
   }
+  const fakeStationId = '000000000000000000000001';
+  await emitWithAckData(socket, 'join_station_room', { stationId: fakeStationId });
   console.log('   (joined all rooms first)\n');
 
-  for (let i = 0; i < rooms.length; i++) {
-    const room = rooms[i];
+  let n = 1;
+  for (const room of rooms) {
     const ack = await emitWithAck(socket, `leave_${room}`);
     if (!ack.ok) throw new Error(`leave_${room} failed`);
-    console.log(`${i + 1}. PASS leave_${room} — left room "${ack.room}"`);
+    console.log(`${n++}. PASS leave_${room} — left room "${ack.room}"`);
   }
+
+  // Station room (dynamic)
+  const leaveAck = await emitWithAckData(socket, 'leave_station_room', { stationId: fakeStationId });
+  if (!leaveAck.ok) throw new Error('leave_station_room failed');
+  console.log(`${n++}. PASS leave_station_room — left room "${leaveAck.room}"`);
+
+  // Leave without stationId (should fail)
+  const badAck = await emitWithAckData(socket, 'leave_station_room', {});
+  if (badAck.ok) throw new Error('leave_station_room should have failed without stationId');
+  console.log(`${n++}. PASS leave_station_room (no stationId) — rejected: "${badAck.error}"`);
 
   socket.disconnect();
   console.log(`\n=== All room leave event tests passed ===\n`);
@@ -226,8 +259,31 @@ async function testDataEvents() {
   const alertEvent = await alertPromise;
   console.log(`${n++}. PASS system_alert — message: ${alertEvent.message}`);
 
+  // 12. station:check_in (dynamic station room)
+  const stationId = station.data._id;
+  await emitWithAckData(socket, 'join_station_room', { stationId });
+
+  const checkInOrder = await apiCall('POST', '/api/orders', token, {
+    customer: cust.data._id,
+    material: matId,
+    quantity: 5,
+    stations: [stationId],
+    currentStationIndex: 0,
+  });
+  const checkInOrderId = checkInOrder.data._id;
+
+  const checkInPromise = waitForEvent(socket, 'station:check_in');
+  await apiCall('PATCH', `/api/orders/${checkInOrderId}`, token, {
+    stationHistory: [{ station: stationId, enteredAt: new Date().toISOString() }],
+  });
+  const checkInEvent = await checkInPromise;
+  console.log(`${n++}. PASS station:check_in — orderId: ${checkInEvent.orderId}, stationId: ${checkInEvent.stationId}, action: ${checkInEvent.action}`);
+
+  await emitWithAckData(socket, 'leave_station_room', { stationId });
+
   // Cleanup test data
-  await apiCall('DELETE', `/api/stations/${station.data._id}`, token);
+  await apiCall('DELETE', `/api/orders/${checkInOrderId}`, token);
+  await apiCall('DELETE', `/api/stations/${stationId}`, token);
   await apiCall('DELETE', `/api/station-templates/${tmplId}`, token);
   await apiCall('DELETE', `/api/materials/${matId}`, token);
   await apiCall('DELETE', `/api/inventories/${inv.data._id}`, token);

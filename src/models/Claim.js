@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const claimSchema = new mongoose.Schema({
+  claimNumber: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
   order: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Order',

@@ -184,46 +184,42 @@ async function testOrders(tokens, customerId, materialId, workerId) {
   return { ordId };
 }
 
-async function testRequests(tokens, customerId, workerId) {
-  console.log('\n=== Requests (all create/update, admin+manager delete, worker sees own) ===\n');
+async function testRequests(tokens, customerId) {
+  console.log('\n=== Requests (admin+manager only for all CRUD) ===\n');
   const path = '/api/requests';
   const body = { details: { type: 'cut', quantity: 5 }, customer: customerId };
 
-  const r1 = await api('POST', path, tokens.admin, { ...body, assignedTo: workerId });
-  check('POST   /requests            (admin)', r1.status, 201);
-  const reqId = r1.data.data?._id;
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /requests            (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /requests            (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /requests            (worker)', r3.status, 403);
 
-  const r2 = await api('POST', path, tokens.manager, body);
-  check('POST   /requests            (manager)', r2.status, 201);
-  const reqId2 = r2.data.data?._id;
+  const r4 = await api('POST', path, tokens.admin, body);
+  check('POST   /requests            (admin)', r4.status, 201);
+  const reqId = r4.data.data?._id;
 
-  const r3 = await api('POST', path, tokens.worker, body);
-  check('POST   /requests            (worker)', r3.status, 201);
-  const reqId3 = r3.data.data?._id;
+  const r5 = await api('POST', path, tokens.manager, body);
+  check('POST   /requests            (manager)', r5.status, 201);
+  const reqId2 = r5.data.data?._id;
 
-  const r4 = await api('GET', path, tokens.admin);
-  check('GET    /requests            (admin)', r4.status, 200);
-  const r5 = await api('GET', path, tokens.worker);
-  check('GET    /requests            (worker — own only)', r5.status, 200);
-  console.log(`          worker sees ${r5.data.data?.length || 0} request(s), admin sees ${r4.data.data?.length || 0}`);
+  const r6 = await api('POST', path, tokens.worker, body);
+  check('POST   /requests            (worker)', r6.status, 403);
 
   if (reqId) {
-    const r6 = await api('PATCH', `${path}/${reqId}`, tokens.worker, { deliveryLocation: 'Updated' });
-    check('PATCH  /requests/:id        (worker — assigned)', r6.status, 200);
+    const r7 = await api('PATCH', `${path}/${reqId}`, tokens.manager, { deliveryLocation: 'Updated' });
+    check('PATCH  /requests/:id        (manager)', r7.status, 200);
+    const r8 = await api('PATCH', `${path}/${reqId}`, tokens.worker, { deliveryLocation: 'Hacked' });
+    check('PATCH  /requests/:id        (worker)', r8.status, 403);
 
-    if (reqId2) {
-      const r7 = await api('PATCH', `${path}/${reqId2}`, tokens.worker, { deliveryLocation: 'Hacked' });
-      check('PATCH  /requests/:id        (worker — not assigned)', r7.status, 403);
-    }
+    const r9 = await api('DELETE', `${path}/${reqId}`, tokens.worker);
+    check('DELETE /requests/:id        (worker)', r9.status, 403);
+    const r10 = await api('DELETE', `${path}/${reqId}`, tokens.manager);
+    check('DELETE /requests/:id        (manager)', r10.status, 200);
   }
 
-  const r8 = await api('DELETE', `${path}/${reqId}`, tokens.worker);
-  check('DELETE /requests/:id        (worker)', r8.status, 403);
-  const r9 = await api('DELETE', `${path}/${reqId}`, tokens.manager);
-  check('DELETE /requests/:id        (manager)', r9.status, 200);
-
   if (reqId2) await api('DELETE', `${path}/${reqId2}`, tokens.admin);
-  if (reqId3) await api('DELETE', `${path}/${reqId3}`, tokens.admin);
 }
 
 async function testWithdrawals(tokens, materialId, workerId) {
@@ -489,7 +485,7 @@ async function main() {
   // Test resources with ownership
   await testMaterialLogs(tokens, matId);
   await testOrders(tokens, custId, matId, workerId);
-  await testRequests(tokens, custId, workerId);
+  await testRequests(tokens, custId);
   await testWithdrawals(tokens, matId, workerId);
   await testClaims(tokens, custId, matId, workerId, adminId);
   await testNotifications(tokens, workerId);

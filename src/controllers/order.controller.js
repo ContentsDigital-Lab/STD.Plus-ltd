@@ -90,6 +90,17 @@ exports.update = async (req, res, next) => {
     }).populate(POPULATE_FIELDS);
     if (!order) return fail(res, 'Order not found', 404);
     emit(req, 'order:updated', { action: 'updated', data: order }, ['dashboard', 'order']);
+
+    const body = req.validated.body;
+    if (body.stationHistory || body.currentStationIndex !== undefined) {
+      const stationId = order.stations?.[order.currentStationIndex];
+      if (stationId) {
+        const lastEntry = order.stationHistory?.[order.stationHistory.length - 1];
+        const action = lastEntry?.exitedAt ? 'exited' : 'entered';
+        emit(req, 'station:check_in', { orderId: order._id, stationId, action }, [`station:${stationId}`]);
+      }
+    }
+
     success(res, order, 'Order updated');
   } catch (err) {
     next(err);

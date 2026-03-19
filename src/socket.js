@@ -56,6 +56,30 @@ const setupSocket = (httpServer) => {
       });
     }
 
+    socket.on('join_station_room', (data, callback) => {
+      const stationId = data?.stationId;
+      if (!stationId) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
+        return;
+      }
+      const room = `station:${stationId}`;
+      socket.join(room);
+      console.log(`[socket] ${socket.user.name} joined room ${room}`);
+      if (typeof callback === 'function') callback({ ok: true, room });
+    });
+
+    socket.on('leave_station_room', (data, callback) => {
+      const stationId = data?.stationId;
+      if (!stationId) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
+        return;
+      }
+      const room = `station:${stationId}`;
+      socket.leave(room);
+      console.log(`[socket] ${socket.user.name} left room ${room}`);
+      if (typeof callback === 'function') callback({ ok: true, room });
+    });
+
     socket.on('system_alert', (data) => {
       if (socket.user.role !== 'admin') {
         return socket.emit('error', { message: 'Not authorized to send system alerts' });

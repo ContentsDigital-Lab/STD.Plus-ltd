@@ -1,4 +1,5 @@
 const Claim = require('../models/Claim');
+const Counter = require('../models/Counter');
 const Order = require('../models/Order');
 const Material = require('../models/Material');
 const Worker = require('../models/Worker');
@@ -48,9 +49,11 @@ exports.create = async (req, res, next) => {
       { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
     ]);
 
+    const claimNumber = await Counter.getNext('claim', 'CLM');
     const claim = await Claim.create({
       ...req.validated.body,
       order: req.params.orderId,
+      claimNumber,
     });
     const populated = await claim.populate(POPULATE_FIELDS);
     emit(req, 'claim:updated', { action: 'created', data: populated }, ['dashboard', 'claim']);
