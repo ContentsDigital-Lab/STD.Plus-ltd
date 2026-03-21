@@ -9,7 +9,7 @@ const qcResultSchema = new mongoose.Schema({
 const productionLogSchema = new mongoose.Schema({
   pane: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'GlassPane',
+    ref: 'Pane',
     required: true,
   },
   order: {

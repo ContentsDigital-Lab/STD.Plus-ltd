@@ -7,10 +7,33 @@ const requestController = require('../controllers/request.controller');
 
 const router = Router();
 
+const STATIONS = ['queue', 'cutting', 'edging', 'tempering', 'laminating', 'assembly', 'qc', 'ready', 'defected'];
+
 const detailsSchema = z.object({
   type: z.string().min(1),
   estimatedPrice: z.number().min(0).optional(),
   quantity: z.number().min(1),
+});
+
+const paneItemSchema = z.object({
+  currentStation: z.enum(STATIONS).optional(),
+  routing: z.array(z.string().min(1)).optional(),
+  customRouting: z.boolean().optional(),
+  dimensions: z.object({
+    width: z.number().min(0).optional(),
+    height: z.number().min(0).optional(),
+    thickness: z.number().min(0).optional(),
+  }).optional(),
+  glassType: z.string().optional(),
+  glassTypeLabel: z.string().optional(),
+  processes: z.array(z.string().min(1)).optional(),
+  edgeTasks: z.array(z.object({
+    side: z.string().min(1),
+    edgeProfile: z.string().min(1),
+    machineType: z.string().min(1).optional(),
+    status: z.enum(['pending', 'in_progress', 'completed']).optional(),
+  })).optional(),
+  notes: z.string().optional(),
 });
 
 const createSchema = z.object({
@@ -21,6 +44,7 @@ const createSchema = z.object({
     deliveryLocation: z.string().optional(),
     assignedTo: z.string().min(1).optional(),
     expectedDeliveryDate: z.string().datetime().optional(),
+    panes: z.array(paneItemSchema).optional(),
   }),
 });
 

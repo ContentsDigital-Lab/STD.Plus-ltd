@@ -1,5 +1,5 @@
 const ProductionLog = require('../models/ProductionLog');
-const GlassPane = require('../models/GlassPane');
+const Pane = require('../models/Pane');
 const Order = require('../models/Order');
 const Worker = require('../models/Worker');
 const { success, fail } = require('../utils/response');
@@ -37,7 +37,7 @@ exports.create = async (req, res, next) => {
   try {
     const { pane, order, operator } = req.validated.body;
     await verifyReferences([
-      { model: GlassPane, id: pane, label: 'GlassPane' },
+      { model: Pane, id: pane, label: 'Pane' },
       { model: Order, id: order, label: 'Order' },
       { model: Worker, id: operator, label: 'Worker (operator)' },
     ]);
@@ -55,7 +55,7 @@ exports.update = async (req, res, next) => {
   try {
     const { pane, order, operator } = req.validated.body;
     await verifyReferences([
-      { model: GlassPane, id: pane, label: 'GlassPane' },
+      { model: Pane, id: pane, label: 'Pane' },
       { model: Order, id: order, label: 'Order' },
       { model: Worker, id: operator, label: 'Worker (operator)' },
     ]);

@@ -38,7 +38,7 @@ const withdrawalSchema = new mongoose.Schema({
   },
   pane: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'GlassPane',
+    ref: 'Pane',
     default: null,
   },
   withdrawnDimensions: {

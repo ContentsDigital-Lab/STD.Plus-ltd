@@ -14,14 +14,14 @@ const paginate = require('../utils/paginate');
 
 const POPULATE_FIELDS = ['request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo'];
 
-const GlassPane = require('../models/GlassPane');
+const Pane = require('../models/Pane');
 const ProductionLog = require('../models/ProductionLog');
 
 const ORDER_DEPENDENTS = [
   { model: Claim, field: 'order', label: 'claim(s)' },
   { model: Withdrawal, field: 'order', label: 'withdrawal(s)' },
   { model: MaterialLog, field: 'order', label: 'material log(s)' },
-  { model: GlassPane, field: 'order', label: 'pane(s)' },
+  { model: Pane, field: 'order', label: 'pane(s)' },
   { model: ProductionLog, field: 'order', label: 'production log(s)' },
 ];
 
@@ -69,6 +69,11 @@ exports.create = async (req, res, next) => {
 
     const orderNumber = await Counter.getNext('order', 'ORD');
     const order = await Order.create({ ...req.validated.body, orderNumber });
+
+    if (order.request) {
+      await Pane.updateMany({ request: order.request, order: null }, { order: order._id });
+    }
+
     const populated = await order.populate(POPULATE_FIELDS);
     emit(req, 'order:updated', { action: 'created', data: populated }, ['dashboard', 'order']);
     success(res, populated, 'Order created', 201);

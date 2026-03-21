@@ -26,7 +26,8 @@ const edgeTaskSchema = z.object({
 
 const createSchema = z.object({
   body: z.object({
-    order: z.string().min(1),
+    request: z.string().min(1),
+    order: z.string().min(1).optional(),
     currentStation: z.enum(STATIONS).optional(),
     currentStatus: z.enum(PANE_STATUS).optional(),
     routing: z.array(z.string().min(1)).optional(),
@@ -47,6 +48,7 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   body: z.object({
+    request: z.string().min(1).optional(),
     order: z.string().min(1).optional(),
     currentStation: z.enum(STATIONS).optional(),
     currentStatus: z.enum(PANE_STATUS).optional(),

@@ -812,15 +812,13 @@ async function testClaimNumbering(token) {
 async function testPaneNumbering(token) {
   console.log('\n=== Pane Auto-Numbering + QR Code ===\n');
 
-  const mat = await api('POST', '/api/materials', token, { name: 'PaneNum Mat', unit: 'sheet', reorderPoint: 5 });
-  const matId = mat.data.data._id;
   const cust = await api('POST', '/api/customers', token, { name: 'PaneNum Cust' });
   const custId = cust.data.data._id;
-  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 5 });
-  const ordId = ord.data.data._id;
+  const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 5 } });
+  const reqId = reqRes.data.data._id;
 
   const r1 = await api('POST', '/api/panes', token, {
-    order: ordId, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered',
+    request: reqId, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered',
   });
   check('CREATE pane has paneNumber', r1.status, 201);
   const num1 = r1.data.data.paneNumber;
@@ -834,7 +832,7 @@ async function testPaneNumbering(token) {
   check('  qrCode matches paneNumber', qr1, `STDPLUS:${num1}`);
   console.log(`          qrCode: ${qr1}`);
 
-  const r2 = await api('POST', '/api/panes', token, { order: ordId });
+  const r2 = await api('POST', '/api/panes', token, { request: reqId });
   check('CREATE second pane has paneNumber', r2.status, 201);
   const num2 = r2.data.data.paneNumber;
   check('  paneNumber is different', num1 !== num2, true);
@@ -854,8 +852,7 @@ async function testPaneNumbering(token) {
 
   await api('DELETE', `/api/panes/${r1.data.data._id}`, token);
   await api('DELETE', `/api/panes/${r2.data.data._id}`, token);
-  await api('DELETE', `/api/orders/${ordId}`, token);
-  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
 }
 
@@ -873,11 +870,18 @@ async function testPaneCascade(token) {
   const matId = mat.data.data._id;
   const cust = await api('POST', '/api/customers', token, { name: 'PaneCasc Cust' });
   const custId = cust.data.data._id;
-  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1 });
+  const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 1 } });
+  const reqId = reqRes.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1, request: reqId });
   const ordId = ord.data.data._id;
 
-  const pane = await api('POST', '/api/panes', token, { order: ordId });
+  const pane = await api('POST', '/api/panes', token, { request: reqId, order: ordId });
   const paneId = pane.data.data._id;
+
+  // Request has order + pane → can't delete request (order checked first)
+  const rr1 = await api('DELETE', `/api/requests/${reqId}`, token);
+  check('DELETE request with refs', rr1.status, 409);
+  checkIncludes('  message mentions order', rr1.data.message, 'order(s)');
 
   // Order has pane → can't delete order
   const r1 = await api('DELETE', `/api/orders/${ordId}`, token);
@@ -895,13 +899,14 @@ async function testPaneCascade(token) {
   check('DELETE pane with production log ref', r2.status, 409);
   checkIncludes('  message mentions production log', r2.data.message, 'production log(s)');
 
-  // Delete log → pane → order
+  // Delete log → pane → order → request
   await api('DELETE', `/api/production-logs/${logId}`, token);
   const r3 = await api('DELETE', `/api/panes/${paneId}`, token);
   check('DELETE pane after log removed', r3.status, 200);
   const r4 = await api('DELETE', `/api/orders/${ordId}`, token);
   check('DELETE order after pane removed', r4.status, 200);
 
+  await api('DELETE', `/api/requests/${reqId}`, token);
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
 }
@@ -915,29 +920,39 @@ async function testPaneReferentialChecks(token) {
 
   const fakeId = '000000000000000000000000';
 
-  // Create pane with fake order
-  const r1 = await api('POST', '/api/panes', token, { order: fakeId });
-  check('CREATE pane with fake order', r1.status, 400);
-  checkIncludes('  message says Order', r1.data.message, 'Order not found');
+  // Create pane with fake request
+  const r0 = await api('POST', '/api/panes', token, { request: fakeId });
+  check('CREATE pane with fake request', r0.status, 400);
+  checkIncludes('  message says Request', r0.data.message, 'Request not found');
 
-  // Create valid order + pane
+  // Create valid request + pane (no order yet)
   const mat = await api('POST', '/api/materials', token, { name: 'PaneRef Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data.data._id;
   const cust = await api('POST', '/api/customers', token, { name: 'PaneRef Cust' });
   const custId = cust.data.data._id;
-  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1 });
-  const ordId = ord.data.data._id;
+  const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 1 } });
+  const reqId = reqRes.data.data._id;
 
-  const pane = await api('POST', '/api/panes', token, { order: ordId });
-  check('CREATE pane with valid order', pane.status, 201);
+  const pane = await api('POST', '/api/panes', token, { request: reqId });
+  check('CREATE pane with valid request (no order)', pane.status, 201);
   const paneId = pane.data.data._id;
+  check('  pane.order is null', pane.data.data.order, null);
+  check('  pane.request is set', !!pane.data.data.request, true);
+
+  // Create order from request → panes get backfilled
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1, request: reqId });
+  const ordId = ord.data.data._id;
+  check('CREATE order from request', ord.status, 201);
+
+  const paneAfter = await api('GET', `/api/panes/${paneId}`, token);
+  check('  pane.order backfilled after order created', !!paneAfter.data.data.order, true);
 
   // Create production log with fake pane
   const r2 = await api('POST', '/api/production-logs', token, {
     pane: fakeId, order: ordId, station: 'cutting', action: 'scan_in',
   });
   check('CREATE production-log with fake pane', r2.status, 400);
-  checkIncludes('  message says GlassPane', r2.data.message, 'GlassPane not found');
+  checkIncludes('  message says Pane', r2.data.message, 'Pane not found');
 
   // Create production log with fake order
   const r3 = await api('POST', '/api/production-logs', token, {
@@ -956,8 +971,114 @@ async function testPaneReferentialChecks(token) {
   await api('DELETE', `/api/production-logs/${r4.data.data._id}`, token);
   await api('DELETE', `/api/panes/${paneId}`, token);
   await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 16. REQUEST WITH INLINE PANES
+// ──────────────────────────────────────────────
+
+async function testRequestWithPanes(token) {
+  console.log('\n=== Request with Inline Panes ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'InlinePane Cust' });
+  const custId = cust.data.data._id;
+
+  const r1 = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 3 },
+    panes: [
+      { dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' },
+      { dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated' },
+      { dimensions: { width: 600, height: 400, thickness: 4 }, glassType: 'tempered' },
+    ],
+  });
+  check('CREATE request with panes', r1.status, 201);
+  check('  response includes panes array', Array.isArray(r1.data.data.panes), true);
+  check('  panes count matches', r1.data.data.panes.length, 3);
+
+  const reqId = r1.data.data._id;
+  const pane1 = r1.data.data.panes[0];
+  const pane2 = r1.data.data.panes[1];
+  const pane3 = r1.data.data.panes[2];
+
+  check('  pane 1 has paneNumber', !!pane1.paneNumber, true);
+  check('  pane 1 has qrCode', !!pane1.qrCode, true);
+  check('  pane 1 linked to request', pane1.request.toString(), reqId);
+  check('  pane 1 order is null', pane1.order, null);
+  check('  pane 2 has different paneNumber', pane1.paneNumber !== pane2.paneNumber, true);
+
+  // Verify panes via GET
+  const paneGet = await api('GET', `/api/panes/${pane1._id}`, token);
+  check('  GET pane linked to request', paneGet.status, 200);
+
+  // Create request without panes (still works)
+  const r2 = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'clear', quantity: 1 },
+  });
+  check('CREATE request without panes', r2.status, 201);
+  check('  no panes property', r2.data.data.panes, undefined);
+
+  // Clean up
+  await api('DELETE', `/api/panes/${pane1._id}`, token);
+  await api('DELETE', `/api/panes/${pane2._id}`, token);
+  await api('DELETE', `/api/panes/${pane3._id}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/requests/${r2.data.data._id}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 17. STICKER TEMPLATE CRUD
+// ──────────────────────────────────────────────
+
+async function testStickerTemplateCrud(token) {
+  console.log('\n=== Sticker Template CRUD ===\n');
+
+  const r1 = await api('POST', '/api/sticker-templates', token, {
+    width: 100, height: 50, elements: [{ type: 'text', value: 'PNE-0001' }],
+  });
+  check('CREATE sticker template', r1.status, 201);
+  const id1 = r1.data.data._id;
+  check('  name defaults to "default"', r1.data.data.name, 'default');
+  check('  width persisted', r1.data.data.width, 100);
+  check('  height persisted', r1.data.data.height, 50);
+  check('  elements is array', Array.isArray(r1.data.data.elements), true);
+  check('  elements length', r1.data.data.elements.length, 1);
+
+  const r2 = await api('POST', '/api/sticker-templates', token, {
+    name: 'large-label', width: 200, height: 100, elements: [],
+  });
+  check('CREATE second sticker template', r2.status, 201);
+  const id2 = r2.data.data._id;
+  check('  custom name persisted', r2.data.data.name, 'large-label');
+
+  const r3 = await api('GET', `/api/sticker-templates/${id1}`, token);
+  check('GET sticker template by ID', r3.status, 200);
+  check('  correct width', r3.data.data.width, 100);
+
+  const r4 = await api('GET', '/api/sticker-templates', token);
+  check('GET all sticker templates', r4.status, 200);
+  check('  returns array', Array.isArray(r4.data.data), true);
+
+  const r5 = await api('PATCH', `/api/sticker-templates/${id1}`, token, {
+    width: 150, elements: [{ type: 'text', value: 'updated' }, { type: 'barcode', value: 'QR' }],
+  });
+  check('UPDATE sticker template', r5.status, 200);
+  check('  width updated', r5.data.data.width, 150);
+  check('  elements updated', r5.data.data.elements.length, 2);
+
+  const r6 = await api('DELETE', `/api/sticker-templates/${id1}`, token);
+  check('DELETE sticker template', r6.status, 200);
+
+  const r7 = await api('GET', `/api/sticker-templates/${id1}`, token);
+  check('GET deleted template returns 404', r7.status, 404);
+
+  const r8 = await api('DELETE', '/api/sticker-templates', token, { ids: [id2] });
+  check('BULK DELETE sticker templates', r8.status, 200);
 }
 
 // ──────────────────────────────────────────────
@@ -985,6 +1106,8 @@ async function main() {
   await testPaneNumbering(token);
   await testPaneCascade(token);
   await testPaneReferentialChecks(token);
+  await testRequestWithPanes(token);
+  await testStickerTemplateCrud(token);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

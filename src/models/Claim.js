@@ -23,7 +23,7 @@ const claimSchema = new mongoose.Schema({
   },
   pane: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'GlassPane',
+    ref: 'Pane',
     default: null,
   },
   description: {
@@ -62,7 +62,7 @@ const claimSchema = new mongoose.Schema({
   },
   remadePane: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'GlassPane',
+    ref: 'Pane',
     default: null,
   },
   claimDate: {

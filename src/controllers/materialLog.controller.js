@@ -1,7 +1,7 @@
 const MaterialLog = require('../models/MaterialLog');
 const Material = require('../models/Material');
 const Order = require('../models/Order');
-const GlassPane = require('../models/GlassPane');
+const Pane = require('../models/Pane');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
@@ -44,7 +44,7 @@ exports.create = async (req, res, next) => {
       { model: Material, id: material, label: 'Material' },
       { model: Order, id: order, label: 'Order' },
       { model: MaterialLog, id: parentLog, label: 'Parent log' },
-      { model: GlassPane, id: pane, label: 'GlassPane' },
+      { model: Pane, id: pane, label: 'Pane' },
     ]);
 
     const log = await MaterialLog.create(req.validated.body);
@@ -63,7 +63,7 @@ exports.update = async (req, res, next) => {
       { model: Material, id: material, label: 'Material' },
       { model: Order, id: order, label: 'Order' },
       { model: MaterialLog, id: parentLog, label: 'Parent log' },
-      { model: GlassPane, id: pane, label: 'GlassPane' },
+      { model: Pane, id: pane, label: 'Pane' },
     ]);
 
     const log = await MaterialLog.findByIdAndUpdate(req.params.id, req.validated.body, {

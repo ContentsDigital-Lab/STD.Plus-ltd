@@ -9,7 +9,7 @@ const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
-const GlassPane = require('../models/GlassPane');
+const Pane = require('../models/Pane');
 
 const POPULATE_FIELDS = ['order', 'pane', 'withdrawnBy', 'material', 'approvedBy'];
 
@@ -74,7 +74,7 @@ exports.create = async (req, res, next) => {
       { model: Worker, id: withdrawnBy, label: 'Worker (withdrawnBy)' },
       { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
       { model: Order, id: order, label: 'Order' },
-      { model: GlassPane, id: pane, label: 'GlassPane' },
+      { model: Pane, id: pane, label: 'Pane' },
     ]);
 
     await deductInventory(material, stockType, quantity);
@@ -100,7 +100,7 @@ exports.update = async (req, res, next) => {
     if (updates.withdrawnBy) refs.push({ model: Worker, id: updates.withdrawnBy, label: 'Worker (withdrawnBy)' });
     if (updates.approvedBy) refs.push({ model: Worker, id: updates.approvedBy, label: 'Worker (approvedBy)' });
     if (updates.order) refs.push({ model: Order, id: updates.order, label: 'Order' });
-    if (updates.pane) refs.push({ model: GlassPane, id: updates.pane, label: 'GlassPane' });
+    if (updates.pane) refs.push({ model: Pane, id: updates.pane, label: 'Pane' });
     if (refs.length) await verifyReferences(refs);
 
     const inventoryAffected = updates.material || updates.stockType || updates.quantity !== undefined;

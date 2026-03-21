@@ -192,6 +192,17 @@
               "api-reference/notifications/update-a-notification",
               "api-reference/notifications/delete-a-notification"
             ]
+          },
+          {
+            "group": "Sticker Templates",
+            "pages": [
+              "api-reference/sticker-templates/list-all-sticker-templates",
+              "api-reference/sticker-templates/create-a-sticker-template",
+              "api-reference/sticker-templates/delete-multiple-sticker-templates",
+              "api-reference/sticker-templates/get-sticker-template-by-id",
+              "api-reference/sticker-templates/update-a-sticker-template",
+              "api-reference/sticker-templates/delete-a-sticker-template"
+            ]
           }
         ]
       }

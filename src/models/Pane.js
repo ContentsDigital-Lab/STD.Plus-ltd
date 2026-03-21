@@ -11,7 +11,7 @@ const edgeTaskSchema = new mongoose.Schema({
   },
 }, { _id: false });
 
-const glassPaneSchema = new mongoose.Schema({
+const paneSchema = new mongoose.Schema({
   paneNumber: {
     type: String,
     unique: true,
@@ -22,10 +22,15 @@ const glassPaneSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
   },
+  request: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Request',
+    required: true,
+  },
   order: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Order',
-    required: true,
+    default: null,
   },
   currentStation: {
     type: String,
@@ -73,7 +78,7 @@ const glassPaneSchema = new mongoose.Schema({
   },
   remakeOf: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'GlassPane',
+    ref: 'Pane',
     default: null,
   },
   startedAt: {
@@ -90,4 +95,4 @@ const glassPaneSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-module.exports = mongoose.model('GlassPane', glassPaneSchema);
+module.exports = mongoose.model('Pane', paneSchema);

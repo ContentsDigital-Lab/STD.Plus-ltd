@@ -279,7 +279,25 @@
           "deadline": { "type": "string", "format": "date-time" },
           "deliveryLocation": { "type": "string" },
           "assignedTo": { "type": "string", "minLength": 1 },
-          "expectedDeliveryDate": { "type": "string", "format": "date-time" }
+          "expectedDeliveryDate": { "type": "string", "format": "date-time" },
+          "panes": {
+            "type": "array",
+            "description": "Optional array of panes to create alongside the request",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currentStation": { "type": "string", "enum": ["queue", "cutting", "edging", "tempering", "laminating", "assembly", "qc", "ready", "defected"] },
+                "routing": { "type": "array", "items": { "type": "string" } },
+                "customRouting": { "type": "boolean" },
+                "dimensions": { "$ref": "#/components/schemas/Dimensions" },
+                "glassType": { "type": "string" },
+                "glassTypeLabel": { "type": "string" },
+                "processes": { "type": "array", "items": { "type": "string" } },
+                "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
+                "notes": { "type": "string" }
+              }
+            }
+          }
         }
       },
       "RequestUpdateBody": {
@@ -412,7 +430,7 @@
         "properties": {
           "_id": { "type": "string" },
           "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }] },
-          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/GlassPane" }] },
+          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
           "withdrawnBy": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
           "quantity": { "type": "integer", "minimum": 1 },
@@ -465,7 +483,7 @@
           "_id": { "type": "string" },
           "claimNumber": { "type": "string", "description": "Auto-generated unique identifier (e.g. CLM-0001)", "example": "CLM-0001" },
           "order": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Order" }] },
-          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/GlassPane" }] },
+          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
           "source": { "type": "string", "enum": ["customer", "worker"] },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
           "description": { "type": "string" },
@@ -475,7 +493,7 @@
           "reportedBy": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "default": "pending" },
           "approvedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
-          "remadePane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/GlassPane" }] },
+          "remadePane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
           "claimDate": { "type": "string", "format": "date-time" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
@@ -577,7 +595,7 @@
         "properties": {
           "_id": { "type": "string" },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
-          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/GlassPane" }] },
+          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
           "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "nullable": true },
           "referenceType": { "type": "string", "enum": ["claim", "withdrawal"], "nullable": true },
@@ -688,13 +706,14 @@
           "note": { "type": "string" }
         }
       },
-      "GlassPane": {
+      "Pane": {
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
           "paneNumber": { "type": "string", "description": "Auto-generated unique identifier (e.g. PNE-0001)", "example": "PNE-0001" },
           "qrCode": { "type": "string", "description": "QR code value (e.g. STDPLUS:PNE-0001)", "example": "STDPLUS:PNE-0001" },
-          "order": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Order" }] },
+          "request": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Request" }] },
+          "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }], "description": "Populated when an order is created from the request" },
           "currentStation": { "type": "string", "enum": ["queue", "cutting", "edging", "tempering", "laminating", "assembly", "qc", "ready", "defected"], "default": "queue" },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "completed"], "default": "pending" },
           "routing": { "type": "array", "items": { "type": "string" } },
@@ -705,7 +724,7 @@
           "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
           "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
           "withdrawal": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Withdrawal" }] },
-          "remakeOf": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/GlassPane" }] },
+          "remakeOf": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
           "startedAt": { "type": "string", "format": "date-time", "nullable": true },
           "completedAt": { "type": "string", "format": "date-time", "nullable": true },
           "deliveredAt": { "type": "string", "format": "date-time", "nullable": true },
@@ -715,9 +734,10 @@
       },
       "PaneCreateBody": {
         "type": "object",
-        "required": ["order"],
+        "required": ["request"],
         "properties": {
-          "order": { "type": "string", "minLength": 1 },
+          "request": { "type": "string", "minLength": 1, "description": "Request ID this pane belongs to" },
+          "order": { "type": "string", "minLength": 1, "description": "Order ID (optional, auto-filled when order is created from request)" },
           "currentStation": { "type": "string", "enum": ["queue", "cutting", "edging", "tempering", "laminating", "assembly", "qc", "ready", "defected"] },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
@@ -731,12 +751,14 @@
           "remakeOf": { "type": "string", "minLength": 1 },
           "startedAt": { "type": "string", "format": "date-time" },
           "completedAt": { "type": "string", "format": "date-time" },
-          "deliveredAt": { "type": "string", "format": "date-time" }
+          "deliveredAt": { "type": "string", "format": "date-time" },
+          "notes": { "type": "string" }
         }
       },
       "PaneUpdateBody": {
         "type": "object",
         "properties": {
+          "request": { "type": "string", "minLength": 1 },
           "order": { "type": "string", "minLength": 1 },
           "currentStation": { "type": "string", "enum": ["queue", "cutting", "edging", "tempering", "laminating", "assembly", "qc", "ready", "defected"] },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
@@ -751,14 +773,15 @@
           "remakeOf": { "type": "string", "minLength": 1 },
           "startedAt": { "type": "string", "format": "date-time" },
           "completedAt": { "type": "string", "format": "date-time" },
-          "deliveredAt": { "type": "string", "format": "date-time" }
+          "deliveredAt": { "type": "string", "format": "date-time" },
+          "notes": { "type": "string" }
         }
       },
       "ProductionLog": {
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
-          "pane": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/GlassPane" }] },
+          "pane": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Pane" }] },
           "order": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Order" }] },
           "station": { "type": "string" },
           "action": { "type": "string", "enum": ["scan_in", "start", "complete", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
@@ -807,6 +830,37 @@
           "startedAt": { "type": "string", "format": "date-time" },
           "completedAt": { "type": "string", "format": "date-time" },
           "durationMs": { "type": "number", "minimum": 0 }
+        }
+      },
+      "StickerTemplate": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string", "default": "default" },
+          "width": { "type": "number" },
+          "height": { "type": "number" },
+          "elements": { "type": "array", "items": {}, "description": "JSON array of sticker layout elements" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "StickerTemplateCreateBody": {
+        "type": "object",
+        "required": ["width", "height"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "description": "Unique name (defaults to 'default')" },
+          "width": { "type": "number", "minimum": 0 },
+          "height": { "type": "number", "minimum": 0 },
+          "elements": { "type": "array", "items": {}, "description": "JSON array of sticker layout elements" }
+        }
+      },
+      "StickerTemplateUpdateBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "width": { "type": "number", "minimum": 0 },
+          "height": { "type": "number", "minimum": 0 },
+          "elements": { "type": "array", "items": {}, "description": "JSON array of sticker layout elements" }
         }
       }
     },
@@ -2136,7 +2190,7 @@
           { "$ref": "#/components/parameters/SortParam" }
         ],
         "responses": {
-          "200": { "description": "List of panes", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/GlassPane" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
+          "200": { "description": "List of panes", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Pane" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -2147,7 +2201,7 @@
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaneCreateBody" } } } },
         "responses": {
-          "201": { "description": "Pane created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/GlassPane" } } }] } } } },
+          "201": { "description": "Pane created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Pane" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" }
@@ -2174,7 +2228,7 @@
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
-          "200": { "description": "Pane found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/GlassPane" } } }] } } } },
+          "200": { "description": "Pane found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Pane" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
           "404": { "$ref": "#/components/responses/404" }
         }
@@ -2187,7 +2241,7 @@
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaneUpdateBody" } } } },
         "responses": {
-          "200": { "description": "Pane updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/GlassPane" } } }] } } } },
+          "200": { "description": "Pane updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Pane" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
@@ -2287,6 +2341,82 @@
           "404": { "$ref": "#/components/responses/404" }
         }
       }
+    },
+    "/api/sticker-templates": {
+      "get": {
+        "tags": ["Sticker Templates"],
+        "summary": "List all sticker templates",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/PageParam" }, { "$ref": "#/components/parameters/LimitParam" }, { "$ref": "#/components/parameters/SortParam" }],
+        "responses": {
+          "200": { "description": "List of sticker templates", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/StickerTemplate" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Sticker Templates"],
+        "summary": "Create a sticker template",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StickerTemplateCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Sticker template created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/StickerTemplate" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Sticker Templates"],
+        "summary": "Bulk delete sticker templates",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Sticker templates deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/sticker-templates/{id}": {
+      "get": {
+        "tags": ["Sticker Templates"],
+        "summary": "Get a sticker template by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Sticker template found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/StickerTemplate" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Sticker Templates"],
+        "summary": "Update a sticker template",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StickerTemplateUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Sticker template updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/StickerTemplate" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Sticker Templates"],
+        "summary": "Delete a sticker template",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Sticker template deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
     }
   },
   "tags": [
@@ -2305,6 +2435,7 @@
     { "name": "Stations" },
     { "name": "Notifications" },
     { "name": "Panes" },
-    { "name": "Production Logs" }
+    { "name": "Production Logs" },
+    { "name": "Sticker Templates" }
   ]
 }

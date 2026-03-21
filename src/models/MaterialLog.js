@@ -8,7 +8,7 @@ const materialLogSchema = new mongoose.Schema({
   },
   pane: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'GlassPane',
+    ref: 'Pane',
     default: null,
   },
   actionType: {

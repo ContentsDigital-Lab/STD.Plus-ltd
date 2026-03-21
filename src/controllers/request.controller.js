@@ -3,6 +3,7 @@ const Counter = require('../models/Counter');
 const Customer = require('../models/Customer');
 const Worker = require('../models/Worker');
 const Order = require('../models/Order');
+const Pane = require('../models/Pane');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
@@ -12,6 +13,7 @@ const POPULATE_FIELDS = ['customer', 'assignedTo'];
 
 const REQUEST_DEPENDENTS = [
   { model: Order, field: 'request', label: 'order(s)' },
+  { model: Pane, field: 'request', label: 'pane(s)' },
 ];
 
 exports.getAll = async (req, res, next) => {
@@ -40,17 +42,31 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { customer, assignedTo } = req.validated.body;
+    const { customer, assignedTo, panes: paneItems, ...rest } = req.validated.body;
     await verifyReferences([
       { model: Customer, id: customer, label: 'Customer' },
       { model: Worker, id: assignedTo, label: 'Worker (assignedTo)' },
     ]);
 
     const requestNumber = await Counter.getNext('request', 'REQ');
-    const request = await Request.create({ ...req.validated.body, requestNumber });
+    const request = await Request.create({ ...rest, customer, assignedTo, requestNumber });
+
+    let createdPanes = [];
+    if (paneItems && paneItems.length > 0) {
+      const panePromises = paneItems.map(async (paneData) => {
+        const paneNumber = await Counter.getNext('pane', 'PNE');
+        const qrCode = `STDPLUS:${paneNumber}`;
+        return Pane.create({ ...paneData, request: request._id, paneNumber, qrCode });
+      });
+      createdPanes = await Promise.all(panePromises);
+    }
+
     const populated = await request.populate(POPULATE_FIELDS);
-    emit(req, 'request:updated', { action: 'created', data: populated }, ['dashboard', 'request']);
-    success(res, populated, 'Request created', 201);
+    const responseData = populated.toObject();
+    if (createdPanes.length > 0) responseData.panes = createdPanes;
+
+    emit(req, 'request:updated', { action: 'created', data: responseData }, ['dashboard', 'request']);
+    success(res, responseData, 'Request created', 201);
   } catch (err) {
     next(err);
   }

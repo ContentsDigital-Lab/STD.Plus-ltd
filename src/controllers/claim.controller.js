@@ -3,7 +3,7 @@ const Counter = require('../models/Counter');
 const Order = require('../models/Order');
 const Material = require('../models/Material');
 const Worker = require('../models/Worker');
-const GlassPane = require('../models/GlassPane');
+const Pane = require('../models/Pane');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
@@ -48,8 +48,8 @@ exports.create = async (req, res, next) => {
       { model: Material, id: material, label: 'Material' },
       { model: Worker, id: reportedBy, label: 'Worker (reportedBy)' },
       { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
-      { model: GlassPane, id: pane, label: 'GlassPane' },
-      { model: GlassPane, id: remadePane, label: 'GlassPane (remadePane)' },
+      { model: Pane, id: pane, label: 'Pane' },
+      { model: Pane, id: remadePane, label: 'Pane (remadePane)' },
     ]);
 
     const claimNumber = await Counter.getNext('claim', 'CLM');
@@ -81,8 +81,8 @@ exports.update = async (req, res, next) => {
       { model: Material, id: material, label: 'Material' },
       { model: Worker, id: reportedBy, label: 'Worker (reportedBy)' },
       { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
-      { model: GlassPane, id: pane, label: 'GlassPane' },
-      { model: GlassPane, id: remadePane, label: 'GlassPane (remadePane)' },
+      { model: Pane, id: pane, label: 'Pane' },
+      { model: Pane, id: remadePane, label: 'Pane (remadePane)' },
     ]);
 
     const claim = await Claim.findByIdAndUpdate(req.params.id, req.validated.body, {
