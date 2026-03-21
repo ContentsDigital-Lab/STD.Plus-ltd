@@ -361,6 +361,10 @@
             }
           },
           "stationData": { "type": "object", "additionalProperties": true },
+          "paneCount": { "type": "integer", "minimum": 0, "description": "Total number of panes in this order" },
+          "panesCompleted": { "type": "integer", "minimum": 0, "description": "Number of panes completed" },
+          "progressPercent": { "type": "number", "minimum": 0, "maximum": 100, "description": "Overall completion percentage" },
+          "stationBreakdown": { "type": "object", "additionalProperties": { "type": "integer" }, "description": "Pane count per station" },
           "notes": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
           "claim": { "type": "string", "minLength": 1 },
@@ -392,6 +396,10 @@
             }
           },
           "stationData": { "type": "object", "additionalProperties": true },
+          "paneCount": { "type": "integer", "minimum": 0, "description": "Total number of panes in this order" },
+          "panesCompleted": { "type": "integer", "minimum": 0, "description": "Number of panes completed" },
+          "progressPercent": { "type": "number", "minimum": 0, "maximum": 100, "description": "Overall completion percentage" },
+          "stationBreakdown": { "type": "object", "additionalProperties": { "type": "integer" }, "description": "Pane count per station" },
           "notes": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
           "claim": { "type": "string", "minLength": 1 },

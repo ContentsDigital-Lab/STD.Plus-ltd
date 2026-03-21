@@ -68,8 +68,7 @@ npm run test:rbac        # test role-based access control
 npm run test:socket      # test WebSocket events
 npm run test:integrity   # test data integrity enforcement
 npm run test:pagination  # test pagination
-npm run test:rate-limit  # test rate limiting (IP + user-based)
-```
+npm run test:rate-limit  # test rate limiting (IP + user-based)```
 
 ## Full Documentation
 
