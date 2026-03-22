@@ -1,0 +1,112 @@
+---
+title: QR Scanning
+description: How the QR code scanning system works
+---
+
+## Overview
+
+The QR scanning system allows workers to move panes through production stations by scanning QR codes with a mobile device. When a pane is scanned, both the mobile and desktop UIs update in real-time via WebSocket.
+
+## QR Code Format
+
+Each pane has a QR code with the format:
+
+```
+STDPLUS:PNE-0001
+```
+
+When the frontend scans this, it should **strip the `STDPLUS:` prefix** and use only the pane number (`PNE-0001`) in the API call.
+
+## Workflow
+
+```
+┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌───────┐
+│  queue   │───▶│ cutting │───▶│ edging  │───▶│   qc    │───▶│ ready │
+└─────────┘    └─────────┘    └─────────┘    └─────────┘    └───────┘
+```
+
+1. Panes start at **queue** with status `pending`.
+2. At each station, workers can perform three actions:
+   - **scan_in** — Acknowledge the pane. Sets `startedAt` but doesn't move it.
+   - **start** — Mark the pane as `in_progress`.
+   - **complete** — Finish work and automatically advance the pane to the next station in its routing.
+3. After the last station, the pane moves to **ready** with status `completed`.
+
+## Mobile Scanning Flow
+
+<Steps>
+  <Step title="Scan QR Code">
+    Worker opens the app on their phone and scans the pane's QR code with their camera.
+  </Step>
+  <Step title="Parse Pane Number">
+    The frontend reads `STDPLUS:PNE-0001` from the QR code and extracts `PNE-0001`.
+  </Step>
+  <Step title="Send Scan Request">
+    Frontend calls `POST /api/panes/PNE-0001/scan` with the station and action.
+  </Step>
+  <Step title="Real-Time Update">
+    Both mobile and desktop receive WebSocket events and update their UIs automatically.
+  </Step>
+</Steps>
+
+## Side Effects
+
+Every scan triggers several side effects:
+
+| Side Effect | Description |
+|---|---|
+| **Production Log** | A `ProductionLog` entry is created for every scan action |
+| **Order Progress** | On `complete`, the order's `panesCompleted`, `progressPercent`, and `stationBreakdown` are updated |
+| **Order Completion** | When all panes reach `ready`, the order status changes to `completed` |
+| **Notification** | If the order has an `assignedTo` worker, a notification is created and sent via WebSocket |
+
+## WebSocket Events
+
+After a scan, the server emits these events to connected clients:
+
+| Event | Rooms | When |
+|---|---|---|
+| `pane:updated` | `dashboard`, `pane`, `production`, `station:<name>` | Every scan action |
+| `production-log:updated` | `dashboard`, `production` | Every scan action |
+| `station:pane_arrived` | `station:<nextStation>`, `station` | On `complete` (pane moves to next station) |
+| `order:updated` | `dashboard`, `order` | On `complete` (order progress changes) |
+| `notification` | `user:<recipientId>` | On `complete` (if order has assigned worker) |
+
+### Listening for Scan Events
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  path: '/api/socket-entry',
+  auth: { token: 'your-jwt-token' },
+});
+
+socket.on('connect', () => {
+  socket.emit('join_pane');
+  socket.emit('join_production');
+  socket.emit('join_station');
+  socket.emit('join_me');
+});
+
+socket.on('pane:updated', ({ action, data }) => {
+  console.log('Pane changed:', data.paneNumber, data.currentStation);
+});
+
+socket.on('station:pane_arrived', ({ paneNumber, fromStation, toStation }) => {
+  console.log(`${paneNumber} moved from ${fromStation} to ${toStation}`);
+});
+
+socket.on('notification', (notif) => {
+  console.log(`[${notif.priority}] ${notif.title}: ${notif.message}`);
+});
+```
+
+## Error Handling
+
+| Status | Cause | Message example |
+|---|---|---|
+| `404` | Pane number doesn't exist | `Pane not found` |
+| `400` | Pane is at a different station | `Pane is at "queue", not "cutting"` |
+| `400` | Pane already finished all stations | `Pane is already completed` |
+| `400` | Operator ID doesn't match any worker | `Operator (Worker) not found` |

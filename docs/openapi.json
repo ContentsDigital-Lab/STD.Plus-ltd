@@ -755,6 +755,23 @@
           "notes": { "type": "string" }
         }
       },
+      "ScanBody": {
+        "type": "object",
+        "required": ["station", "action"],
+        "properties": {
+          "station": { "type": "string", "minLength": 1, "description": "The station where the scan is happening (must match the pane's current station)", "example": "cutting" },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete"], "description": "`scan_in` — acknowledge arrival, `start` — begin work, `complete` — finish and advance to next station" },
+          "operator": { "type": "string", "minLength": 1, "description": "Worker ID of the operator performing the scan. Defaults to the authenticated user if omitted." }
+        }
+      },
+      "ScanResult": {
+        "type": "object",
+        "properties": {
+          "pane": { "$ref": "#/components/schemas/Pane" },
+          "log": { "$ref": "#/components/schemas/ProductionLog" },
+          "nextStation": { "type": "string", "description": "The station the pane moved to (only present on `complete` action)", "example": "edging" }
+        }
+      },
       "PaneUpdateBody": {
         "type": "object",
         "properties": {
@@ -2342,6 +2359,55 @@
         }
       }
     },
+    "/api/panes/{paneNumber}/scan": {
+      "post": {
+        "tags": ["QR Scanning"],
+        "summary": "Scan a pane (QR scan endpoint)",
+        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Actions:**\n- `scan_in` — Acknowledge the pane at the station. Sets `startedAt` but does not move the pane.\n- `start` — Mark work as in-progress at the station.\n- `complete` — Finish work at the station. Automatically advances the pane to the next station in its routing. If it's the last station, pane moves to `ready` with status `completed`.\n\n**Side effects:**\n- Creates a `ProductionLog` entry for every scan.\n- Updates associated `Order` progress (`panesCompleted`, `progressPercent`, `stationBreakdown`) on `complete`.\n- Emits WebSocket events: `pane:updated`, `production-log:updated`, `station:pane_arrived`, `order:updated`, `notification`.\n- Creates a `Notification` for the order's assigned worker (if any).\n\nRequires authentication. Any role can scan.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "paneNumber",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The pane number (e.g. `PNE-0001`). Strip the `STDPLUS:` prefix from QR codes before sending.",
+            "example": "PNE-0001"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ScanBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scan processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/ScanResult" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error — wrong station, already completed, or invalid operator", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "description": "Pane not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
     "/api/sticker-templates": {
       "get": {
         "tags": ["Sticker Templates"],
@@ -2435,6 +2501,7 @@
     { "name": "Stations" },
     { "name": "Notifications" },
     { "name": "Panes" },
+    { "name": "QR Scanning" },
     { "name": "Production Logs" },
     { "name": "Sticker Templates" }
   ]

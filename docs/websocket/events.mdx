@@ -125,10 +125,11 @@ socket.on('order:updated', (payload) => {
 | `withdrawal:updated` | INBOUND | `dashboard`, `withdrawal` | Withdrawal create / update / delete |
 | `claim:updated` | INBOUND | `dashboard`, `claim` | Claim create / update / delete |
 | `station:updated` | INBOUND | `dashboard`, `station` | Station create / update / delete |
-| `pane:updated` | INBOUND | `dashboard`, `pane`, `production` | Pane create / update / delete |
-| `production-log:updated` | INBOUND | `dashboard`, `production` | Production log create / update / delete |
+| `pane:updated` | INBOUND | `dashboard`, `pane`, `production`, `station:<name>` | Pane create / update / delete / QR scan |
+| `production-log:updated` | INBOUND | `dashboard`, `production` | Production log create / update / delete / QR scan |
 | `station-template:updated` | INBOUND | `dashboard`, `station` | Station template create / update / delete |
 | `station:check_in` | INBOUND | `station:<stationId>` | Order update with station changes |
+| `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | QR scan with `complete` action |
 
 **Payload format:**
 
@@ -174,9 +175,46 @@ socket.on('station:check_in', (payload) => {
 | `stationId` | The station where it happened |
 | `action` | `entered` (order arrived) or `exited` (order completed/left) |
 
+### Pane Arrived (QR Scan)
+
+Emitted when a pane is scanned with the `complete` action and advances to the next station. Sent to the next station's room and the general `station` room.
+
+```javascript
+socket.on('station:pane_arrived', (payload) => {
+  console.log(payload.paneNumber);  // "PNE-0001"
+  console.log(payload.fromStation); // "cutting"
+  console.log(payload.toStation);   // "edging"
+  console.log(payload.orderId);     // "69a98ee25bb1d35efb8cc1ff"
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | POST `/api/panes/{paneNumber}/scan` with `action: "complete"` |
+
+**Payload:**
+
+```json
+{
+  "paneNumber": "PNE-0001",
+  "paneId": "69a98ee25bb1d35efb8cc1ff",
+  "fromStation": "cutting",
+  "toStation": "edging",
+  "orderId": "69b12cd35bb1d35efb8cc200"
+}
+```
+
+| Field | Description |
+|---|---|
+| `paneNumber` | The pane that moved (e.g. `PNE-0001`) |
+| `paneId` | The pane's `_id` |
+| `fromStation` | The station the pane just completed |
+| `toStation` | The station the pane moved to |
+| `orderId` | The associated order ID (if any) |
+
 ### Notification
 
-Sent to a specific user's personal room when a notification is created via the REST API.
+Sent to a specific user's personal room when a notification is created via the REST API or the QR scan endpoint.
 
 ```javascript
 socket.on('notification', (notification) => {
@@ -187,7 +225,7 @@ socket.on('notification', (notification) => {
 
 | Event | Direction | Emitted to | Triggered by |
 |---|---|---|---|
-| `notification` | INBOUND | `user:<recipientId>` | POST `/api/notifications` |
+| `notification` | INBOUND | `user:<recipientId>` | POST `/api/notifications`, QR scan `complete` action |
 
 **Payload:** The full populated notification object.
 

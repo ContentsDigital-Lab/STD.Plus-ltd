@@ -18,6 +18,10 @@
             "pages": ["index", "quickstart", "authentication"]
           },
           {
+            "group": "QR Scanning",
+            "pages": ["scanning/overview"]
+          },
+          {
             "group": "WebSocket",
             "pages": ["websocket/overview", "websocket/events"]
           }
@@ -147,6 +151,12 @@
               "api-reference/panes/get-pane-by-id",
               "api-reference/panes/update-a-pane",
               "api-reference/panes/delete-a-pane"
+            ]
+          },
+          {
+            "group": "QR Scanning",
+            "pages": [
+              "api-reference/scanning/scan-a-pane"
             ]
           },
           {

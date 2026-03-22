@@ -12,6 +12,7 @@
     "test:pagination": "node scripts/test-pagination.js",
     "test:socket": "node scripts/test-socket.js",
     "test:rate-limit": "node scripts/test-rate-limit.js",
+    "test:scan": "node scripts/test-scan.js",
     "seed": "node scripts/seed.js",
     "reset": "node scripts/reset.js",
     "backfill": "node scripts/backfill-auto-numbers.js",

@@ -4,6 +4,7 @@ const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const authorize = require('../middleware/authorize');
 const paneController = require('../controllers/pane.controller');
+const scanController = require('../controllers/scan.controller');
 
 const router = Router();
 
@@ -74,6 +75,15 @@ const deleteManySchema = z.object({
   }),
 });
 
+const scanSchema = z.object({
+  body: z.object({
+    station: z.string().min(1),
+    action: z.enum(['scan_in', 'start', 'complete']),
+    operator: z.string().min(1).optional(),
+  }),
+});
+
+router.post('/:paneNumber/scan', auth, validate(scanSchema), scanController.scan);
 router.get('/', auth, paneController.getAll);
 router.get('/:id', auth, paneController.getById);
 router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), paneController.create);
