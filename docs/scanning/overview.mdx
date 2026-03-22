@@ -20,12 +20,12 @@ When the frontend scans this, it should **strip the `STDPLUS:` prefix** and use 
 ## Workflow
 
 ```
-┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌───────┐
-│  queue   │───▶│ cutting │───▶│ edging  │───▶│   qc    │───▶│ ready │
-└─────────┘    └─────────┘    └─────────┘    └─────────┘    └───────┘
+┌─────────┐    ┌─────────┐    ┌─────────┐    ┌───────┐
+│ cutting │───▶│ edging  │───▶│   qc    │───▶│ ready │
+└─────────┘    └─────────┘    └─────────┘    └───────┘
 ```
 
-1. Panes start at **queue** with status `pending`.
+1. Panes start at their **first routing station** (e.g. `cutting`) with status `pending`. If a pane has no routing, it starts at `ready` and is immediately `completed`.
 2. At each station, workers can perform three actions:
    - **scan_in** — Acknowledge the pane. Sets `startedAt` but doesn't move it.
    - **start** — Mark the pane as `in_progress`.

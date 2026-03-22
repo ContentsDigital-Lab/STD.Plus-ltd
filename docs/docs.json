@@ -19,7 +19,7 @@
           },
           {
             "group": "QR Scanning",
-            "pages": ["scanning/overview"]
+            "pages": ["scanning/overview", "scanning/qr-checkin"]
           },
           {
             "group": "WebSocket",

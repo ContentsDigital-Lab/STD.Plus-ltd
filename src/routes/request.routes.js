@@ -7,8 +7,6 @@ const requestController = require('../controllers/request.controller');
 
 const router = Router();
 
-const STATIONS = ['queue', 'cutting', 'edging', 'tempering', 'laminating', 'assembly', 'qc', 'ready', 'defected'];
-
 const detailsSchema = z.object({
   type: z.string().min(1),
   estimatedPrice: z.number().min(0).optional(),
@@ -16,7 +14,7 @@ const detailsSchema = z.object({
 });
 
 const paneItemSchema = z.object({
-  currentStation: z.enum(STATIONS).optional(),
+  currentStation: z.string().min(1).optional(),
   routing: z.array(z.string().min(1)).optional(),
   customRouting: z.boolean().optional(),
   dimensions: z.object({

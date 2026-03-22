@@ -1,0 +1,115 @@
+---
+title: QR Check-in
+description: How the worker QR check-in system works
+---
+
+## Overview
+
+The QR check-in system lets workers check in at factory stations by scanning a QR code on their phone. When a worker scans in, the station screen updates in real-time via WebSocket.
+
+This is separate from the [pane scanning system](/scanning/overview) — QR check-in tracks **worker presence** at stations, not pane movement through production.
+
+## How It Works
+
+```
+┌──────────────┐         ┌────────┐         ┌──────────────┐
+│ Station      │◀────────│ Server │◀────────│ Mobile       │
+│ (big screen) │  scan-  │        │  mobile │ (worker      │
+│              │confirmed│        │  -scan  │  phone)      │
+└──────────────┘         └────────┘         └──────────────┘
+```
+
+<Steps>
+  <Step title="Station Screen Connects">
+    The station page connects to Socket.IO and emits `join-station` with its station ID. The server places the socket in room `station:<stationId>`.
+  </Step>
+  <Step title="Worker Scans QR Code">
+    The worker opens the app on their phone, scans the station's QR code, and the frontend emits `mobile-scan` with `{ stationId, worker }`.
+  </Step>
+  <Step title="Server Broadcasts">
+    The server records the scan and emits `scan-confirmed` with `{ worker, time }` to all sockets in the station's room.
+  </Step>
+  <Step title="Station Updates">
+    The station screen receives `scan-confirmed` and updates its UI (e.g. redirects to a checked-in page, shows the worker name and time).
+  </Step>
+</Steps>
+
+## Replay Buffer
+
+If the station screen connects **after** a mobile scan (race condition), the server replays the last scan automatically — as long as it happened within the last **15 seconds**.
+
+This means the station won't miss a scan even if the mobile device emits before the station page has finished connecting.
+
+## WebSocket Events
+
+All events require JWT authentication via the Socket.IO handshake.
+
+### Outbound (Client → Server)
+
+| Event | Payload | Description |
+|---|---|---|
+| `join-station` | `stationId` (string) | Station screen joins its room. Receives replayed scan if one exists within 15s. |
+| `mobile-scan` | `{ stationId, worker? }` | Mobile device sends a check-in. `worker` is optional — defaults to the authenticated user's name. |
+
+### Inbound (Server → Client)
+
+| Event | Payload | Emitted to | Description |
+|---|---|---|---|
+| `scan-confirmed` | `{ worker, time }` | `station:<stationId>` | Broadcast when a worker checks in. Also sent as replay on `join-station`. |
+
+## Usage
+
+### Station Screen
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  path: '/api/socket-entry',
+  auth: { token: 'your-jwt-token' },
+});
+
+socket.on('connect', () => {
+  socket.emit('join-station', 'cutting', (ack) => {
+    console.log(ack); // { ok: true, room: "station:cutting" }
+  });
+});
+
+socket.on('scan-confirmed', ({ worker, time }) => {
+  console.log(`${worker} checked in at ${time}`);
+});
+```
+
+### Mobile Device
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  path: '/api/socket-entry',
+  auth: { token: 'your-jwt-token' },
+});
+
+socket.on('connect', () => {
+  socket.emit('mobile-scan', {
+    stationId: 'cutting',
+    worker: 'Boss',
+  }, (ack) => {
+    console.log(ack); // { ok: true }
+  });
+});
+```
+
+<Note>
+  Both the station screen and mobile device must authenticate with a valid JWT token. The `worker` field in `mobile-scan` is optional — if omitted, the server uses the authenticated user's name from the token.
+</Note>
+
+## QR Code Format
+
+The station's QR code should encode a URL that the mobile app can open, containing the station ID as a query parameter:
+
+```
+https://your-app.com/mobile?stationId=cutting
+```
+
+The frontend strips the `stationId` from the URL and uses it in the `mobile-scan` event.

@@ -122,24 +122,18 @@ async function testBasicScanFlow(token) {
   const pane1Get = await api('GET', `/api/panes/${pane1._id}`, token);
   check('  pane 1 order backfilled', !!pane1Get.data.data.order, true);
 
-  // ── scan_in at queue ──
+  // ── verify pane starts at first routing station (cutting) ──
+  check('  pane 1 starts at routing[0]', pane1.currentStation, 'cutting');
+
+  // ── scan_in at cutting ──
   const r1 = await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, {
-    station: 'queue', action: 'scan_in',
+    station: 'cutting', action: 'scan_in',
   });
-  check('SCAN_IN pane 1 at queue', r1.status, 200);
-  check('  pane still at queue', r1.data.data.pane.currentStation, 'queue');
+  check('SCAN_IN pane 1 at cutting', r1.status, 200);
+  check('  pane still at cutting', r1.data.data.pane.currentStation, 'cutting');
   check('  startedAt is set', !!r1.data.data.pane.startedAt, true);
   check('  production log created', !!r1.data.data.log, true);
   check('  log action is scan_in', r1.data.data.log.action, 'scan_in');
-
-  // ── complete at queue → moves to cutting (routing[0]) ──
-  const r2 = await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, {
-    station: 'queue', action: 'complete',
-  });
-  check('COMPLETE pane 1 at queue', r2.status, 200);
-  check('  pane moved to cutting', r2.data.data.pane.currentStation, 'cutting');
-  check('  nextStation is cutting', r2.data.data.nextStation, 'cutting');
-  check('  status is pending', r2.data.data.pane.currentStatus, 'pending');
 
   // ── start at cutting ──
   const r3 = await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, {
@@ -179,8 +173,7 @@ async function testBasicScanFlow(token) {
   check('  order progressPercent', ordAfter.data.data.progressPercent, 50);
   check('  order status still in progress', ordAfter.data.data.status !== 'completed', true);
 
-  // ── complete pane 2 through all stations ──
-  await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: 'queue', action: 'complete' });
+  // ── complete pane 2 through all stations (starts at cutting, no queue) ──
   await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
   await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: 'edging', action: 'complete' });
   const r7 = await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: 'qc', action: 'complete' });
@@ -247,19 +240,18 @@ async function testErrorCases(token) {
 
   // ── non-existent pane ──
   const r1 = await api('POST', '/api/panes/PNE-9999/scan', token, {
-    station: 'queue', action: 'complete',
+    station: 'cutting', action: 'complete',
   });
   check('scan non-existent pane', r1.status, 404);
 
-  // ── wrong station ──
+  // ── wrong station (pane starts at cutting, try edging) ──
   const r2 = await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, {
-    station: 'cutting', action: 'complete',
+    station: 'edging', action: 'complete',
   });
   check('scan at wrong station', r2.status, 400);
-  checkIncludes('  message mentions actual station', r2.data.message, 'queue');
+  checkIncludes('  message mentions actual station', r2.data.message, 'cutting');
 
   // ── complete through all stations, then try again ──
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'queue', action: 'complete' });
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'qc', action: 'complete' });
 
@@ -294,12 +286,12 @@ async function testErrorCases(token) {
   const parsedPaneNumber = qrValue.replace('STDPLUS:', '');
 
   const r5 = await api('POST', `/api/panes/${parsedPaneNumber}/scan`, token, {
-    station: 'queue', action: 'complete',
+    station: 'cutting', action: 'complete',
   });
   check('scan with pane number parsed from QR', r5.status, 200);
-  check('  pane moved correctly', r5.data.data.pane.currentStation, 'cutting');
+  check('  pane moved correctly', r5.data.data.pane.currentStation, 'ready');
 
-  // ── no routing — complete goes straight to ready ──
+  // ── no routing — pane starts at ready and is already completed ──
   const reqRes3 = await api('POST', '/api/requests', token, {
     customer: custId,
     details: { type: 'clear', quantity: 1 },
@@ -307,6 +299,8 @@ async function testErrorCases(token) {
   });
   const reqId3 = reqRes3.data.data._id;
   const pane3 = reqRes3.data.data.panes[0];
+  check('empty routing pane starts at ready', pane3.currentStation, 'ready');
+  check('  empty routing pane is completed', pane3.currentStatus, 'completed');
 
   const ordRes3 = await api('POST', '/api/orders', token, {
     customer: custId, material: matId, quantity: 1, request: reqId3, paneCount: 1,
@@ -314,11 +308,10 @@ async function testErrorCases(token) {
   const ordId3 = ordRes3.data.data._id;
 
   const r6 = await api('POST', `/api/panes/${pane3.paneNumber}/scan`, token, {
-    station: 'queue', action: 'complete',
+    station: 'ready', action: 'complete',
   });
-  check('scan with empty routing', r6.status, 200);
-  check('  pane goes to ready', r6.data.data.pane.currentStation, 'ready');
-  check('  pane is completed', r6.data.data.pane.currentStatus, 'completed');
+  check('scan already-completed empty-routing pane', r6.status, 400);
+  checkIncludes('  says already completed', r6.data.message, 'already completed');
 
   // ── cleanup ──
   const logs = await api('GET', '/api/production-logs?limit=100', token);
@@ -383,34 +376,29 @@ async function testWebSocketEvents(token) {
   });
   const ordId = ordRes.data.data._id;
 
-  // ── scan_in → expect pane:updated event ──
+  // ── scan_in at cutting (first station) → expect pane:updated event ──
   let paneEventPromise = waitForEvent(socket, 'pane:updated');
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'queue', action: 'scan_in' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'scan_in' });
   const scanInEvent = await paneEventPromise;
   check('WS pane:updated on scan_in', scanInEvent.action, 'updated');
 
-  // ── complete at queue → expect pane:updated + station:pane_arrived + notification ──
+  // ── complete at cutting → expect pane:updated + station:pane_arrived + notification ──
   paneEventPromise = waitForEvent(socket, 'pane:updated');
   const arrivalPromise = waitForEvent(socket, 'station:pane_arrived');
   const notifPromise = waitForEvent(socket, 'notification');
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'queue', action: 'complete' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
 
   const completeEvent = await paneEventPromise;
   check('WS pane:updated on complete', completeEvent.action, 'updated');
 
   const arrivalEvent = await arrivalPromise;
-  check('WS station:pane_arrived fired', arrivalEvent.toStation, 'cutting');
-  check('  fromStation correct', arrivalEvent.fromStation, 'queue');
+  check('WS station:pane_arrived fired', arrivalEvent.toStation, 'qc');
+  check('  fromStation correct', arrivalEvent.fromStation, 'cutting');
   check('  paneNumber correct', arrivalEvent.paneNumber, pane.paneNumber);
 
   const notifEvent = await notifPromise;
   check('WS notification fired', notifEvent.type, 'pane_arrived');
   checkIncludes('  notification message', notifEvent.message, pane.paneNumber);
-
-  // ── complete cutting → qc ──
-  paneEventPromise = waitForEvent(socket, 'pane:updated');
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
-  await paneEventPromise;
 
   // ── complete qc (last) → ready, expect order:updated ──
   paneEventPromise = waitForEvent(socket, 'pane:updated');
@@ -479,8 +467,7 @@ async function testNotifications(token) {
   });
   const ordId = ordRes.data.data._id;
 
-  // Complete through all stations
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'queue', action: 'complete' });
+  // Complete through all stations (pane starts at cutting)
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'qc', action: 'complete' });
 
@@ -493,7 +480,7 @@ async function testNotifications(token) {
   check('notifications created for each advance', scanNotifs.length >= 2, true);
   console.log(`          found ${scanNotifs.length} scan notifications`);
 
-  const arrivalNotif = scanNotifs.find((n) => n.message.includes('cutting'));
+  const arrivalNotif = scanNotifs.find((n) => n.message.includes('qc'));
   if (arrivalNotif) {
     check('  arrival notification has correct type', arrivalNotif.type, 'pane_arrived');
     check('  arrival notification priority', arrivalNotif.priority, 'medium');
@@ -522,7 +509,7 @@ async function testNotifications(token) {
   const pane2 = reqRes2.data.data.panes[0];
 
   const notifCountBefore = (await api('GET', '/api/notifications?limit=100', token)).data.pagination.total;
-  await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: 'queue', action: 'complete' });
+  await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
   const notifCountAfter = (await api('GET', '/api/notifications?limit=100', token)).data.pagination.total;
   check('no notification when order has no assignedTo', notifCountAfter, notifCountBefore);
 

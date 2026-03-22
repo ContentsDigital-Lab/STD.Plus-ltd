@@ -286,7 +286,7 @@
             "items": {
               "type": "object",
               "properties": {
-                "currentStation": { "type": "string", "enum": ["queue", "cutting", "edging", "tempering", "laminating", "assembly", "qc", "ready", "defected"] },
+                "currentStation": { "type": "string", "description": "Current station name (matches routing entries)" },
                 "routing": { "type": "array", "items": { "type": "string" } },
                 "customRouting": { "type": "boolean" },
                 "dimensions": { "$ref": "#/components/schemas/Dimensions" },
@@ -714,7 +714,7 @@
           "qrCode": { "type": "string", "description": "QR code value (e.g. STDPLUS:PNE-0001)", "example": "STDPLUS:PNE-0001" },
           "request": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Request" }] },
           "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }], "description": "Populated when an order is created from the request" },
-          "currentStation": { "type": "string", "enum": ["queue", "cutting", "edging", "tempering", "laminating", "assembly", "qc", "ready", "defected"], "default": "queue" },
+          "currentStation": { "type": "string", "description": "Current station name — defaults to first station in routing, or 'ready' if no routing" },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "completed"], "default": "pending" },
           "routing": { "type": "array", "items": { "type": "string" } },
           "customRouting": { "type": "boolean", "default": false },
@@ -738,7 +738,7 @@
         "properties": {
           "request": { "type": "string", "minLength": 1, "description": "Request ID this pane belongs to" },
           "order": { "type": "string", "minLength": 1, "description": "Order ID (optional, auto-filled when order is created from request)" },
-          "currentStation": { "type": "string", "enum": ["queue", "cutting", "edging", "tempering", "laminating", "assembly", "qc", "ready", "defected"] },
+          "currentStation": { "type": "string", "minLength": 1, "description": "Station name (any valid station)" },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "customRouting": { "type": "boolean" },
@@ -777,7 +777,7 @@
         "properties": {
           "request": { "type": "string", "minLength": 1 },
           "order": { "type": "string", "minLength": 1 },
-          "currentStation": { "type": "string", "enum": ["queue", "cutting", "edging", "tempering", "laminating", "assembly", "qc", "ready", "defected"] },
+          "currentStation": { "type": "string", "minLength": 1, "description": "Station name (any valid station)" },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "customRouting": { "type": "boolean" },

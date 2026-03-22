@@ -78,6 +78,38 @@ socket.emit('leave_station_room', { stationId: '69a98ee25bb1d35efb8cc1ff' }, (ac
   These are **dynamic rooms** scoped to individual stations, unlike `join_station` which joins a single shared room for the stations page. `stationId` is required — the callback returns `{ ok: false, error: "stationId is required" }` if omitted.
 </Note>
 
+### QR Check-in Events
+
+Used by the [QR check-in system](/scanning/qr-checkin) for worker presence at stations. The station screen joins with `join-station` and receives `scan-confirmed` when a mobile device emits `mobile-scan`.
+
+<CodeGroup>
+```javascript Station screen — join and listen
+socket.emit('join-station', 'cutting', (ack) => {
+  console.log(ack); // { ok: true, room: "station:cutting" }
+});
+
+socket.on('scan-confirmed', ({ worker, time }) => {
+  console.log(`${worker} checked in at ${time}`);
+});
+```
+
+```javascript Mobile device — send scan
+socket.emit('mobile-scan', { stationId: 'cutting', worker: 'Boss' }, (ack) => {
+  console.log(ack); // { ok: true }
+});
+```
+</CodeGroup>
+
+| Event | Direction | Description |
+|---|---|---|
+| `join-station` | OUTBOUND | Station screen joins `station:<stationId>`. Receives replayed `scan-confirmed` if a scan occurred within the last 15 seconds. |
+| `mobile-scan` | OUTBOUND | Mobile sends `{ stationId, worker? }`. Server broadcasts `scan-confirmed` to the station room. `worker` defaults to the authenticated user's name if omitted. |
+| `scan-confirmed` | INBOUND | Sent to `station:<stationId>` with `{ worker, time }` when a worker checks in. |
+
+<Note>
+  `join-station` uses a hyphenated name (not underscore) to distinguish it from `join_station` which joins the shared stations page room. Both require JWT authentication.
+</Note>
+
 ### Leave Events
 
 ```javascript

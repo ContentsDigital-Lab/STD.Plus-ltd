@@ -56,7 +56,10 @@ exports.create = async (req, res, next) => {
       const panePromises = paneItems.map(async (paneData) => {
         const paneNumber = await Counter.getNext('pane', 'PNE');
         const qrCode = `STDPLUS:${paneNumber}`;
-        return Pane.create({ ...paneData, request: request._id, paneNumber, qrCode });
+        const hasRouting = paneData.routing?.length > 0;
+        const currentStation = hasRouting ? paneData.routing[0] : 'ready';
+        const extras = hasRouting ? {} : { currentStatus: 'completed', completedAt: new Date() };
+        return Pane.create({ ...paneData, request: request._id, paneNumber, qrCode, currentStation, ...extras });
       });
       createdPanes = await Promise.all(panePromises);
     }

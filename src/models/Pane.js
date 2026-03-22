@@ -34,8 +34,7 @@ const paneSchema = new mongoose.Schema({
   },
   currentStation: {
     type: String,
-    enum: ['queue', 'cutting', 'edging', 'tempering', 'laminating', 'assembly', 'qc', 'ready', 'defected'],
-    default: 'queue',
+    default: '',
   },
   currentStatus: {
     type: String,

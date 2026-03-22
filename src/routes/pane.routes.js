@@ -8,7 +8,6 @@ const scanController = require('../controllers/scan.controller');
 
 const router = Router();
 
-const STATIONS = ['queue', 'cutting', 'edging', 'tempering', 'laminating', 'assembly', 'qc', 'ready', 'defected'];
 const PANE_STATUS = ['pending', 'in_progress', 'completed'];
 const EDGE_STATUS = ['pending', 'in_progress', 'completed'];
 
@@ -29,7 +28,7 @@ const createSchema = z.object({
   body: z.object({
     request: z.string().min(1),
     order: z.string().min(1).optional(),
-    currentStation: z.enum(STATIONS).optional(),
+    currentStation: z.string().min(1).optional(),
     currentStatus: z.enum(PANE_STATUS).optional(),
     routing: z.array(z.string().min(1)).optional(),
     customRouting: z.boolean().optional(),
@@ -51,7 +50,7 @@ const updateSchema = z.object({
   body: z.object({
     request: z.string().min(1).optional(),
     order: z.string().min(1).optional(),
-    currentStation: z.enum(STATIONS).optional(),
+    currentStation: z.string().min(1).optional(),
     currentStatus: z.enum(PANE_STATUS).optional(),
     routing: z.array(z.string().min(1)).optional(),
     customRouting: z.boolean().optional(),

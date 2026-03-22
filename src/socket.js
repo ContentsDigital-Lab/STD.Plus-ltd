@@ -31,6 +31,9 @@ const setupSocket = (httpServer) => {
 
   const ROOMS = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production'];
 
+  const lastScanByStation = new Map();
+  const REPLAY_WINDOW_MS = 15000;
+
   io.on('connection', (socket) => {
     console.log(`[socket] ${socket.user.name} connected (${socket.id})`);
 
@@ -78,6 +81,41 @@ const setupSocket = (httpServer) => {
       socket.leave(room);
       console.log(`[socket] ${socket.user.name} left room ${room}`);
       if (typeof callback === 'function') callback({ ok: true, room });
+    });
+
+    // QR check-in: station screen joins its room and receives replayed scans
+    socket.on('join-station', (stationId, callback) => {
+      if (!stationId || typeof stationId !== 'string') {
+        if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
+        return;
+      }
+      const room = `station:${stationId}`;
+      socket.join(room);
+      console.log(`[socket] ${socket.user.name} joined station ${stationId}`);
+
+      const last = lastScanByStation.get(stationId);
+      if (last && Date.now() - last.at < REPLAY_WINDOW_MS) {
+        socket.emit('scan-confirmed', { worker: last.worker, time: last.time });
+      }
+      if (typeof callback === 'function') callback({ ok: true, room });
+    });
+
+    // QR check-in: mobile sends scan, server broadcasts to the station room
+    socket.on('mobile-scan', (data, callback) => {
+      if (!data?.stationId) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
+        return;
+      }
+
+      const worker = data.worker || socket.user.name;
+      const time = new Date().toLocaleTimeString();
+      const room = `station:${data.stationId}`;
+
+      lastScanByStation.set(data.stationId, { worker, time, at: Date.now() });
+      io.to(room).emit('scan-confirmed', { worker, time });
+
+      console.log(`[socket] mobile-scan from ${socket.user.name} at station ${data.stationId}`);
+      if (typeof callback === 'function') callback({ ok: true });
     });
 
     socket.on('system_alert', (data) => {
