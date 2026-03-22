@@ -131,7 +131,9 @@ exports.update = async (req, res, next) => {
         const lastEntry = order.stationHistory?.[order.stationHistory.length - 1];
         const action = lastEntry?.exitedAt ? 'exited' : 'entered';
         emit(req, 'station:check_in', { orderId: order._id, stationId, action }, [`station:${stationId}`]);
-    // Notify station room when order advances to a new station
+      }
+    }
+
     const prevIdx = existing.currentStationIndex ?? 0;
     const newIdx = order.currentStationIndex ?? 0;
     if (newIdx !== prevIdx && Array.isArray(order.stations) && order.stations[newIdx]) {
