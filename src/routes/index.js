@@ -14,6 +14,7 @@ const stationTemplateRoutes = require('./stationTemplate.routes');
 const stationRoutes = require('./station.routes');
 const materialLogRoutes = require('./materialLog.routes');
 const notificationRoutes = require('./notification.routes');
+const pricingSettingsRoutes = require('./pricingSettings.routes');
 
 const router = Router();
 
@@ -31,5 +32,6 @@ router.use('/station-templates', stationTemplateRoutes);
 router.use('/stations', stationRoutes);
 router.use('/material-logs', materialLogRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/pricing-settings', pricingSettingsRoutes);
 
 module.exports = router;

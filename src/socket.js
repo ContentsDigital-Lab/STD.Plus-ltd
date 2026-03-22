@@ -29,7 +29,7 @@ const setupSocket = (httpServer) => {
     }
   });
 
-  const ROOMS = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim'];
+  const ROOMS = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pricing'];
 
   io.on('connection', (socket) => {
     console.log(`[socket] ${socket.user.name} connected (${socket.id})`);
