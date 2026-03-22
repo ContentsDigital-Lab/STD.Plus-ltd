@@ -56,6 +56,24 @@ const setupSocket = (httpServer) => {
       });
     }
 
+    // Per-station rooms — workers join when viewing a specific station page
+    // stationId can be a MongoDB ObjectId string or any station identifier
+    socket.on('join_station_room', (stationId, callback) => {
+      if (!stationId || typeof stationId !== 'string') return;
+      const roomId = `station:${stationId}`;
+      socket.join(roomId);
+      console.log(`[socket] ${socket.user.name} joined station room ${roomId}`);
+      if (typeof callback === 'function') callback({ ok: true, room: roomId });
+    });
+
+    socket.on('leave_station_room', (stationId, callback) => {
+      if (!stationId || typeof stationId !== 'string') return;
+      const roomId = `station:${stationId}`;
+      socket.leave(roomId);
+      console.log(`[socket] ${socket.user.name} left station room ${roomId}`);
+      if (typeof callback === 'function') callback({ ok: true, room: roomId });
+    });
+
     socket.on('system_alert', (data) => {
       if (socket.user.role !== 'admin') {
         return socket.emit('error', { message: 'Not authorized to send system alerts' });

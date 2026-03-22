@@ -66,6 +66,26 @@ exports.create = async (req, res, next) => {
     const order = await Order.create({ ...req.validated.body, orderNumber });
     const populated = await order.populate(POPULATE_FIELDS);
     emit(req, 'order:updated', { action: 'created', data: populated }, ['dashboard', 'order']);
+
+    // Notify the first station when a new order is created
+    const firstStationId = Array.isArray(order.stations) && order.stations[0]
+      ? order.stations[0].toString()
+      : null;
+    if (firstStationId) {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`station:${firstStationId}`).emit('notification', {
+          type: 'order_arrived',
+          title: 'มีออเดอร์ใหม่เข้า',
+          message: `ออเดอร์ ${order.orderNumber || order._id} เข้าสถานีนี้แล้ว`,
+          referenceId: order._id,
+          referenceType: 'Order',
+          priority: 'high',
+          readStatus: false,
+        });
+      }
+    }
+
     success(res, populated, 'Order created', 201);
   } catch (err) {
     next(err);
@@ -74,9 +94,11 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
+    // Fetch existing order first so we can detect station advancement
+    const existing = await Order.findById(req.params.id);
+    if (!existing) return fail(res, 'Order not found', 404);
+
     if (req.user.role === 'worker') {
-      const existing = await Order.findById(req.params.id);
-      if (!existing) return fail(res, 'Order not found', 404);
       if (existing.assignedTo?.toString() !== req.user._id.toString()) {
         return fail(res, 'Not authorized', 403);
       }
@@ -89,7 +111,28 @@ exports.update = async (req, res, next) => {
       runValidators: true,
     }).populate(POPULATE_FIELDS);
     if (!order) return fail(res, 'Order not found', 404);
+
     emit(req, 'order:updated', { action: 'updated', data: order }, ['dashboard', 'order']);
+
+    // Notify station room when order advances to a new station
+    const prevIdx = existing.currentStationIndex ?? 0;
+    const newIdx = order.currentStationIndex ?? 0;
+    if (newIdx !== prevIdx && Array.isArray(order.stations) && order.stations[newIdx]) {
+      const nextStationId = order.stations[newIdx].toString();
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`station:${nextStationId}`).emit('notification', {
+          type: 'order_arrived',
+          title: 'มีออเดอร์เข้า',
+          message: `ออเดอร์ ${order.orderNumber || order._id} เข้าสถานีนี้แล้ว`,
+          referenceId: order._id,
+          referenceType: 'Order',
+          priority: 'high',
+          readStatus: false,
+        });
+      }
+    }
+
     success(res, order, 'Order updated');
   } catch (err) {
     next(err);
