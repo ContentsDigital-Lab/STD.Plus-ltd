@@ -29,7 +29,7 @@ const setupSocket = (httpServer) => {
     }
   });
 
-  const ROOMS = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production'];
+  const ROOMS = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production', 'pricing'];
 
   const lastScanByStation = new Map();
   const REPLAY_WINDOW_MS = 15000;

@@ -17,6 +17,7 @@ const notificationRoutes = require('./notification.routes');
 const paneRoutes = require('./pane.routes');
 const productionLogRoutes = require('./productionLog.routes');
 const stickerTemplateRoutes = require('./stickerTemplate.routes');
+const pricingSettingsRoutes = require('./pricingSettings.routes');
 
 const router = Router();
 
@@ -37,5 +38,6 @@ router.use('/notifications', notificationRoutes);
 router.use('/panes', paneRoutes);
 router.use('/production-logs', productionLogRoutes);
 router.use('/sticker-templates', stickerTemplateRoutes);
+router.use('/pricing-settings', pricingSettingsRoutes);
 
 module.exports = router;
