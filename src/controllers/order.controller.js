@@ -36,7 +36,7 @@ const buildRefs = (body) => [
 
 exports.getAll = async (req, res, next) => {
   try {
-    const filter = req.user.role === 'worker' ? { assignedTo: req.user._id } : {};
+    const filter = {};
     const { data, pagination } = await paginate(Order, {
       filter,
       populate: POPULATE_FIELDS,
@@ -54,9 +54,6 @@ exports.getById = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.id).populate(POPULATE_FIELDS);
     if (!order) return fail(res, 'Order not found', 404);
-    if (req.user.role === 'worker' && order.assignedTo?._id.toString() !== req.user._id.toString()) {
-      return fail(res, 'Not authorized', 403);
-    }
     success(res, order);
   } catch (err) {
     next(err);

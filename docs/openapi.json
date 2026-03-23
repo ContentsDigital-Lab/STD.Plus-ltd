@@ -1526,6 +1526,61 @@
         }
       }
     },
+    "/api/inventories/{id}/move": {
+      "post": {
+        "tags": ["Inventories"],
+        "summary": "Move inventory to another location",
+        "description": "Moves a specified quantity from the source inventory record to a target location. If an inventory record already exists at the target location (same material and stock type), the quantity is added to it; otherwise a new record is created. Any authenticated user can perform this action.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["quantity", "toLocation"],
+                "properties": {
+                  "quantity": { "type": "number", "minimum": 1, "description": "Amount to move" },
+                  "toLocation": { "type": "string", "minLength": 1, "description": "Destination location name" },
+                  "toStorageColor": { "type": "string", "description": "Storage color at destination (optional)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inventory moved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "source": { "$ref": "#/components/schemas/Inventory" },
+                            "target": { "$ref": "#/components/schemas/Inventory" },
+                            "movedQuantity": { "type": "number" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
     "/api/material-logs": {
       "get": {
         "tags": ["Material Logs"],
@@ -1613,7 +1668,7 @@
       "get": {
         "tags": ["Requests"],
         "summary": "List all requests",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Any authenticated user can list requests (read-only).",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           { "$ref": "#/components/parameters/PageParam" },
@@ -1657,7 +1712,7 @@
       "get": {
         "tags": ["Requests"],
         "summary": "Get request by ID",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Any authenticated user can view a request (read-only).",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {

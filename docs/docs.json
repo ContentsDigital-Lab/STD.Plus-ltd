@@ -84,7 +84,8 @@
               "api-reference/inventories/delete-multiple-inventories",
               "api-reference/inventories/get-inventory-by-id",
               "api-reference/inventories/update-an-inventory",
-              "api-reference/inventories/delete-an-inventory"
+              "api-reference/inventories/delete-an-inventory",
+              "api-reference/inventories/move-inventory"
             ]
           },
           {

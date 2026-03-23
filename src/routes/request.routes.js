@@ -63,8 +63,8 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, authorize('admin', 'manager'), requestController.getAll);
-router.get('/:id', auth, authorize('admin', 'manager'), requestController.getById);
+router.get('/', auth, requestController.getAll);
+router.get('/:id', auth, requestController.getById);
 router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), requestController.create);
 router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), requestController.update);
 router.delete('/', auth, authorize('admin', 'manager'), validate(deleteManySchema), requestController.deleteMany);

@@ -33,9 +33,18 @@ const deleteManySchema = z.object({
   }),
 });
 
+const moveSchema = z.object({
+  body: z.object({
+    quantity: z.number().min(1),
+    toLocation: z.string().min(1),
+    toStorageColor: z.string().optional(),
+  }),
+});
+
 router.get('/', auth, inventoryController.getAll);
 router.get('/:id', auth, inventoryController.getById);
 router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), inventoryController.create);
+router.post('/:id/move', auth, validate(moveSchema), inventoryController.move);
 router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), inventoryController.update);
 router.delete('/', auth, authorize('admin'), validate(deleteManySchema), inventoryController.deleteMany);
 router.delete('/:id', auth, authorize('admin'), inventoryController.deleteOne);
