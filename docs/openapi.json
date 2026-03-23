@@ -2483,6 +2483,73 @@
           "404": { "$ref": "#/components/responses/404" }
         }
       }
+    },
+    "/api/pricing-settings": {
+      "get": {
+        "tags": ["Pricing Settings"],
+        "summary": "Get pricing settings",
+        "description": "Returns the singleton pricing settings document. Auto-creates with defaults if none exists. Any authenticated user can read.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Pricing settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "_id": { "type": "string" },
+                            "singleton": { "type": "boolean", "example": true },
+                            "glassPrices": { "type": "object", "description": "Nested map: glass type → thickness → { pricePerSqFt, grindingRate }", "additionalProperties": { "type": "object", "additionalProperties": { "type": "object", "properties": { "pricePerSqFt": { "type": "number" }, "grindingRate": { "type": "number" } } } } },
+                            "holePriceEach": { "type": "number", "example": 50 },
+                            "notchPrice": { "type": "number", "example": 100 },
+                            "updatedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "type": "object", "properties": { "_id": { "type": "string" }, "name": { "type": "string" }, "role": { "type": "string" } } }] },
+                            "createdAt": { "type": "string", "format": "date-time" },
+                            "updatedAt": { "type": "string", "format": "date-time" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "put": {
+        "tags": ["Pricing Settings"],
+        "summary": "Update pricing settings",
+        "description": "Updates the singleton pricing settings. Requires **admin** or **manager** role. Emits `pricing:updated` WebSocket event to the `pricing` room.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "glassPrices": { "type": "object", "description": "Nested map: glass type → thickness → { pricePerSqFt, grindingRate }", "additionalProperties": { "type": "object", "additionalProperties": { "type": "object", "properties": { "pricePerSqFt": { "type": "number", "minimum": 0 }, "grindingRate": { "type": "number", "minimum": 0 } }, "required": ["pricePerSqFt", "grindingRate"] } } },
+                  "holePriceEach": { "type": "number", "minimum": 0 },
+                  "notchPrice": { "type": "number", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Pricing settings updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
     }
   },
   "tags": [
@@ -2503,6 +2570,7 @@
     { "name": "Panes" },
     { "name": "QR Scanning" },
     { "name": "Production Logs" },
-    { "name": "Sticker Templates" }
+    { "name": "Sticker Templates" },
+    { "name": "Pricing Settings" }
   ]
 }

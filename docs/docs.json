@@ -213,6 +213,13 @@
               "api-reference/sticker-templates/update-a-sticker-template",
               "api-reference/sticker-templates/delete-a-sticker-template"
             ]
+          },
+          {
+            "group": "Pricing Settings",
+            "pages": [
+              "api-reference/pricing-settings/get-pricing-settings",
+              "api-reference/pricing-settings/update-pricing-settings"
+            ]
           }
         ]
       }

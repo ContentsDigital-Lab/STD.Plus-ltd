@@ -1,0 +1,53 @@
+---
+title: Get Pricing Settings
+api: GET /api/pricing-settings
+description: Retrieve the current glass pricing configuration
+---
+
+Returns the singleton pricing settings document containing glass prices per type/thickness, grinding rates, hole prices, and notch prices.
+
+If no settings document exists yet, one is automatically created with default values on the first request.
+
+<Note>
+  Any authenticated user can read pricing settings. No specific role is required.
+</Note>
+
+## Response
+
+<ResponseField name="data" type="object">
+  <Expandable title="properties">
+    <ResponseField name="_id" type="string" />
+    <ResponseField name="singleton" type="boolean" description="Always true — enforces single document" />
+    <ResponseField name="glassPrices" type="object" description="Nested map: glass type → thickness → { pricePerSqFt, grindingRate }">
+      ```json
+      {
+        "Clear": {
+          "3mm": { "pricePerSqFt": 35, "grindingRate": 50 },
+          "5mm": { "pricePerSqFt": 50, "grindingRate": 50 }
+        },
+        "Tempered": {
+          "5mm": { "pricePerSqFt": 85, "grindingRate": 75 }
+        }
+      }
+      ```
+    </ResponseField>
+    <ResponseField name="holePriceEach" type="number" description="Price per hole (default: 50)" />
+    <ResponseField name="notchPrice" type="number" description="Price per notch (default: 100)" />
+    <ResponseField name="updatedBy" type="object" description="Populated worker who last updated (name, role)" />
+    <ResponseField name="createdAt" type="string" />
+    <ResponseField name="updatedAt" type="string" />
+  </Expandable>
+</ResponseField>
+
+## Glass Types (Defaults)
+
+| Type | Available Thicknesses |
+|---|---|
+| Clear | 3mm, 5mm, 6mm, 8mm, 10mm, 12mm, 15mm, 19mm |
+| Tinted | 5mm, 6mm, 8mm, 10mm, 12mm, 15mm |
+| Tempered | 5mm, 6mm, 8mm, 10mm, 12mm, 15mm, 19mm |
+| Laminated | 6mm, 8mm, 10mm, 12mm, 15mm |
+| Low-E | 6mm, 8mm, 10mm, 12mm |
+| Frosted | 5mm, 6mm, 8mm, 10mm |
+| Reflective | 6mm, 8mm, 10mm |
+| Patterned | 5mm, 6mm |
