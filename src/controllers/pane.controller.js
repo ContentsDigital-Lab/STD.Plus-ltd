@@ -1,7 +1,9 @@
+const mongoose = require('mongoose');
 const Pane = require('../models/Pane');
+const PaneLog = require('../models/PaneLog');
+const Order = require('../models/Order');
 const Counter = require('../models/Counter');
 const Request = require('../models/Request');
-const Order = require('../models/Order');
 const Withdrawal = require('../models/Withdrawal');
 const ProductionLog = require('../models/ProductionLog');
 const { success, fail } = require('../utils/response');
@@ -9,29 +11,43 @@ const emit = require('../utils/emitEvent');
 const { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['request', 'order', 'withdrawal', 'remakeOf'];
+const POPULATE_FIELDS = [
+  { path: 'order',   select: 'orderNumber code customer' },
+  { path: 'request', select: 'code' },
+  { path: 'withdrawal' },
+  { path: 'remakeOf' },
+];
 
 const PANE_DEPENDENTS = [
   { model: ProductionLog, field: 'pane', label: 'production log(s)' },
 ];
 
+// ── GET /panes ────────────────────────────────────────────────────────────────
 exports.getAll = async (req, res, next) => {
   try {
-    const { data, pagination } = await paginate(Pane, {
-      populate: POPULATE_FIELDS,
-      page: req.query.page,
-      limit: req.query.limit,
-      sort: req.query.sort,
-    });
-    success(res, data, 'Success', 200, pagination);
+    const filter = {};
+    if (req.query.order)   filter.order   = req.query.order;
+    if (req.query.request) filter.request = req.query.request;
+    if (req.query.station) filter.currentStation = req.query.station;
+    if (req.query.status)  filter.currentStatus  = req.query.status;
+
+    const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit) || 200));
+    const sort  = req.query.sort || '-createdAt';
+
+    const data = await Pane.find(filter).sort(sort).limit(limit).populate(POPULATE_FIELDS).lean();
+    success(res, data);
   } catch (err) {
     next(err);
   }
 };
 
+// ── GET /panes/:id ────────────────────────────────────────────────────────────
 exports.getById = async (req, res, next) => {
   try {
-    const pane = await Pane.findById(req.params.id).populate(POPULATE_FIELDS);
+    const { id } = req.params;
+    const pane = mongoose.Types.ObjectId.isValid(id)
+      ? await Pane.findById(id).populate(POPULATE_FIELDS).lean()
+      : await Pane.findOne({ paneNumber: id.toUpperCase() }).populate(POPULATE_FIELDS).lean();
     if (!pane) return fail(res, 'Pane not found', 404);
     success(res, pane);
   } catch (err) {
@@ -39,19 +55,22 @@ exports.getById = async (req, res, next) => {
   }
 };
 
+// ── POST /panes ───────────────────────────────────────────────────────────────
 exports.create = async (req, res, next) => {
   try {
     const { request, order, withdrawal, remakeOf } = req.validated.body;
     await verifyReferences([
-      { model: Request, id: request, label: 'Request' },
-      { model: Order, id: order, label: 'Order' },
+      { model: Request,    id: request,    label: 'Request' },
+      { model: Order,      id: order,      label: 'Order' },
       { model: Withdrawal, id: withdrawal, label: 'Withdrawal' },
-      { model: Pane, id: remakeOf, label: 'Pane (remakeOf)' },
+      { model: Pane,       id: remakeOf,   label: 'Pane (remakeOf)' },
     ]);
-
-    const paneNumber = await Counter.getNext('pane', 'PNE');
-    const qrCode = `STDPLUS:${paneNumber}`;
-    const pane = await Pane.create({ ...req.validated.body, paneNumber, qrCode });
+    const body = { ...req.validated.body };
+    if (!body.paneNumber) {
+      body.paneNumber = await Counter.getNext('pane', 'PNE');
+    }
+    body.qrCode = `STDPLUS:${body.paneNumber}`;
+    const pane = await Pane.create(body);
     const populated = await pane.populate(POPULATE_FIELDS);
     emit(req, 'pane:updated', { action: 'created', data: populated }, ['dashboard', 'pane', 'production']);
     success(res, populated, 'Pane created', 201);
@@ -60,20 +79,21 @@ exports.create = async (req, res, next) => {
   }
 };
 
+// ── PATCH /panes/:id ──────────────────────────────────────────────────────────
 exports.update = async (req, res, next) => {
   try {
-    const { request, order, withdrawal, remakeOf } = req.validated.body;
+    const { request, order, withdrawal, remakeOf } = req.validated?.body ?? req.body;
     await verifyReferences([
       { model: Request, id: request, label: 'Request' },
       { model: Order, id: order, label: 'Order' },
       { model: Withdrawal, id: withdrawal, label: 'Withdrawal' },
       { model: Pane, id: remakeOf, label: 'Pane (remakeOf)' },
     ]);
-
-    const pane = await Pane.findByIdAndUpdate(req.params.id, req.validated.body, {
-      new: true,
-      runValidators: true,
-    }).populate(POPULATE_FIELDS);
+    const pane = await Pane.findByIdAndUpdate(
+      req.params.id,
+      req.validated?.body ?? req.body,
+      { new: true, runValidators: true }
+    ).populate(POPULATE_FIELDS).lean();
     if (!pane) return fail(res, 'Pane not found', 404);
     emit(req, 'pane:updated', { action: 'updated', data: pane }, ['dashboard', 'pane', 'production']);
     success(res, pane, 'Pane updated');
@@ -82,12 +102,13 @@ exports.update = async (req, res, next) => {
   }
 };
 
+// ── DELETE /panes/:id ─────────────────────────────────────────────────────────
 exports.deleteOne = async (req, res, next) => {
   try {
     await blockDeleteIfReferenced(req.params.id, PANE_DEPENDENTS);
     const pane = await Pane.findByIdAndDelete(req.params.id);
     if (!pane) return fail(res, 'Pane not found', 404);
-    emit(req, 'pane:updated', { action: 'deleted', data: pane }, ['dashboard', 'pane', 'production']);
+    emit(req, 'pane:updated', { action: 'deleted', data: { _id: pane._id } }, ['dashboard', 'pane', 'production']);
     success(res, null, 'Pane deleted');
   } catch (err) {
     next(err);
@@ -101,6 +122,81 @@ exports.deleteMany = async (req, res, next) => {
     const result = await Pane.deleteMany({ _id: { $in: ids } });
     emit(req, 'pane:updated', { action: 'deleted', data: { ids } }, ['dashboard', 'pane', 'production']);
     success(res, { deletedCount: result.deletedCount }, 'Panes deleted');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /panes/:paneNumber/scan ──────────────────────────────────────────────
+exports.scan = async (req, res, next) => {
+  try {
+    const { paneNumber } = req.params;
+    const { station, action } = req.body;
+
+    if (!station) return fail(res, 'station is required', 400);
+    if (!['scan_in', 'start', 'complete'].includes(action)) return fail(res, 'Invalid action', 400);
+
+    const pane = await Pane.findOne({ paneNumber: paneNumber.toUpperCase() });
+    if (!pane) return fail(res, `ไม่พบกระจก ${paneNumber}`, 404);
+
+    const now = new Date();
+    let nextStation = null;
+
+    if (action === 'scan_in') {
+      pane.currentStation = station;
+      pane.currentStatus  = 'in_progress';
+      if (!pane.startedAt) pane.startedAt = now;
+    }
+
+    if (action === 'start') {
+      pane.currentStation = station;
+      pane.currentStatus  = 'in_progress';
+    }
+
+    if (action === 'complete') {
+      const route = Array.isArray(pane.routing) ? pane.routing : [];
+      const idx   = route.indexOf(station);
+      nextStation = (idx >= 0 && idx < route.length - 1) ? route[idx + 1] : null;
+
+      if (nextStation) {
+        pane.currentStation = nextStation;
+        pane.currentStatus  = 'pending';
+      } else {
+        pane.currentStation = station;
+        pane.currentStatus  = 'completed';
+        pane.completedAt    = now;
+      }
+    }
+
+    await pane.save();
+    const populated = await pane.populate(POPULATE_FIELDS);
+
+    const log = await PaneLog.create({
+      pane:        pane._id,
+      order:       pane.order ?? null,
+      station,
+      action,
+      completedAt: action === 'complete' ? now : null,
+    });
+
+    emit(req, 'pane:updated', { action: 'scanned', data: populated }, ['pane']);
+
+    if (action === 'complete' && nextStation) {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`station:${nextStation}`).emit('notification', {
+          type:    'pane_arrived',
+          title:   'มีกระจกเข้าสถานี',
+          message: `กระจก ${pane.paneNumber} เข้าสถานีนี้แล้ว`,
+        });
+      }
+    }
+
+    success(res, {
+      pane:        populated.toObject ? populated.toObject() : populated,
+      log:         log.toObject(),
+      nextStation: nextStation ?? undefined,
+    });
   } catch (err) {
     next(err);
   }

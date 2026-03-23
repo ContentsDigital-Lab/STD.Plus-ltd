@@ -26,45 +26,49 @@ const edgeTaskSchema = z.object({
 
 const createSchema = z.object({
   body: z.object({
-    request: z.string().min(1),
-    order: z.string().min(1).optional(),
-    currentStation: z.string().min(1).optional(),
+    paneNumber:    z.string().min(1).optional(),
+    qrCode:        z.string().optional(),
+    order:         z.string().min(1).optional(),
+    request:       z.string().min(1).optional(),
+    currentStation:z.string().min(1).optional(),
     currentStatus: z.enum(PANE_STATUS).optional(),
-    routing: z.array(z.string().min(1)).optional(),
+    routing:       z.array(z.string().min(1)).optional(),
     customRouting: z.boolean().optional(),
-    dimensions: dimensionsSchema,
-    glassType: z.string().optional(),
-    glassTypeLabel: z.string().optional(),
-    processes: z.array(z.string().min(1)).optional(),
-    edgeTasks: z.array(edgeTaskSchema).optional(),
-    withdrawal: z.string().min(1).optional(),
-    remakeOf: z.string().min(1).optional(),
-    startedAt: z.string().datetime().optional(),
-    completedAt: z.string().datetime().optional(),
-    deliveredAt: z.string().datetime().optional(),
-    notes: z.string().optional(),
+    dimensions:    dimensionsSchema,
+    glassType:     z.string().optional(),
+    glassTypeLabel:z.string().optional(),
+    processes:     z.array(z.string().min(1)).optional(),
+    edgeTasks:     z.array(edgeTaskSchema).optional(),
+    withdrawal:    z.string().min(1).optional(),
+    remakeOf:      z.string().min(1).optional(),
+    startedAt:     z.string().datetime().optional(),
+    completedAt:   z.string().datetime().optional(),
+    deliveredAt:   z.string().datetime().optional(),
+    notes:         z.string().optional(),
   }),
 });
 
 const updateSchema = z.object({
   body: z.object({
-    request: z.string().min(1).optional(),
-    order: z.string().min(1).optional(),
-    currentStation: z.string().min(1).optional(),
+    paneNumber:    z.string().min(1).optional(),
+    qrCode:        z.string().optional(),
+    order:         z.string().min(1).optional(),
+    request:       z.string().min(1).optional(),
+    currentStation:z.string().min(1).optional(),
     currentStatus: z.enum(PANE_STATUS).optional(),
-    routing: z.array(z.string().min(1)).optional(),
+    routing:       z.array(z.string().min(1)).optional(),
     customRouting: z.boolean().optional(),
-    dimensions: dimensionsSchema,
-    glassType: z.string().optional(),
-    glassTypeLabel: z.string().optional(),
-    processes: z.array(z.string().min(1)).optional(),
-    edgeTasks: z.array(edgeTaskSchema).optional(),
-    withdrawal: z.string().min(1).optional(),
-    remakeOf: z.string().min(1).optional(),
-    startedAt: z.string().datetime().optional(),
-    completedAt: z.string().datetime().optional(),
-    deliveredAt: z.string().datetime().optional(),
-    notes: z.string().optional(),
+    dimensions:    dimensionsSchema,
+    glassType:     z.string().optional(),
+    glassTypeLabel:z.string().optional(),
+    processes:     z.array(z.string().min(1)).optional(),
+    edgeTasks:     z.array(edgeTaskSchema).optional(),
+    withdrawal:    z.string().min(1).optional(),
+    remakeOf:      z.string().min(1).optional(),
+    startedAt:     z.string().datetime().optional(),
+    completedAt:   z.string().datetime().optional(),
+    deliveredAt:   z.string().datetime().optional(),
+    notes:         z.string().optional(),
   }),
 });
 
@@ -82,12 +86,12 @@ const scanSchema = z.object({
   }),
 });
 
-router.post('/:paneNumber/scan', auth, validate(scanSchema), scanController.scan);
-router.get('/', auth, paneController.getAll);
-router.get('/:id', auth, paneController.getById);
-router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), paneController.create);
-router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), paneController.update);
-router.delete('/', auth, authorize('admin'), validate(deleteManySchema), paneController.deleteMany);
-router.delete('/:id', auth, authorize('admin'), paneController.deleteOne);
+router.get('/',                    auth, paneController.getAll);
+router.get('/:id',                 auth, paneController.getById);
+router.post('/',                   auth, authorize('admin', 'manager'), validate(createSchema), paneController.create);
+router.patch('/:id',               auth, authorize('admin', 'manager'), validate(updateSchema), paneController.update);
+router.delete('/',                 auth, authorize('admin'), validate(deleteManySchema), paneController.deleteMany);
+router.delete('/:id',              auth, authorize('admin'), paneController.deleteOne);
+router.post('/:paneNumber/scan',   auth, validate(scanSchema), paneController.scan);
 
 module.exports = router;

@@ -18,6 +18,7 @@ const paneRoutes = require('./pane.routes');
 const productionLogRoutes = require('./productionLog.routes');
 const stickerTemplateRoutes = require('./stickerTemplate.routes');
 const pricingSettingsRoutes = require('./pricingSettings.routes');
+const paneLogRoutes = require('./paneLog.routes');
 
 const router = Router();
 
@@ -39,5 +40,6 @@ router.use('/panes', paneRoutes);
 router.use('/production-logs', productionLogRoutes);
 router.use('/sticker-templates', stickerTemplateRoutes);
 router.use('/pricing-settings', pricingSettingsRoutes);
+router.use('/pane-logs', paneLogRoutes);
 
 module.exports = router;
