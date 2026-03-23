@@ -1,0 +1,166 @@
+const mongoose = require('mongoose');
+const Pane    = require('../models/Pane');
+const PaneLog = require('../models/PaneLog');
+const Order   = require('../models/Order');
+const Counter = require('../models/Counter');
+const { success, fail } = require('../utils/response');
+const emit = require('../utils/emitEvent');
+
+const POPULATE_FIELDS = [
+  { path: 'order',   select: 'orderNumber code customer' },
+  { path: 'request', select: 'code' },
+];
+
+// ── GET /panes ────────────────────────────────────────────────────────────────
+exports.getAll = async (req, res, next) => {
+  try {
+    const filter = {};
+    if (req.query.order)   filter.order   = req.query.order;
+    if (req.query.request) filter.request = req.query.request;
+    if (req.query.station) filter.currentStation = req.query.station;
+    if (req.query.status)  filter.currentStatus  = req.query.status;
+
+    const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit) || 200));
+    const sort  = req.query.sort || '-createdAt';
+
+    const data = await Pane.find(filter).sort(sort).limit(limit).populate(POPULATE_FIELDS).lean();
+    success(res, data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── GET /panes/:id ────────────────────────────────────────────────────────────
+exports.getById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const pane = mongoose.Types.ObjectId.isValid(id)
+      ? await Pane.findById(id).populate(POPULATE_FIELDS).lean()
+      : await Pane.findOne({ paneNumber: id.toUpperCase() }).populate(POPULATE_FIELDS).lean();
+    if (!pane) return fail(res, 'Pane not found', 404);
+    success(res, pane);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /panes ───────────────────────────────────────────────────────────────
+exports.create = async (req, res, next) => {
+  try {
+    const body = { ...req.validated.body };
+    // Auto-generate paneNumber if not provided (e.g. when created from OrderReleasePanel)
+    if (!body.paneNumber) {
+      body.paneNumber = await Counter.getNext('pane', 'PNE');
+    }
+    const pane = await Pane.create(body);
+    const populated = await pane.populate(POPULATE_FIELDS);
+    emit(req, 'pane:updated', { action: 'created', data: populated }, ['pane']);
+    success(res, populated, 'Created', 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── PATCH /panes/:id ──────────────────────────────────────────────────────────
+exports.update = async (req, res, next) => {
+  try {
+    const pane = await Pane.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate(POPULATE_FIELDS).lean();
+    if (!pane) return fail(res, 'Pane not found', 404);
+    emit(req, 'pane:updated', { action: 'updated', data: pane }, ['pane']);
+    success(res, pane);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── DELETE /panes/:id ─────────────────────────────────────────────────────────
+exports.deleteOne = async (req, res, next) => {
+  try {
+    const pane = await Pane.findByIdAndDelete(req.params.id);
+    if (!pane) return fail(res, 'Pane not found', 404);
+    emit(req, 'pane:updated', { action: 'deleted', data: { _id: pane._id } }, ['pane']);
+    success(res, null, 'Deleted');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /panes/:paneNumber/scan ──────────────────────────────────────────────
+exports.scan = async (req, res, next) => {
+  try {
+    const { paneNumber } = req.params;
+    const { station, action } = req.body;
+
+    if (!station) return fail(res, 'station is required', 400);
+    if (!['scan_in', 'start', 'complete'].includes(action)) return fail(res, 'Invalid action', 400);
+
+    const pane = await Pane.findOne({ paneNumber: paneNumber.toUpperCase() });
+    if (!pane) return fail(res, `ไม่พบกระจก ${paneNumber}`, 404);
+
+    const now = new Date();
+    let nextStation = null;
+
+    if (action === 'scan_in') {
+      pane.currentStation = station;
+      pane.currentStatus  = 'in_progress';
+      if (!pane.startedAt) pane.startedAt = now;
+    }
+
+    if (action === 'start') {
+      pane.currentStation = station;
+      pane.currentStatus  = 'in_progress';
+    }
+
+    if (action === 'complete') {
+      const route = Array.isArray(pane.routing) ? pane.routing : [];
+      const idx   = route.indexOf(station);
+      nextStation = (idx >= 0 && idx < route.length - 1) ? route[idx + 1] : null;
+
+      if (nextStation) {
+        pane.currentStation = nextStation;
+        pane.currentStatus  = 'pending';
+      } else {
+        // Last station — mark fully completed
+        pane.currentStation = station;
+        pane.currentStatus  = 'completed';
+        pane.completedAt    = now;
+      }
+    }
+
+    await pane.save();
+    const populated = await pane.populate(POPULATE_FIELDS);
+
+    // Create production log
+    const log = await PaneLog.create({
+      pane:        pane._id,
+      order:       pane.order ?? null,
+      station,
+      action,
+      completedAt: action === 'complete' ? now : null,
+    });
+
+    // Emit real-time events
+    emit(req, 'pane:updated', { action: 'scanned', data: populated }, ['pane']);
+
+    // Notify next station (if completing and there is one)
+    if (action === 'complete' && nextStation) {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`station:${nextStation}`).emit('notification', {
+          type:    'pane_arrived',
+          title:   'มีกระจกเข้าสถานี',
+          message: `กระจก ${pane.paneNumber} เข้าสถานีนี้แล้ว`,
+        });
+      }
+    }
+
+    success(res, {
+      pane:        populated.toObject ? populated.toObject() : populated,
+      log:         log.toObject(),
+      nextStation: nextStation ?? undefined,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

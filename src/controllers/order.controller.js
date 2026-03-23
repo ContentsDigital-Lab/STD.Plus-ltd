@@ -32,6 +32,8 @@ const buildRefs = (body) => [
 exports.getAll = async (req, res, next) => {
   try {
     const filter = req.user.role === 'worker' ? { assignedTo: req.user._id } : {};
+    // Filter orders that include a specific station in their route
+    if (req.query.stationId) filter.stations = req.query.stationId;
     const { data, pagination } = await paginate(Order, {
       filter,
       populate: POPULATE_FIELDS,
