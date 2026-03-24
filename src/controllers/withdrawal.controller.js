@@ -11,9 +11,21 @@ const paginate = require('../utils/paginate');
 
 const Pane = require('../models/Pane');
 
-const POPULATE_FIELDS = ['order', 'pane', 'withdrawnBy', 'material', 'approvedBy'];
+const POPULATE_FIELDS = ['order', 'pane', 'withdrawnBy', 'material', 'approvedBy', 'inventory'];
 
-const deductInventory = async (materialId, stockType, quantity) => {
+const deductInventory = async (materialId, stockType, quantity, inventoryId = null) => {
+  if (inventoryId) {
+    const inv = await Inventory.findById(inventoryId);
+    if (!inv) throw new AppError('Specific inventory record not found', 404);
+    if (inv.material.toString() !== materialId.toString()) throw new AppError('Material mismatch for the specified inventory', 400);
+    if (inv.quantity < quantity) {
+      throw new AppError(`Insufficient stock in specified inventory. Available: ${inv.quantity}, Requested: ${quantity}`, 400);
+    }
+    inv.quantity -= quantity;
+    await inv.save();
+    return;
+  }
+
   const inventories = await Inventory.find({ material: materialId, stockType }).sort({ createdAt: 1 });
   const total = inventories.reduce((sum, inv) => sum + inv.quantity, 0);
   if (total < quantity) {
@@ -29,7 +41,16 @@ const deductInventory = async (materialId, stockType, quantity) => {
   }
 };
 
-const restoreInventory = async (materialId, stockType, quantity) => {
+const restoreInventory = async (materialId, stockType, quantity, inventoryId = null) => {
+  if (inventoryId) {
+    const inv = await Inventory.findById(inventoryId);
+    if (inv) {
+      inv.quantity += quantity;
+      await inv.save();
+      return;
+    }
+  }
+
   const inventory = await Inventory.findOne({ material: materialId, stockType }).sort({ createdAt: 1 });
   if (inventory) {
     inventory.quantity += quantity;
@@ -77,7 +98,7 @@ exports.create = async (req, res, next) => {
       { model: Pane, id: pane, label: 'Pane' },
     ]);
 
-    await deductInventory(material, stockType, quantity);
+    await deductInventory(material, stockType, quantity, req.validated.body.inventory);
 
     const withdrawal = await Withdrawal.create(req.validated.body);
     const populated = await withdrawal.populate(POPULATE_FIELDS);
@@ -110,11 +131,11 @@ exports.update = async (req, res, next) => {
       const newStockType = updates.stockType || oldWithdrawal.stockType;
       const newQuantity = updates.quantity !== undefined ? updates.quantity : oldWithdrawal.quantity;
 
-      await restoreInventory(oldWithdrawal.material, oldWithdrawal.stockType, oldWithdrawal.quantity);
+      await restoreInventory(oldWithdrawal.material, oldWithdrawal.stockType, oldWithdrawal.quantity, oldWithdrawal.inventory);
       try {
-        await deductInventory(newMaterial, newStockType, newQuantity);
+        await deductInventory(newMaterial, newStockType, newQuantity, updates.inventory || oldWithdrawal.inventory);
       } catch (err) {
-        await deductInventory(oldWithdrawal.material, oldWithdrawal.stockType, oldWithdrawal.quantity);
+        await deductInventory(oldWithdrawal.material, oldWithdrawal.stockType, oldWithdrawal.quantity, oldWithdrawal.inventory);
         throw err;
       }
     }
@@ -139,7 +160,7 @@ exports.deleteOne = async (req, res, next) => {
     const withdrawal = await Withdrawal.findById(req.params.id);
     if (!withdrawal) return fail(res, 'Withdrawal not found', 404);
 
-    await restoreInventory(withdrawal.material, withdrawal.stockType, withdrawal.quantity);
+    await restoreInventory(withdrawal.material, withdrawal.stockType, withdrawal.quantity, withdrawal.inventory);
     await Withdrawal.findByIdAndDelete(req.params.id);
 
     emit(req, 'withdrawal:updated', { action: 'deleted', data: withdrawal }, ['dashboard', 'withdrawal']);
@@ -156,7 +177,7 @@ exports.deleteMany = async (req, res, next) => {
     const withdrawals = await Withdrawal.find({ _id: { $in: ids } });
 
     for (const w of withdrawals) {
-      await restoreInventory(w.material, w.stockType, w.quantity);
+      await restoreInventory(w.material, w.stockType, w.quantity, w.inventory);
     }
 
     const result = await Withdrawal.deleteMany({ _id: { $in: ids } });

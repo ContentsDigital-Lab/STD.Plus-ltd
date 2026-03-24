@@ -25,6 +25,7 @@ const createSchema = z.object({
     approvedBy: z.string().min(1).optional(),
     withdrawnDimensions: withdrawnDimensionsSchema,
     notes: z.string().optional(),
+    inventory: z.string().optional(),
     withdrawnDate: z.string().datetime().optional(),
   }),
 });
@@ -41,6 +42,7 @@ const updateSchema = z.object({
     approvedBy: z.string().min(1).optional(),
     withdrawnDimensions: withdrawnDimensionsSchema,
     notes: z.string().optional(),
+    inventory: z.string().optional(),
     withdrawnDate: z.string().datetime().optional(),
   }),
 });

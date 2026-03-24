@@ -50,6 +50,11 @@ const withdrawalSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  inventory: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Inventory',
+    default: null,
+  },
   withdrawnDate: {
     type: Date,
     default: Date.now,
