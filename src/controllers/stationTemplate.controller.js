@@ -2,11 +2,11 @@ const StationTemplate = require('../models/StationTemplate');
 const Station = require('../models/Station');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
-const { blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
+const { cascadeDeleteReferenced, cascadeDeleteManyReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
 const TEMPLATE_DEPENDENTS = [
-  { model: Station, field: 'templateId', label: 'station(s)' },
+  { model: Station, field: 'templateId' },
 ];
 
 exports.getAll = async (req, res, next) => {
@@ -58,7 +58,7 @@ exports.update = async (req, res, next) => {
 
 exports.deleteOne = async (req, res, next) => {
   try {
-    await blockDeleteIfReferenced(req.params.id, TEMPLATE_DEPENDENTS);
+    await cascadeDeleteReferenced(req.params.id, TEMPLATE_DEPENDENTS);
     const template = await StationTemplate.findByIdAndDelete(req.params.id);
     if (!template) return fail(res, 'Station template not found', 404);
     emit(req, 'station-template:updated', { action: 'deleted', data: template }, ['dashboard', 'station']);
@@ -71,7 +71,7 @@ exports.deleteOne = async (req, res, next) => {
 exports.deleteMany = async (req, res, next) => {
   try {
     const { ids } = req.validated.body;
-    await blockDeleteManyIfReferenced(ids, TEMPLATE_DEPENDENTS);
+    await cascadeDeleteManyReferenced(ids, TEMPLATE_DEPENDENTS);
     const result = await StationTemplate.deleteMany({ _id: { $in: ids } });
     emit(req, 'station-template:updated', { action: 'deleted', data: { ids } }, ['dashboard', 'station']);
     success(res, { deletedCount: result.deletedCount }, 'Station templates deleted');

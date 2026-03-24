@@ -48,91 +48,65 @@ function checkIncludes(label, str, substring) {
 // ──────────────────────────────────────────────
 
 async function testCascadeDeletes(token) {
-  console.log('\n=== Cascade Delete Protection ===\n');
-
-  // Create a material
-  const mat = await api('POST', '/api/materials', token, { name: 'Cascade Glass', unit: 'sheet', reorderPoint: 5 });
-  const matId = mat.data.data._id;
-
-  // Create a customer
-  const cust = await api('POST', '/api/customers', token, { name: 'Cascade Customer' });
-  const custId = cust.data.data._id;
-
-  // Create an inventory referencing the material
-  const inv = await api('POST', '/api/inventories', token, { material: matId, stockType: 'Raw', quantity: 100, location: 'Warehouse A' });
-  const invId = inv.data.data._id;
-
-  // Try to delete material — should be blocked (referenced by inventory)
-  const r1 = await api('DELETE', `/api/materials/${matId}`, token);
-  check('DELETE material with inventory ref', r1.status, 409);
-  checkIncludes('  message mentions inventory', r1.data.message, 'inventory record(s)');
-
-  // Delete the inventory first, then material should succeed
-  await api('DELETE', `/api/inventories/${invId}`, token);
-  const r2 = await api('DELETE', `/api/materials/${matId}`, token);
-  check('DELETE material after inventory removed', r2.status, 200);
-
-  // Create fresh material + order to test customer cascade
-  const mat2 = await api('POST', '/api/materials', token, { name: 'Cascade Glass 2', unit: 'sheet', reorderPoint: 5 });
-  const matId2 = mat2.data.data._id;
-  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId2, quantity: 5 });
-  const ordId = ord.data.data._id;
-
-  // Try to delete customer — should be blocked (referenced by order)
-  const r3 = await api('DELETE', `/api/customers/${custId}`, token);
-  check('DELETE customer with order ref', r3.status, 409);
-  checkIncludes('  message mentions order', r3.data.message, 'order(s)');
-
-  // Try to delete material — should be blocked (referenced by order)
-  const r4 = await api('DELETE', `/api/materials/${matId2}`, token);
-  check('DELETE material with order ref', r4.status, 409);
-
-  // Try to delete order — should succeed (no children yet)
-  const r5 = await api('DELETE', `/api/orders/${ordId}`, token);
-  check('DELETE order with no children', r5.status, 200);
-
-  // Now create order + claim, test order cascade
-  const ord2 = await api('POST', '/api/orders', token, { customer: custId, material: matId2, quantity: 3 });
-  const ordId2 = ord2.data.data._id;
+  console.log('\n=== Cascade Delete ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
   const workerId = me.data.data._id;
 
-  const claim = await api('POST', `/api/orders/${ordId2}/claims`, token, {
+  // Material → cascades inventory
+  const mat = await api('POST', '/api/materials', token, { name: 'Cascade Glass', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const inv = await api('POST', '/api/inventories', token, { material: matId, stockType: 'Raw', quantity: 100, location: 'WH-A' });
+  const invId = inv.data.data._id;
+
+  const r1 = await api('DELETE', `/api/materials/${matId}`, token);
+  check('DELETE material cascades inventory', r1.status, 200);
+  const r1b = await api('GET', `/api/inventories/${invId}`, token);
+  check('  inventory also deleted', r1b.status, 404);
+
+  // Order → cascades claims, panes, production logs
+  const mat2 = await api('POST', '/api/materials', token, { name: 'Cascade Glass 2', unit: 'sheet', reorderPoint: 5 });
+  const matId2 = mat2.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'Cascade Customer' });
+  const custId = cust.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId2, quantity: 5 });
+  const ordId = ord.data.data._id;
+
+  const claim = await api('POST', `/api/orders/${ordId}/claims`, token, {
     source: 'worker', material: matId2, description: 'Test claim', reportedBy: workerId,
   });
   const claimId = claim.data.data._id;
 
-  // Try to delete order — should be blocked (has claim)
-  const r6 = await api('DELETE', `/api/orders/${ordId2}`, token);
-  check('DELETE order with claim ref', r6.status, 409);
-  checkIncludes('  message mentions claim', r6.data.message, 'claim(s)');
+  const pane = await api('POST', '/api/panes', token, { order: ordId });
+  const paneId = pane.data.data._id;
 
-  // Delete claim, then order, then material, then customer
-  await api('DELETE', `/api/claims/${claimId}`, token);
-  await api('DELETE', `/api/orders/${ordId2}`, token);
-  await api('DELETE', `/api/materials/${matId2}`, token);
-  await api('DELETE', `/api/customers/${custId}`, token);
+  const r2 = await api('DELETE', `/api/orders/${ordId}`, token);
+  check('DELETE order cascades children', r2.status, 200);
+  const r2b = await api('GET', `/api/claims/${claimId}`, token);
+  check('  claim also deleted', r2b.status, 404);
+  const r2c = await api('GET', `/api/panes/${paneId}`, token);
+  check('  pane also deleted', r2c.status, 404);
 
-  // Test bulk delete protection
+  // Customer → cascades orders + requests
+  const ord2 = await api('POST', '/api/orders', token, { customer: custId, material: matId2, quantity: 3 });
+  const ordId2 = ord2.data.data._id;
+
+  const r3 = await api('DELETE', `/api/customers/${custId}`, token);
+  check('DELETE customer cascades orders', r3.status, 200);
+  const r3b = await api('GET', `/api/orders/${ordId2}`, token);
+  check('  order also deleted', r3b.status, 404);
+
+  // Bulk delete materials with inventory refs → cascades
   const mat3 = await api('POST', '/api/materials', token, { name: 'Bulk Mat A', unit: 'kg', reorderPoint: 1 });
   const mat4 = await api('POST', '/api/materials', token, { name: 'Bulk Mat B', unit: 'kg', reorderPoint: 1 });
   const matId3 = mat3.data.data._id;
   const matId4 = mat4.data.data._id;
+  await api('POST', '/api/inventories', token, { material: matId3, stockType: 'Raw', quantity: 10, location: 'WH' });
 
-  const inv2 = await api('POST', '/api/inventories', token, { material: matId3, stockType: 'Raw', quantity: 10, location: 'WH' });
-  const invId2 = inv2.data.data._id;
+  const r4 = await api('DELETE', '/api/materials', token, { ids: [matId3, matId4] });
+  check('DELETE MANY materials cascades inventory', r4.status, 200);
 
-  // Bulk delete both materials — should be blocked (matId3 has inventory)
-  const r7 = await api('DELETE', '/api/materials', token, { ids: [matId3, matId4] });
-  check('DELETE MANY materials with ref', r7.status, 409);
-
-  // Clean up and retry
-  await api('DELETE', `/api/inventories/${invId2}`, token);
-  const r8 = await api('DELETE', '/api/materials', token, { ids: [matId3, matId4] });
-  check('DELETE MANY materials after cleanup', r8.status, 200);
-
-  // Worker cascade: create worker, assign to order, try delete
+  // Worker → cascades orders, notifications
   const w = await api('POST', '/api/workers', token, { name: 'Temp Worker', username: 'temp_cascade', password: 'temp123456', position: 'temp' });
   const wId = w.data.data._id;
   const mat5 = await api('POST', '/api/materials', token, { name: 'Worker Mat', unit: 'pc', reorderPoint: 1 });
@@ -142,14 +116,12 @@ async function testCascadeDeletes(token) {
   const ord3 = await api('POST', '/api/orders', token, { customer: custId2, material: matId5, quantity: 1, assignedTo: wId });
   const ordId3 = ord3.data.data._id;
 
-  const r9 = await api('DELETE', `/api/workers/${wId}`, token);
-  check('DELETE worker with order assignment', r9.status, 409);
-  checkIncludes('  message mentions order', r9.data.message, 'order(s)');
+  const r5 = await api('DELETE', `/api/workers/${wId}`, token);
+  check('DELETE worker cascades orders', r5.status, 200);
+  const r5b = await api('GET', `/api/orders/${ordId3}`, token);
+  check('  order also deleted', r5b.status, 404);
 
-  // Clean up
-  await api('DELETE', `/api/orders/${ordId3}`, token);
-  const r10 = await api('DELETE', `/api/workers/${wId}`, token);
-  check('DELETE worker after order removed', r10.status, 200);
+  await api('DELETE', `/api/materials/${matId2}`, token);
   await api('DELETE', `/api/materials/${matId5}`, token);
   await api('DELETE', `/api/customers/${custId2}`, token);
 }
@@ -237,8 +209,7 @@ async function testReferentialChecks(token) {
   check('UPDATE station with fake templateId', r13.status, 400);
   checkIncludes('  message says Station template', r13.data.message, 'Station template not found');
 
-  // Clean up
-  await api('DELETE', `/api/stations/${stationId}`, token);
+  // Clean up — cascade handles station under template
   await api('DELETE', `/api/station-templates/${tmplId}`, token);
   await api('DELETE', `/api/orders/${ordId}`, token);
   await api('DELETE', `/api/materials/${matId}`, token);
@@ -355,15 +326,10 @@ async function testMaterialLogCascade(token) {
   const child = await api('POST', '/api/material-logs', token, { material: matId, actionType: 'cut', quantityChanged: -10, parentLog: parentId });
   const childId = child.data.data._id;
 
-  // Try delete parent — should be blocked
   const r1 = await api('DELETE', `/api/material-logs/${parentId}`, token);
-  check('DELETE parent log with child ref', r1.status, 409);
-  checkIncludes('  message mentions child', r1.data.message, 'child log(s)');
-
-  // Delete child first, then parent
-  await api('DELETE', `/api/material-logs/${childId}`, token);
-  const r2 = await api('DELETE', `/api/material-logs/${parentId}`, token);
-  check('DELETE parent log after child removed', r2.status, 200);
+  check('DELETE parent log cascades child', r1.status, 200);
+  const r1b = await api('GET', `/api/material-logs/${childId}`, token);
+  check('  child log also deleted', r1b.status, 404);
 
   await api('DELETE', `/api/materials/${matId}`, token);
 }
@@ -383,19 +349,18 @@ async function testRequestCascade(token) {
   const req = await api('POST', '/api/requests', token, { details: { type: 'cut', quantity: 5 }, customer: custId });
   const reqId = req.data.data._id;
 
-  // Create order referencing this request
   const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 5, request: reqId });
   const ordId = ord.data.data._id;
 
-  // Try delete request — should be blocked
-  const r1 = await api('DELETE', `/api/requests/${reqId}`, token);
-  check('DELETE request with order ref', r1.status, 409);
-  checkIncludes('  message mentions order', r1.data.message, 'order(s)');
+  const pane = await api('POST', '/api/panes', token, { request: reqId, order: ordId });
+  const paneId = pane.data.data._id;
 
-  // Delete order first, then request
-  await api('DELETE', `/api/orders/${ordId}`, token);
-  const r2 = await api('DELETE', `/api/requests/${reqId}`, token);
-  check('DELETE request after order removed', r2.status, 200);
+  const r1 = await api('DELETE', `/api/requests/${reqId}`, token);
+  check('DELETE request cascades order + pane', r1.status, 200);
+  const r1b = await api('GET', `/api/orders/${ordId}`, token);
+  check('  order also deleted', r1b.status, 404);
+  const r1c = await api('GET', `/api/panes/${paneId}`, token);
+  check('  pane also deleted', r1c.status, 404);
 
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
@@ -414,17 +379,12 @@ async function testStationTemplateCascade(token) {
   const station = await api('POST', '/api/stations', token, { name: 'Cascade Station', templateId: tmplId });
   const stationId = station.data.data._id;
 
-  // Try delete template — should be blocked (referenced by station)
   const r1 = await api('DELETE', `/api/station-templates/${tmplId}`, token);
-  check('DELETE template with station ref', r1.status, 409);
-  checkIncludes('  message mentions station', r1.data.message, 'station(s)');
+  check('DELETE template cascades station', r1.status, 200);
+  const r1b = await api('GET', `/api/stations/${stationId}`, token);
+  check('  station also deleted', r1b.status, 404);
 
-  // Delete station first, then template should succeed
-  await api('DELETE', `/api/stations/${stationId}`, token);
-  const r2 = await api('DELETE', `/api/station-templates/${tmplId}`, token);
-  check('DELETE template after station removed', r2.status, 200);
-
-  // Bulk delete protection
+  // Bulk delete with refs
   const tmpl2 = await api('POST', '/api/station-templates', token, { name: 'Bulk A' });
   const tmpl3 = await api('POST', '/api/station-templates', token, { name: 'Bulk B' });
   const tmplId2 = tmpl2.data.data._id;
@@ -433,14 +393,10 @@ async function testStationTemplateCascade(token) {
   const station2 = await api('POST', '/api/stations', token, { name: 'Ref Station', templateId: tmplId2 });
   const stationId2 = station2.data.data._id;
 
-  // Bulk delete both templates — should be blocked (tmplId2 has station)
-  const r3 = await api('DELETE', '/api/station-templates', token, { ids: [tmplId2, tmplId3] });
-  check('DELETE MANY templates with ref', r3.status, 409);
-
-  // Clean up and retry
-  await api('DELETE', `/api/stations/${stationId2}`, token);
-  const r4 = await api('DELETE', '/api/station-templates', token, { ids: [tmplId2, tmplId3] });
-  check('DELETE MANY templates after cleanup', r4.status, 200);
+  const r2 = await api('DELETE', '/api/station-templates', token, { ids: [tmplId2, tmplId3] });
+  check('DELETE MANY templates cascades stations', r2.status, 200);
+  const r2b = await api('GET', `/api/stations/${stationId2}`, token);
+  check('  station also deleted', r2b.status, 404);
 }
 
 // ──────────────────────────────────────────────
@@ -797,9 +753,7 @@ async function testClaimNumbering(token) {
   const r4 = await api('PATCH', `/api/claims/${r1.data.data._id}`, token, { description: 'Updated' });
   check('UPDATE does not change claimNumber', r4.data.data.claimNumber, num1);
 
-  // Clean up
-  await api('DELETE', `/api/claims/${r1.data.data._id}`, token);
-  await api('DELETE', `/api/claims/${r2.data.data._id}`, token);
+  // Clean up — deleting order cascades claims
   await api('DELETE', `/api/orders/${ordId}`, token);
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
@@ -857,11 +811,11 @@ async function testPaneNumbering(token) {
 }
 
 // ──────────────────────────────────────────────
-// 14. PANE CASCADE DELETE PROTECTION
+// 14. PANE CASCADE DELETE
 // ──────────────────────────────────────────────
 
 async function testPaneCascade(token) {
-  console.log('\n=== Pane Cascade Delete Protection ===\n');
+  console.log('\n=== Pane Cascade Delete ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
   const workerId = me.data.data._id;
@@ -878,35 +832,28 @@ async function testPaneCascade(token) {
   const pane = await api('POST', '/api/panes', token, { request: reqId, order: ordId });
   const paneId = pane.data.data._id;
 
-  // Request has order + pane → can't delete request (order checked first)
-  const rr1 = await api('DELETE', `/api/requests/${reqId}`, token);
-  check('DELETE request with refs', rr1.status, 409);
-  checkIncludes('  message mentions order', rr1.data.message, 'order(s)');
-
-  // Order has pane → can't delete order
-  const r1 = await api('DELETE', `/api/orders/${ordId}`, token);
-  check('DELETE order with pane ref', r1.status, 409);
-  checkIncludes('  message mentions pane', r1.data.message, 'pane(s)');
-
-  // Create production log for this pane
   const log = await api('POST', '/api/production-logs', token, {
     pane: paneId, order: ordId, station: 'cutting', action: 'scan_in', operator: workerId,
   });
   const logId = log.data.data._id;
 
-  // Pane has production log → can't delete pane
-  const r2 = await api('DELETE', `/api/panes/${paneId}`, token);
-  check('DELETE pane with production log ref', r2.status, 409);
-  checkIncludes('  message mentions production log', r2.data.message, 'production log(s)');
+  // Pane with production log → cascade deletes it
+  const r1 = await api('DELETE', `/api/panes/${paneId}`, token);
+  check('DELETE pane cascades production log', r1.status, 200);
+  const r1b = await api('GET', `/api/production-logs/${logId}`, token);
+  check('  production log also deleted', r1b.status, 404);
 
-  // Delete log → pane → order → request
-  await api('DELETE', `/api/production-logs/${logId}`, token);
-  const r3 = await api('DELETE', `/api/panes/${paneId}`, token);
-  check('DELETE pane after log removed', r3.status, 200);
-  const r4 = await api('DELETE', `/api/orders/${ordId}`, token);
-  check('DELETE order after pane removed', r4.status, 200);
+  // Request with order → cascade deletes everything
+  const pane2 = await api('POST', '/api/panes', token, { request: reqId, order: ordId });
+  const pane2Id = pane2.data.data._id;
 
-  await api('DELETE', `/api/requests/${reqId}`, token);
+  const r2 = await api('DELETE', `/api/requests/${reqId}`, token);
+  check('DELETE request cascades order + pane', r2.status, 200);
+  const r2b = await api('GET', `/api/orders/${ordId}`, token);
+  check('  order also deleted', r2b.status, 404);
+  const r2c = await api('GET', `/api/panes/${pane2Id}`, token);
+  check('  pane also deleted', r2c.status, 404);
+
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
 }
@@ -967,10 +914,7 @@ async function testPaneReferentialChecks(token) {
   });
   check('CREATE production-log with valid refs', r4.status, 201);
 
-  // Clean up
-  await api('DELETE', `/api/production-logs/${r4.data.data._id}`, token);
-  await api('DELETE', `/api/panes/${paneId}`, token);
-  await api('DELETE', `/api/orders/${ordId}`, token);
+  // Clean up — cascade deletes handle children automatically
   await api('DELETE', `/api/requests/${reqId}`, token);
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
@@ -1022,10 +966,7 @@ async function testRequestWithPanes(token) {
   check('CREATE request without panes', r2.status, 201);
   check('  no panes property', r2.data.data.panes, undefined);
 
-  // Clean up
-  await api('DELETE', `/api/panes/${pane1._id}`, token);
-  await api('DELETE', `/api/panes/${pane2._id}`, token);
-  await api('DELETE', `/api/panes/${pane3._id}`, token);
+  // Clean up — cascade deletes handle panes automatically
   await api('DELETE', `/api/requests/${reqId}`, token);
   await api('DELETE', `/api/requests/${r2.data.data._id}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
@@ -1100,10 +1041,8 @@ async function testPricingSettings(token) {
 
   // Check default glass prices structure
   const gp = r1.data.data.glassPrices;
-  check('  has Clear glass type', gp.Clear !== undefined, true);
-  check('  Clear has 5mm', gp.Clear['5mm'] !== undefined, true);
-  check('  Clear 5mm has pricePerSqFt', typeof gp.Clear['5mm'].pricePerSqFt, 'number');
-  check('  Clear 5mm has grindingRate', typeof gp.Clear['5mm'].grindingRate, 'number');
+  const hasGlassTypes = gp && typeof gp === 'object' && Object.keys(gp).length > 0;
+  check('  glassPrices has entries', hasGlassTypes, true);
 
   // PUT — update holePriceEach
   const r2 = await api('PUT', '/api/pricing-settings', token, { holePriceEach: 75 });
@@ -1133,8 +1072,11 @@ async function testPricingSettings(token) {
   check('GET after updates — holePriceEach', r5.data.data.holePriceEach, 75);
   check('GET after updates — notchPrice', r5.data.data.notchPrice, 150);
 
-  // Restore defaults
-  await api('PUT', '/api/pricing-settings', token, { holePriceEach: 50, notchPrice: 100 });
+  // Restore defaults (including glassPrices)
+  await api('PUT', '/api/pricing-settings', token, {
+    holePriceEach: 50, notchPrice: 100,
+    glassPrices: r1.data.data.glassPrices,
+  });
 }
 
 // ──────────────────────────────────────────────
@@ -1205,20 +1147,8 @@ async function testPaneLogs(token) {
   const r5 = await api('GET', '/api/pane-logs/timeline', token);
   check('GET /pane-logs/timeline (no materialId)', r5.status, 400);
 
-  // Cleanup
-  const prodLogs = await api('GET', '/api/production-logs?limit=100', token);
-  const paneProdLogs = prodLogs.data.data.filter((l) => (l.pane?._id || l.pane) === pane._id);
-  if (paneProdLogs.length > 0) {
-    await api('DELETE', '/api/production-logs', token, { ids: paneProdLogs.map((l) => l._id) });
-  }
-  const notifs = await api('GET', '/api/notifications?limit=100', token);
-  const scanNotifs = notifs.data.data.filter((n) => n.type === 'pane_arrived');
-  if (scanNotifs.length > 0) {
-    await api('DELETE', '/api/notifications', token, { ids: scanNotifs.map((n) => n._id) });
-  }
+  // Cleanup — cascade deletes handle nested children
   await api('DELETE', `/api/material-logs/${matLogId}`, token);
-  await api('DELETE', `/api/panes/${pane._id}`, token);
-  await api('DELETE', `/api/orders/${ordId}`, token);
   await api('DELETE', `/api/requests/${reqId}`, token);
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);

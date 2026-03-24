@@ -9,7 +9,9 @@ const Withdrawal = require('../models/Withdrawal');
 const MaterialLog = require('../models/MaterialLog');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
-const { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
+const { verifyReferences, cascadeDeleteReferenced, cascadeDeleteManyReferenced } = require('../services/integrity');
+const Inventory = require('../models/Inventory');
+const PaneLog = require('../models/PaneLog');
 const paginate = require('../utils/paginate');
 
 const POPULATE_FIELDS = ['request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo'];
@@ -17,12 +19,29 @@ const POPULATE_FIELDS = ['request', 'customer', 'material', 'claim', 'withdrawal
 const Pane = require('../models/Pane');
 const ProductionLog = require('../models/ProductionLog');
 
+const restoreInventory = async (materialId, stockType, quantity) => {
+  const inventory = await Inventory.findOne({ material: materialId, stockType }).sort({ createdAt: 1 });
+  if (inventory) {
+    inventory.quantity += quantity;
+    await inventory.save();
+  }
+};
+
+const PANE_CASCADE = [
+  { model: PaneLog, field: 'pane' },
+  { model: ProductionLog, field: 'pane' },
+  { model: MaterialLog, field: 'pane' },
+];
+
 const ORDER_DEPENDENTS = [
-  { model: Claim, field: 'order', label: 'claim(s)' },
-  { model: Withdrawal, field: 'order', label: 'withdrawal(s)' },
-  { model: MaterialLog, field: 'order', label: 'material log(s)' },
-  { model: Pane, field: 'order', label: 'pane(s)' },
-  { model: ProductionLog, field: 'order', label: 'production log(s)' },
+  { model: Claim, field: 'order' },
+  { model: Withdrawal, field: 'order', beforeDelete: async (docs) => {
+    for (const w of docs) await restoreInventory(w.material, w.stockType, w.quantity);
+  }},
+  { model: MaterialLog, field: 'order' },
+  { model: PaneLog, field: 'order' },
+  { model: ProductionLog, field: 'order' },
+  { model: Pane, field: 'order', cascade: PANE_CASCADE },
 ];
 
 const buildRefs = (body) => [
@@ -159,7 +178,7 @@ exports.update = async (req, res, next) => {
 
 exports.deleteOne = async (req, res, next) => {
   try {
-    await blockDeleteIfReferenced(req.params.id, ORDER_DEPENDENTS);
+    await cascadeDeleteReferenced(req.params.id, ORDER_DEPENDENTS);
     const order = await Order.findByIdAndDelete(req.params.id);
     if (!order) return fail(res, 'Order not found', 404);
     emit(req, 'order:updated', { action: 'deleted', data: order }, ['dashboard', 'order']);
@@ -172,7 +191,7 @@ exports.deleteOne = async (req, res, next) => {
 exports.deleteMany = async (req, res, next) => {
   try {
     const { ids } = req.validated.body;
-    await blockDeleteManyIfReferenced(ids, ORDER_DEPENDENTS);
+    await cascadeDeleteManyReferenced(ids, ORDER_DEPENDENTS);
     const result = await Order.deleteMany({ _id: { $in: ids } });
     emit(req, 'order:updated', { action: 'deleted', data: { ids } }, ['dashboard', 'order']);
     success(res, { deletedCount: result.deletedCount }, 'Orders deleted');

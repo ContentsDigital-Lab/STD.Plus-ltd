@@ -4,13 +4,13 @@ const Order = require('../models/Order');
 const Pane = require('../models/Pane');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
-const { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
+const { verifyReferences, cascadeDeleteReferenced, cascadeDeleteManyReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
 const POPULATE_FIELDS = ['material', 'pane', 'order', 'parentLog'];
 
 const LOG_DEPENDENTS = [
-  { model: MaterialLog, field: 'parentLog', label: 'child log(s)' },
+  { model: MaterialLog, field: 'parentLog' },
 ];
 
 exports.getAll = async (req, res, next) => {
@@ -84,7 +84,7 @@ exports.update = async (req, res, next) => {
 
 exports.deleteOne = async (req, res, next) => {
   try {
-    await blockDeleteIfReferenced(req.params.id, LOG_DEPENDENTS);
+    await cascadeDeleteReferenced(req.params.id, LOG_DEPENDENTS);
     const log = await MaterialLog.findByIdAndDelete(req.params.id);
     if (!log) return fail(res, 'Material log not found', 404);
     emit(req, 'log:updated', { action: 'deleted', data: log }, ['dashboard', 'log']);
@@ -97,7 +97,7 @@ exports.deleteOne = async (req, res, next) => {
 exports.deleteMany = async (req, res, next) => {
   try {
     const { ids } = req.validated.body;
-    await blockDeleteManyIfReferenced(ids, LOG_DEPENDENTS);
+    await cascadeDeleteManyReferenced(ids, LOG_DEPENDENTS);
     const result = await MaterialLog.deleteMany({ _id: { $in: ids } });
     emit(req, 'log:updated', { action: 'deleted', data: { ids } }, ['dashboard', 'log']);
     success(res, { deletedCount: result.deletedCount }, 'Material logs deleted');

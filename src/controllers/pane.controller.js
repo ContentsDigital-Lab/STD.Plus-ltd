@@ -8,11 +8,12 @@ const Withdrawal = require('../models/Withdrawal');
 const ProductionLog = require('../models/ProductionLog');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
-const { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
+const { verifyReferences, cascadeDeleteReferenced, cascadeDeleteManyReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
 const Claim = require('../models/Claim');
 const MaterialLog = require('../models/MaterialLog');
+const Inventory = require('../models/Inventory');
 
 const POPULATE_FIELDS = [
   { path: 'order',    select: 'orderNumber code customer material' },
@@ -22,12 +23,22 @@ const POPULATE_FIELDS = [
   { path: 'material', select: 'name' },
 ];
 
+const restoreInventory = async (materialId, stockType, quantity) => {
+  const inventory = await Inventory.findOne({ material: materialId, stockType }).sort({ createdAt: 1 });
+  if (inventory) {
+    inventory.quantity += quantity;
+    await inventory.save();
+  }
+};
+
 const PANE_DEPENDENTS = [
-  { model: PaneLog, field: 'pane', label: 'pane log(s)' },
-  { model: ProductionLog, field: 'pane', label: 'production log(s)' },
-  { model: Claim, field: 'pane', label: 'claim(s)' },
-  { model: MaterialLog, field: 'pane', label: 'material log(s)' },
-  { model: Withdrawal, field: 'pane', label: 'withdrawal(s)' },
+  { model: PaneLog, field: 'pane' },
+  { model: ProductionLog, field: 'pane' },
+  { model: Claim, field: 'pane' },
+  { model: MaterialLog, field: 'pane' },
+  { model: Withdrawal, field: 'pane', beforeDelete: async (docs) => {
+    for (const w of docs) await restoreInventory(w.material, w.stockType, w.quantity);
+  }},
 ];
 
 // ── GET /panes ────────────────────────────────────────────────────────────────
@@ -114,7 +125,7 @@ exports.update = async (req, res, next) => {
 // ── DELETE /panes/:id ─────────────────────────────────────────────────────────
 exports.deleteOne = async (req, res, next) => {
   try {
-    await blockDeleteIfReferenced(req.params.id, PANE_DEPENDENTS);
+    await cascadeDeleteReferenced(req.params.id, PANE_DEPENDENTS);
     const pane = await Pane.findByIdAndDelete(req.params.id);
     if (!pane) return fail(res, 'Pane not found', 404);
     emit(req, 'pane:updated', { action: 'deleted', data: { _id: pane._id } }, ['dashboard', 'pane', 'production']);
@@ -127,7 +138,7 @@ exports.deleteOne = async (req, res, next) => {
 exports.deleteMany = async (req, res, next) => {
   try {
     const { ids } = req.validated.body;
-    await blockDeleteManyIfReferenced(ids, PANE_DEPENDENTS);
+    await cascadeDeleteManyReferenced(ids, PANE_DEPENDENTS);
     const result = await Pane.deleteMany({ _id: { $in: ids } });
     emit(req, 'pane:updated', { action: 'deleted', data: { ids } }, ['dashboard', 'pane', 'production']);
     success(res, { deletedCount: result.deletedCount }, 'Panes deleted');
