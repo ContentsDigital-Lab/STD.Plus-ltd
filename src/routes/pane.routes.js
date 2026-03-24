@@ -12,6 +12,7 @@ const createSchema = z.object({
     qrCode:        z.string().optional(),
     order:         z.string().optional(),
     request:       z.string().optional(),
+    material:      z.string().optional(),
     currentStation:z.string().optional(),
     currentStatus: z.enum(['pending', 'in_progress', 'completed']).optional(),
     routing:       z.array(z.string()).optional(),

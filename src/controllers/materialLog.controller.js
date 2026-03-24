@@ -14,7 +14,11 @@ const LOG_DEPENDENTS = [
 
 exports.getAll = async (req, res, next) => {
   try {
+    const filter = {};
+    if (req.query.materialId) filter.material = req.query.materialId;
+    if (req.query.actionType)  filter.actionType = req.query.actionType;
     const { data, pagination } = await paginate(MaterialLog, {
+      filter,
       populate: POPULATE_FIELDS,
       page: req.query.page,
       limit: req.query.limit,

@@ -7,18 +7,20 @@ const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 
 const POPULATE_FIELDS = [
-  { path: 'order',   select: 'orderNumber code customer' },
-  { path: 'request', select: 'code' },
+  { path: 'order',    select: 'orderNumber code customer material' },
+  { path: 'request',  select: 'code' },
+  { path: 'material', select: 'name' },
 ];
 
 // ── GET /panes ────────────────────────────────────────────────────────────────
 exports.getAll = async (req, res, next) => {
   try {
     const filter = {};
-    if (req.query.order)   filter.order   = req.query.order;
-    if (req.query.request) filter.request = req.query.request;
-    if (req.query.station) filter.currentStation = req.query.station;
-    if (req.query.status)  filter.currentStatus  = req.query.status;
+    if (req.query.order)    filter.order    = req.query.order;
+    if (req.query.request)  filter.request  = req.query.request;
+    if (req.query.material) filter.material = req.query.material;
+    if (req.query.station)  filter.currentStation = req.query.station;
+    if (req.query.status)   filter.currentStatus  = req.query.status;
 
     const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit) || 200));
     const sort  = req.query.sort || '-createdAt';
@@ -130,10 +132,20 @@ exports.scan = async (req, res, next) => {
     await pane.save();
     const populated = await pane.populate(POPULATE_FIELDS);
 
+    // Resolve materialId: prefer pane.material, fall back to order.material
+    let materialId = pane.material ?? null;
+    if (!materialId && pane.order) {
+      const ord = await Order.findById(pane.order).select('material').lean();
+      materialId = ord?.material ?? null;
+      // Back-fill pane.material so future scans don't need the extra lookup
+      if (materialId) await Pane.updateOne({ _id: pane._id }, { material: materialId });
+    }
+
     // Create production log
     const log = await PaneLog.create({
       pane:        pane._id,
       order:       pane.order ?? null,
+      material:    materialId,
       station,
       action,
       completedAt: action === 'complete' ? now : null,
