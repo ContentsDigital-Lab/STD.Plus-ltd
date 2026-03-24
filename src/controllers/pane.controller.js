@@ -1,8 +1,10 @@
-const mongoose = require('mongoose');
-const Pane    = require('../models/Pane');
-const PaneLog = require('../models/PaneLog');
-const Order   = require('../models/Order');
-const Counter = require('../models/Counter');
+const mongoose    = require('mongoose');
+const Pane        = require('../models/Pane');
+const PaneLog     = require('../models/PaneLog');
+const Order       = require('../models/Order');
+const Inventory   = require('../models/Inventory');
+const MaterialLog = require('../models/MaterialLog');
+const Counter     = require('../models/Counter');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 
@@ -56,6 +58,23 @@ exports.create = async (req, res, next) => {
     }
     const pane = await Pane.create(body);
     const populated = await pane.populate(POPULATE_FIELDS);
+
+    // If linked to an inventory slot → auto-create a 'cut' MaterialLog for traceability
+    if (body.inventory) {
+      const inv = await Inventory.findById(body.inventory).lean();
+      if (inv) {
+        await MaterialLog.create({
+          material:        inv.material,
+          actionType:      'cut',
+          quantityChanged: -1,
+          referenceId:     inv._id,
+          stockType:       inv.stockType ?? null,
+          order:           body.order ?? null,
+        }).catch(err => console.error('[pane.create] MaterialLog cut failed:', err));
+        emit(req, 'log:updated', { action: 'created' }, ['log']);
+      }
+    }
+
     emit(req, 'pane:updated', { action: 'created', data: populated }, ['pane']);
     success(res, populated, 'Created', 201);
   } catch (err) {
@@ -146,6 +165,7 @@ exports.scan = async (req, res, next) => {
       pane:        pane._id,
       order:       pane.order ?? null,
       material:    materialId,
+      worker:      req.user?._id ?? null,
       station,
       action,
       completedAt: action === 'complete' ? now : null,
@@ -153,6 +173,8 @@ exports.scan = async (req, res, next) => {
 
     // Emit real-time events
     emit(req, 'pane:updated', { action: 'scanned', data: populated }, ['pane']);
+    // Also notify 'log' room so timeline/material-log views refresh automatically
+    emit(req, 'log:updated', { action: 'pane_scanned', data: { paneLog: log, material: materialId } }, ['log']);
 
     // Notify next station (if completing and there is one)
     if (action === 'complete' && nextStation) {

@@ -4,6 +4,7 @@ const paneLogSchema = new mongoose.Schema({
   pane:     { type: mongoose.Schema.Types.ObjectId, ref: 'Pane',     required: true },
   order:    { type: mongoose.Schema.Types.ObjectId, ref: 'Order',    default: null },
   material: { type: mongoose.Schema.Types.ObjectId, ref: 'Material', default: null },
+  worker:   { type: mongoose.Schema.Types.ObjectId, ref: 'Worker',   default: null },
   station:  { type: String, required: true },
   action:   { type: String, enum: ['scan_in', 'start', 'complete'],  required: true },
   completedAt: { type: Date, default: null },

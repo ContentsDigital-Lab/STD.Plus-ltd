@@ -13,6 +13,7 @@ const createSchema = z.object({
     order:         z.string().optional(),
     request:       z.string().optional(),
     material:      z.string().optional(),
+    inventory:     z.string().optional(),
     currentStation:z.string().optional(),
     currentStatus: z.enum(['pending', 'in_progress', 'completed']).optional(),
     routing:       z.array(z.string()).optional(),

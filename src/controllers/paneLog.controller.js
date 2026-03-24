@@ -50,8 +50,9 @@ exports.getTimeline = async (req, res, next) => {
         .lean(),
       PaneLog.find({ material: materialId })
         .sort({ createdAt: 1 })
-        .populate({ path: 'pane',  select: 'paneNumber glassTypeLabel dimensions' })
-        .populate({ path: 'order', select: 'orderNumber code' })
+        .populate({ path: 'pane',   select: 'paneNumber glassTypeLabel dimensions' })
+        .populate({ path: 'order',  select: 'orderNumber code' })
+        .populate({ path: 'worker', select: 'name username role' })
         .lean(),
     ]);
 
