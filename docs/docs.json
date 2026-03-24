@@ -136,6 +136,7 @@
             "group": "Claims",
             "pages": [
               "api-reference/claims/create-a-claim-for-an-order",
+              "api-reference/claims/create-a-claim-from-pane",
               "api-reference/claims/list-all-claims",
               "api-reference/claims/delete-multiple-claims",
               "api-reference/claims/get-claim-by-id",

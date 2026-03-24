@@ -494,6 +494,7 @@
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "default": "pending" },
           "approvedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
           "remadePane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
+          "photos": { "type": "array", "items": { "type": "string", "format": "uri" }, "default": [] },
           "claimDate": { "type": "string", "format": "date-time" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
@@ -514,6 +515,25 @@
           "reportedBy": { "type": "string", "minLength": 1 },
           "approvedBy": { "type": "string", "minLength": 1 },
           "remadePane": { "type": "string", "minLength": 1 },
+          "photos": { "type": "array", "items": { "type": "string", "format": "uri" } },
+          "claimDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ClaimFromPaneBody": {
+        "type": "object",
+        "required": ["paneNumber", "source", "description", "reportedBy"],
+        "properties": {
+          "paneNumber": { "type": "string", "minLength": 1, "description": "Pane number (e.g. PNE-0001). The endpoint auto-resolves the order and material from the pane.", "example": "PNE-0001" },
+          "source": { "type": "string", "enum": ["customer", "worker"] },
+          "description": { "type": "string", "minLength": 1 },
+          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "other"] },
+          "defectStation": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+          "decision": { "type": "string", "enum": ["destroy", "keep"] },
+          "reportedBy": { "type": "string", "minLength": 1 },
+          "approvedBy": { "type": "string", "minLength": 1 },
+          "remadePane": { "type": "string", "minLength": 1 },
+          "photos": { "type": "array", "items": { "type": "string", "format": "uri" } },
           "claimDate": { "type": "string", "format": "date-time" }
         }
       },
@@ -531,6 +551,7 @@
           "reportedBy": { "type": "string", "minLength": 1 },
           "approvedBy": { "type": "string", "minLength": 1 },
           "remadePane": { "type": "string", "minLength": 1 },
+          "photos": { "type": "array", "items": { "type": "string", "format": "uri" } },
           "claimDate": { "type": "string", "format": "date-time" }
         }
       },
@@ -1961,6 +1982,28 @@
           "200": { "description": "Claims deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/claims/from-pane": {
+      "post": {
+        "tags": ["Claims"],
+        "summary": "Create claim from pane number",
+        "description": "Convenience endpoint that accepts a `paneNumber` (e.g. `PNE-0001`) and automatically resolves the pane's `order` and `material`. No need to provide order ID in the URL or material ID in the body.\n\nRequires authentication. Any role can create.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ClaimFromPaneBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Claim created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Claim" } } }] } } } },
+          "400": { "description": "Pane has no associated order or material", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "description": "Pane not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },

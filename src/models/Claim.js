@@ -65,6 +65,10 @@ const claimSchema = new mongoose.Schema({
     ref: 'Pane',
     default: null,
   },
+  photos: {
+    type: [String],
+    default: [],
+  },
   claimDate: {
     type: Date,
     default: Date.now,

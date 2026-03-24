@@ -760,6 +760,81 @@ async function testClaimNumbering(token) {
 }
 
 // ──────────────────────────────────────────────
+// 12b. CLAIM FROM PANE + PHOTOS
+// ──────────────────────────────────────────────
+
+async function testClaimFromPane(token) {
+  console.log('\n=== Claim From Pane + Photos ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const mat = await api('POST', '/api/materials', token, { name: 'ClaimPane Glass', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'ClaimPane Cust' });
+  const custId = cust.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 5 });
+  const ordId = ord.data.data._id;
+
+  const pane = await api('POST', '/api/panes', token, { order: ordId, material: matId });
+  const paneNumber = pane.data.data.paneNumber;
+  const paneId = pane.data.data._id;
+
+  // Create claim from pane number
+  const r1 = await api('POST', '/api/claims/from-pane', token, {
+    paneNumber,
+    source: 'worker',
+    description: 'Defect found via scan',
+    defectCode: 'scratch',
+    reportedBy: workerId,
+    photos: ['https://example.com/photo1.jpg', 'https://example.com/photo2.jpg'],
+  });
+  check('CREATE claim from pane', r1.status, 201);
+  check('  order auto-resolved', r1.data.data.order._id || r1.data.data.order, ordId);
+  check('  material auto-resolved', r1.data.data.material._id || r1.data.data.material, matId);
+  check('  pane linked', r1.data.data.pane._id || r1.data.data.pane, paneId);
+  check('  has claimNumber', typeof r1.data.data.claimNumber, 'string');
+  check('  photos array length', r1.data.data.photos.length, 2);
+  check('  photo URL correct', r1.data.data.photos[0], 'https://example.com/photo1.jpg');
+
+  // Create claim from fake pane number
+  const r2 = await api('POST', '/api/claims/from-pane', token, {
+    paneNumber: 'PNE-9999',
+    source: 'worker',
+    description: 'Fake pane',
+    reportedBy: workerId,
+  });
+  check('CREATE claim from fake pane', r2.status, 404);
+
+  // Photos on regular claim create (via order)
+  const r3 = await api('POST', `/api/orders/${ordId}/claims`, token, {
+    source: 'customer', material: matId, description: 'With photos', reportedBy: workerId,
+    photos: ['https://example.com/defect.jpg'],
+  });
+  check('CREATE regular claim with photos', r3.status, 201);
+  check('  photos included', r3.data.data.photos.length, 1);
+
+  // Claim without photos defaults to empty array
+  const r4 = await api('POST', `/api/orders/${ordId}/claims`, token, {
+    source: 'customer', material: matId, description: 'No photos', reportedBy: workerId,
+  });
+  check('CREATE claim without photos', r4.status, 201);
+  check('  photos defaults to empty', r4.data.data.photos.length, 0);
+
+  // Update claim photos
+  const r5 = await api('PATCH', `/api/claims/${r4.data.data._id}`, token, {
+    photos: ['https://example.com/added.jpg'],
+  });
+  check('UPDATE claim photos', r5.status, 200);
+  check('  photos updated', r5.data.data.photos.length, 1);
+
+  // Clean up
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // 13. PANE AUTO-NUMBERING + QR CODE
 // ──────────────────────────────────────────────
 
@@ -1261,6 +1336,7 @@ async function main() {
   await testRequestNumbering(token);
   await testOrderNumbering(token);
   await testClaimNumbering(token);
+  await testClaimFromPane(token);
   await testPaneNumbering(token);
   await testPaneCascade(token);
   await testPaneReferentialChecks(token);
