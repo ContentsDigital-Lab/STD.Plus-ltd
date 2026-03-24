@@ -154,10 +154,18 @@ exports.scan = async (req, res, next) => {
     const { station, action } = req.body;
 
     if (!station) return fail(res, 'station is required', 400);
-    if (!['scan_in', 'start', 'complete'].includes(action)) return fail(res, 'Invalid action', 400);
+    if (!['scan_in', 'start', 'complete', 'scan_out'].includes(action)) return fail(res, 'Invalid action', 400);
 
     const pane = await Pane.findOne({ paneNumber: paneNumber.toUpperCase() });
     if (!pane) return fail(res, `ไม่พบกระจก ${paneNumber}`, 404);
+
+    if (pane.currentStatus === 'completed') {
+      return fail(res, `กระจก ${pane.paneNumber} already completed`, 400);
+    }
+
+    if (['complete', 'scan_out'].includes(action) && pane.currentStation !== station) {
+      return fail(res, `กระจกอยู่ที่สถานี ${pane.currentStation} ไม่ใช่ ${station}`, 400);
+    }
 
     const now = new Date();
     let nextStation = null;
@@ -174,6 +182,15 @@ exports.scan = async (req, res, next) => {
     }
 
     if (action === 'complete') {
+      pane.currentStation = station;
+      pane.currentStatus  = 'awaiting_scan_out';
+    }
+
+    if (action === 'scan_out') {
+      if (pane.currentStatus !== 'awaiting_scan_out') {
+        return fail(res, 'กระจกยังไม่เสร็จสิ้น ต้องกด "เสร็จสิ้น" ก่อน scan out', 400);
+      }
+
       const route = Array.isArray(pane.routing) ? pane.routing : [];
       const idx   = route.indexOf(station);
       nextStation = (idx >= 0 && idx < route.length - 1) ? route[idx + 1] : null;
@@ -191,35 +208,88 @@ exports.scan = async (req, res, next) => {
     await pane.save();
     const populated = await pane.populate(POPULATE_FIELDS);
 
-    // Resolve materialId: prefer pane.material, fall back to order.material
     let materialId = pane.material ?? null;
     if (!materialId && pane.order) {
       const ord = await Order.findById(pane.order).select('material').lean();
       materialId = ord?.material ?? null;
-      // Back-fill pane.material so future scans don't need the extra lookup
       if (materialId) await Pane.updateOne({ _id: pane._id }, { material: materialId });
     }
 
-    // Create production log
     const log = await PaneLog.create({
       pane:        pane._id,
       order:       pane.order ?? null,
       material:    materialId,
       station,
       action,
-      completedAt: action === 'complete' ? now : null,
+      completedAt: action === 'scan_out' ? now : null,
     });
 
-    emit(req, 'pane:updated', { action: 'scanned', data: populated }, ['pane']);
+    emit(req, 'pane:updated', { action: 'updated', data: populated },
+      ['dashboard', 'pane', 'production', `station:${station}`]);
 
-    if (action === 'complete' && nextStation) {
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`station:${nextStation}`).emit('notification', {
-          type:    'pane_arrived',
-          title:   'มีกระจกเข้าสถานี',
-          message: `กระจก ${pane.paneNumber} เข้าสถานีนี้แล้ว`,
-        });
+    if (action === 'scan_out') {
+      const isLastStation = !nextStation;
+
+      if (pane.order) {
+        const order = await Order.findById(pane.order);
+        if (order) {
+          const breakdown = order.stationBreakdown instanceof Map
+            ? order.stationBreakdown
+            : new Map(Object.entries(order.stationBreakdown || {}));
+          const prevCount = breakdown.get(station) || 0;
+          if (prevCount > 0) breakdown.set(station, prevCount - 1);
+          if (nextStation) breakdown.set(nextStation, (breakdown.get(nextStation) || 0) + 1);
+          order.stationBreakdown = breakdown;
+
+          if (isLastStation) {
+            order.panesCompleted = (order.panesCompleted || 0) + 1;
+            if (order.paneCount > 0) {
+              order.progressPercent = Math.round((order.panesCompleted / order.paneCount) * 100);
+            }
+            if (order.panesCompleted >= order.paneCount && order.paneCount > 0) {
+              order.status = 'completed';
+            }
+          }
+
+          await order.save();
+          const populatedOrder = await order.populate(['request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo']);
+          emit(req, 'order:updated', { action: 'updated', data: populatedOrder }, ['dashboard', 'order']);
+
+          const recipientId = populatedOrder.assignedTo?._id || populatedOrder.assignedTo;
+          if (recipientId) {
+            const Notification = require('../models/Notification');
+            const title = isLastStation ? 'กระจกเสร็จสมบูรณ์' : 'มีกระจกเข้าสถานี';
+            const message = isLastStation
+              ? `กระจก ${pane.paneNumber} completed all stations`
+              : `กระจก ${pane.paneNumber} เข้าสถานี ${nextStation} แล้ว`;
+            const notification = await Notification.create({
+              recipient: recipientId,
+              type: 'pane_arrived',
+              title,
+              message,
+              referenceId: pane._id,
+              referenceType: 'Pane',
+              priority: isLastStation ? 'low' : 'medium',
+            });
+            emit(req, 'notification', notification, [`user:${recipientId}`]);
+          }
+        }
+      }
+
+      if (nextStation) {
+        emit(req, 'station:pane_arrived', {
+          paneNumber: pane.paneNumber, paneId: pane._id,
+          fromStation: station, toStation: nextStation, orderId: pane.order,
+        }, [`station:${nextStation}`, 'station']);
+
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`station:${nextStation}`).emit('notification', {
+            type:    'pane_arrived',
+            title:   'มีกระจกเข้าสถานี',
+            message: `กระจก ${pane.paneNumber} เข้าสถานีนี้แล้ว`,
+          });
+        }
       }
     }
 

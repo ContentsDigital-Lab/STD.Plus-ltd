@@ -23,7 +23,7 @@ const paneSchema = new mongoose.Schema({
   material:   { type: mongoose.Schema.Types.ObjectId, ref: 'Material',   default: null },
 
   currentStation: { type: String, default: 'queue' },
-  currentStatus:  { type: String, enum: ['pending', 'in_progress', 'completed'], default: 'pending' },
+  currentStatus:  { type: String, enum: ['pending', 'in_progress', 'awaiting_scan_out', 'completed'], default: 'pending' },
 
   routing:      { type: [String], default: [] },
   customRouting:{ type: Boolean, default: false },

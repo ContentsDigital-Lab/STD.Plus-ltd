@@ -71,6 +71,6 @@ When data changes via the REST API, the server emits events to the relevant room
 | `pane` | `pane:updated` |
 | `production` | `pane:updated`, `production-log:updated` |
 | `pricing` | `pricing:updated` |
-| `station` | `station:updated`, `station-template:updated` |
-| `station:<stationId>` | `station:check_in`, `scan-confirmed`, `notification` (order arrived) |
+| `station` | `station:updated`, `station-template:updated`, `station:pane_arrived` |
+| `station:<stationId>` | `station:check_in`, `scan-confirmed`, `station:pane_arrived`, `notification` (order arrived) |
 | *(broadcast)* | `system_alert` |

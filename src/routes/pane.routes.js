@@ -8,7 +8,7 @@ const scanController = require('../controllers/scan.controller');
 
 const router = Router();
 
-const PANE_STATUS = ['pending', 'in_progress', 'completed'];
+const PANE_STATUS = ['pending', 'in_progress', 'awaiting_scan_out', 'completed'];
 const EDGE_STATUS = ['pending', 'in_progress', 'completed'];
 
 const dimensionsSchema = z.object({
@@ -32,7 +32,7 @@ const createSchema = z.object({
     request:       z.string().optional(),
     material:      z.string().optional(),
     currentStation:z.string().optional(),
-    currentStatus: z.enum(['pending', 'in_progress', 'completed']).optional(),
+    currentStatus: z.enum(PANE_STATUS).optional(),
     routing:       z.array(z.string()).optional(),
     customRouting: z.boolean().optional(),
     dimensions:    dimensionsSchema,
@@ -82,7 +82,7 @@ const deleteManySchema = z.object({
 const scanSchema = z.object({
   body: z.object({
     station: z.string().min(1),
-    action: z.enum(['scan_in', 'start', 'complete']),
+    action: z.enum(['scan_in', 'start', 'complete', 'scan_out']),
     operator: z.string().min(1).optional(),
   }),
 });

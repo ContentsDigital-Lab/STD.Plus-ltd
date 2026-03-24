@@ -26,11 +26,23 @@ When the frontend scans this, it should **strip the `STDPLUS:` prefix** and use 
 ```
 
 1. Panes start at their **first routing station** (e.g. `cutting`) with status `pending`. If a pane has no routing, it starts at `ready` and is immediately `completed`.
-2. At each station, workers can perform three actions:
-   - **scan_in** — Acknowledge the pane. Sets `startedAt` but doesn't move it.
+2. At each station, workers can perform four actions:
+   - **scan_in** — Acknowledge the pane at the station. Sets `startedAt` but doesn't move it.
    - **start** — Mark the pane as `in_progress`.
-   - **complete** — Finish work and automatically advance the pane to the next station in its routing.
-3. After the last station, the pane moves to **ready** with status `completed`.
+   - **complete** — Mark work as done. Pane stays at the station with status `awaiting_scan_out`, ready for handoff.
+   - **scan_out** — Handoff: advances the pane to the next station with status `pending`. If it's the last station, pane becomes `completed`.
+3. After the last station's **scan_out**, the pane is marked `completed` with `completedAt` set.
+
+### Two-Step Completion Flow
+
+The `complete` → `scan_out` pattern is a deliberate two-step handoff:
+
+```
+scan_in → start → complete (awaiting_scan_out) → scan_out (moves to next station)
+```
+
+- **complete** confirms the worker finished their task but the pane hasn't left the station yet.
+- **scan_out** is the physical handoff — the pane moves to the next station (or is marked completed if it was the last one).
 
 ## Mobile Scanning Flow
 
@@ -53,12 +65,12 @@ When the frontend scans this, it should **strip the `STDPLUS:` prefix** and use 
 
 Every scan triggers several side effects:
 
-| Side Effect | Description |
-|---|---|
-| **Production Log** | A `ProductionLog` entry is created for every scan action |
-| **Order Progress** | On `complete`, the order's `panesCompleted`, `progressPercent`, and `stationBreakdown` are updated |
-| **Order Completion** | When all panes reach `ready`, the order status changes to `completed` |
-| **Notification** | If the order has an `assignedTo` worker, a notification is created and sent via WebSocket |
+| Side Effect | When | Description |
+|---|---|---|
+| **Pane Log** | Every action | A `PaneLog` entry is created for every scan action |
+| **Order Progress** | On `scan_out` | The order's `panesCompleted`, `progressPercent`, and `status` are updated |
+| **Order Completion** | On `scan_out` (last station, last pane) | When all panes are `completed`, the order status changes to `completed` |
+| **Notification** | On `scan_out` | If the order has an `assignedTo` worker, a notification is created and sent via WebSocket |
 
 ## WebSocket Events
 
@@ -66,11 +78,10 @@ After a scan, the server emits these events to connected clients:
 
 | Event | Rooms | When |
 |---|---|---|
-| `pane:updated` | `dashboard`, `pane`, `production`, `station:<name>` | Every scan action |
-| `production-log:updated` | `dashboard`, `production` | Every scan action |
-| `station:pane_arrived` | `station:<nextStation>`, `station` | On `complete` (pane moves to next station) |
-| `order:updated` | `dashboard`, `order` | On `complete` (order progress changes) |
-| `notification` | `user:<recipientId>` | On `complete` (if order has assigned worker) |
+| `pane:updated` | `dashboard`, `pane`, `production`, `station:<name>` | On `complete` and `scan_out` |
+| `station:pane_arrived` | `station:<nextStation>`, `station` | On `scan_out` (pane moves to next station) |
+| `order:updated` | `dashboard`, `order` | On `scan_out` (order progress changes) |
+| `notification` | `user:<recipientId>` | On `scan_out` (if order has assigned worker) |
 
 ### Listening for Scan Events
 
@@ -107,6 +118,7 @@ socket.on('notification', (notif) => {
 | Status | Cause | Message example |
 |---|---|---|
 | `404` | Pane number doesn't exist | `Pane not found` |
-| `400` | Pane is at a different station | `Pane is at "queue", not "cutting"` |
+| `400` | Pane is at a different station | `Pane is at "edging", not "cutting"` |
 | `400` | Pane already finished all stations | `Pane is already completed` |
+| `400` | `scan_out` called without `complete` first | `Pane must be completed at station before scan_out` |
 | `400` | Operator ID doesn't match any worker | `Operator (Worker) not found` |

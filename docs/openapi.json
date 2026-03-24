@@ -715,7 +715,7 @@
           "request": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Request" }] },
           "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }], "description": "Populated when an order is created from the request" },
           "currentStation": { "type": "string", "description": "Current station name — defaults to first station in routing, or 'ready' if no routing" },
-          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "completed"], "default": "pending" },
+          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"], "default": "pending" },
           "routing": { "type": "array", "items": { "type": "string" } },
           "customRouting": { "type": "boolean", "default": false },
           "dimensions": { "$ref": "#/components/schemas/Dimensions" },
@@ -739,7 +739,7 @@
           "request": { "type": "string", "minLength": 1, "description": "Request ID this pane belongs to" },
           "order": { "type": "string", "minLength": 1, "description": "Order ID (optional, auto-filled when order is created from request)" },
           "currentStation": { "type": "string", "minLength": 1, "description": "Station name (any valid station)" },
-          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
+          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "customRouting": { "type": "boolean" },
           "dimensions": { "$ref": "#/components/schemas/Dimensions" },
@@ -760,7 +760,7 @@
         "required": ["station", "action"],
         "properties": {
           "station": { "type": "string", "minLength": 1, "description": "The station where the scan is happening (must match the pane's current station)", "example": "cutting" },
-          "action": { "type": "string", "enum": ["scan_in", "start", "complete"], "description": "`scan_in` — acknowledge arrival, `start` — begin work, `complete` — finish and advance to next station" },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out"], "description": "`scan_in` — acknowledge arrival, `start` — begin work, `complete` — mark work done (pane stays at station with `awaiting_scan_out` status), `scan_out` — handoff pane to next station (or mark completed if last station)" },
           "operator": { "type": "string", "minLength": 1, "description": "Worker ID of the operator performing the scan. Defaults to the authenticated user if omitted." }
         }
       },
@@ -778,7 +778,7 @@
           "request": { "type": "string", "minLength": 1 },
           "order": { "type": "string", "minLength": 1 },
           "currentStation": { "type": "string", "minLength": 1, "description": "Station name (any valid station)" },
-          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
+          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "customRouting": { "type": "boolean" },
           "dimensions": { "$ref": "#/components/schemas/Dimensions" },
@@ -801,7 +801,7 @@
           "pane": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Pane" }] },
           "order": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Order" }] },
           "station": { "type": "string" },
-          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
           "operator": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
           "defectCode": { "type": "string", "nullable": true },
           "reworkReason": { "type": "string", "nullable": true },
@@ -821,7 +821,7 @@
           "pane": { "type": "string", "minLength": 1 },
           "order": { "type": "string", "minLength": 1 },
           "station": { "type": "string", "minLength": 1 },
-          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
           "operator": { "type": "string", "minLength": 1 },
           "defectCode": { "type": "string" },
           "reworkReason": { "type": "string" },
@@ -838,7 +838,7 @@
           "pane": { "type": "string", "minLength": 1 },
           "order": { "type": "string", "minLength": 1 },
           "station": { "type": "string", "minLength": 1 },
-          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
           "operator": { "type": "string", "minLength": 1 },
           "defectCode": { "type": "string" },
           "reworkReason": { "type": "string" },
@@ -2418,7 +2418,7 @@
       "post": {
         "tags": ["QR Scanning"],
         "summary": "Scan a pane (QR scan endpoint)",
-        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Actions:**\n- `scan_in` — Acknowledge the pane at the station. Sets `startedAt` but does not move the pane.\n- `start` — Mark work as in-progress at the station.\n- `complete` — Finish work at the station. Automatically advances the pane to the next station in its routing. If it's the last station, pane moves to `ready` with status `completed`.\n\n**Side effects:**\n- Creates a `ProductionLog` entry for every scan.\n- Updates associated `Order` progress (`panesCompleted`, `progressPercent`, `stationBreakdown`) on `complete`.\n- Emits WebSocket events: `pane:updated`, `production-log:updated`, `station:pane_arrived`, `order:updated`, `notification`.\n- Creates a `Notification` for the order's assigned worker (if any).\n\nRequires authentication. Any role can scan.",
+        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Two-step completion flow:**\n1. `complete` — Marks work as done at the current station. Pane stays at the same station with status `awaiting_scan_out`.\n2. `scan_out` — Hands off the pane to the next station (sets status to `pending`). If it's the last station, pane is marked `completed`.\n\n**Actions:**\n- `scan_in` — Acknowledge the pane at the station. Sets `startedAt` but does not move the pane.\n- `start` — Mark work as in-progress at the station.\n- `complete` — Finish work at the station. Pane stays at the station with status `awaiting_scan_out`, ready for handoff.\n- `scan_out` — Handoff: advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set.\n\n**Side effects:**\n- Creates a `PaneLog` entry for every scan action.\n- On `scan_out`: updates associated `Order` progress (`panesCompleted`, `progressPercent`) and order `status`.\n- On `scan_out`: emits WebSocket events `pane:updated`, `station:pane_arrived`, `order:updated`, `notification`.\n- On `scan_out`: creates a `Notification` for the order's assigned worker (if any).\n\n**Validations:**\n- `complete` and `scan_out` must be performed at the pane's `currentStation`.\n- `scan_out` requires pane status to be `awaiting_scan_out` (i.e. `complete` must be called first).\n- Scanning a pane that is already `completed` returns 400.\n\nRequires authentication. Any role can scan.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -2471,7 +2471,7 @@
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           { "name": "station", "in": "query", "schema": { "type": "string" }, "description": "Filter by station name" },
-          { "name": "action", "in": "query", "schema": { "type": "string", "enum": ["scan_in", "start", "complete"] }, "description": "Filter by action type" },
+          { "name": "action", "in": "query", "schema": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out"] }, "description": "Filter by action type" },
           { "name": "orderId", "in": "query", "schema": { "type": "string" }, "description": "Filter by order ID" },
           { "name": "paneId", "in": "query", "schema": { "type": "string" }, "description": "Filter by pane ID" },
           { "name": "materialId", "in": "query", "schema": { "type": "string" }, "description": "Filter by material ID" },
@@ -2500,7 +2500,7 @@
                               "orderId": { "type": "string", "description": "Same as order (frontend compatibility alias)" },
                               "material": { "type": "string" },
                               "station": { "type": "string" },
-                              "action": { "type": "string", "enum": ["scan_in", "start", "complete"] },
+                              "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out"] },
                               "completedAt": { "type": "string", "format": "date-time", "nullable": true },
                               "createdAt": { "type": "string", "format": "date-time" },
                               "updatedAt": { "type": "string", "format": "date-time" }
