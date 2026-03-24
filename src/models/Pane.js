@@ -16,13 +16,15 @@ const paneSchema = new mongoose.Schema({
     trim:     true,
   },
   qrCode: { type: String, default: '' },
-  order:     { type: mongoose.Schema.Types.ObjectId, ref: 'Order',     default: null },
-  request:   { type: mongoose.Schema.Types.ObjectId, ref: 'Request',   default: null },
-  material:  { type: mongoose.Schema.Types.ObjectId, ref: 'Material',  default: null },
-  inventory: { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory', default: null },
+  order:      { type: mongoose.Schema.Types.ObjectId, ref: 'Order',      default: null },
+  request:    { type: mongoose.Schema.Types.ObjectId, ref: 'Request',    default: null },
+  withdrawal: { type: mongoose.Schema.Types.ObjectId, ref: 'Withdrawal', default: null },
+  remakeOf:   { type: mongoose.Schema.Types.ObjectId, ref: 'Pane',       default: null },
+  material:   { type: mongoose.Schema.Types.ObjectId, ref: 'Material',   default: null },
+  inventory:  { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory',  default: null },
 
   currentStation: { type: String, default: 'queue' },
-  currentStatus:  { type: String, enum: ['pending', 'in_progress', 'completed'], default: 'pending' },
+  currentStatus:  { type: String, enum: ['pending', 'in_progress', 'awaiting_scan_out', 'completed'], default: 'pending' },
 
   routing:      { type: [String], default: [] },
   customRouting:{ type: Boolean, default: false },
@@ -45,5 +47,4 @@ const paneSchema = new mongoose.Schema({
 
 paneSchema.index({ order: 1 });
 paneSchema.index({ currentStation: 1, currentStatus: 1 });
-
 module.exports = mongoose.model('Pane', paneSchema);

@@ -1,0 +1,124 @@
+---
+title: QR Scanning
+description: How the QR code scanning system works
+---
+
+## Overview
+
+The QR scanning system allows workers to move panes through production stations by scanning QR codes with a mobile device. When a pane is scanned, both the mobile and desktop UIs update in real-time via WebSocket.
+
+## QR Code Format
+
+Each pane has a QR code with the format:
+
+```
+STDPLUS:PNE-0001
+```
+
+When the frontend scans this, it should **strip the `STDPLUS:` prefix** and use only the pane number (`PNE-0001`) in the API call.
+
+## Workflow
+
+```
+┌─────────┐    ┌─────────┐    ┌─────────┐    ┌───────┐
+│ cutting │───▶│ edging  │───▶│   qc    │───▶│ ready │
+└─────────┘    └─────────┘    └─────────┘    └───────┘
+```
+
+1. Panes start at their **first routing station** (e.g. `cutting`) with status `pending`. If a pane has no routing, it starts at `ready` and is immediately `completed`.
+2. At each station, workers can perform four actions:
+   - **scan_in** — Acknowledge the pane at the station. Sets `startedAt` but doesn't move it.
+   - **start** — Mark the pane as `in_progress`.
+   - **complete** — Mark work as done. Pane stays at the station with status `awaiting_scan_out`, ready for handoff.
+   - **scan_out** — Handoff: advances the pane to the next station with status `pending`. If it's the last station, pane becomes `completed`.
+3. After the last station's **scan_out**, the pane is marked `completed` with `completedAt` set.
+
+### Two-Step Completion Flow
+
+The `complete` → `scan_out` pattern is a deliberate two-step handoff:
+
+```
+scan_in → start → complete (awaiting_scan_out) → scan_out (moves to next station)
+```
+
+- **complete** confirms the worker finished their task but the pane hasn't left the station yet.
+- **scan_out** is the physical handoff — the pane moves to the next station (or is marked completed if it was the last one).
+
+## Mobile Scanning Flow
+
+<Steps>
+  <Step title="Scan QR Code">
+    Worker opens the app on their phone and scans the pane's QR code with their camera.
+  </Step>
+  <Step title="Parse Pane Number">
+    The frontend reads `STDPLUS:PNE-0001` from the QR code and extracts `PNE-0001`.
+  </Step>
+  <Step title="Send Scan Request">
+    Frontend calls `POST /api/panes/PNE-0001/scan` with the station and action.
+  </Step>
+  <Step title="Real-Time Update">
+    Both mobile and desktop receive WebSocket events and update their UIs automatically.
+  </Step>
+</Steps>
+
+## Side Effects
+
+Every scan triggers several side effects:
+
+| Side Effect | When | Description |
+|---|---|---|
+| **Pane Log** | Every action | A `PaneLog` entry is created for every scan action |
+| **Order Progress** | On `scan_out` | The order's `panesCompleted`, `progressPercent`, and `status` are updated |
+| **Order Completion** | On `scan_out` (last station, last pane) | When all panes are `completed`, the order status changes to `completed` |
+| **Notification** | On `scan_out` | If the order has an `assignedTo` worker, a notification is created and sent via WebSocket |
+
+## WebSocket Events
+
+After a scan, the server emits these events to connected clients:
+
+| Event | Rooms | When |
+|---|---|---|
+| `pane:updated` | `dashboard`, `pane`, `production`, `station:<name>` | On `complete` and `scan_out` |
+| `station:pane_arrived` | `station:<nextStation>`, `station` | On `scan_out` (pane moves to next station) |
+| `order:updated` | `dashboard`, `order` | On `scan_out` (order progress changes) |
+| `notification` | `user:<recipientId>` | On `scan_out` (if order has assigned worker) |
+
+### Listening for Scan Events
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  path: '/api/socket-entry',
+  auth: { token: 'your-jwt-token' },
+});
+
+socket.on('connect', () => {
+  socket.emit('join_pane');
+  socket.emit('join_production');
+  socket.emit('join_station');
+  socket.emit('join_me');
+});
+
+socket.on('pane:updated', ({ action, data }) => {
+  console.log('Pane changed:', data.paneNumber, data.currentStation);
+});
+
+socket.on('station:pane_arrived', ({ paneNumber, fromStation, toStation }) => {
+  console.log(`${paneNumber} moved from ${fromStation} to ${toStation}`);
+});
+
+socket.on('notification', (notif) => {
+  console.log(`[${notif.priority}] ${notif.title}: ${notif.message}`);
+});
+```
+
+## Error Handling
+
+| Status | Cause | Message example |
+|---|---|---|
+| `404` | Pane number doesn't exist | `Pane not found` |
+| `400` | Pane is at a different station | `Pane is at "edging", not "cutting"` |
+| `400` | Pane already finished all stations | `Pane is already completed` |
+| `400` | `scan_out` called without `complete` first | `Pane must be completed at station before scan_out` |
+| `400` | Operator ID doesn't match any worker | `Operator (Worker) not found` |

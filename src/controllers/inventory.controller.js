@@ -73,6 +73,50 @@ exports.deleteOne = async (req, res, next) => {
   }
 };
 
+exports.move = async (req, res, next) => {
+  try {
+    const source = await Inventory.findById(req.params.id).populate('material');
+    if (!source) return fail(res, 'Source inventory not found', 404);
+
+    const { quantity, toLocation, toStorageColor } = req.validated.body;
+
+    if (quantity > source.quantity) {
+      return fail(res, `Insufficient stock. Available: ${source.quantity}, Requested: ${quantity}`, 400);
+    }
+
+    source.quantity -= quantity;
+    await source.save();
+
+    let target = await Inventory.findOne({
+      material: source.material._id,
+      stockType: source.stockType,
+      location: toLocation,
+    });
+
+    if (target) {
+      target.quantity += quantity;
+      if (toStorageColor !== undefined) target.storageColor = toStorageColor;
+      await target.save();
+    } else {
+      target = await Inventory.create({
+        material: source.material._id,
+        stockType: source.stockType,
+        quantity,
+        location: toLocation,
+        storageColor: toStorageColor || '',
+      });
+    }
+
+    const populatedSource = await source.populate('material');
+    const populatedTarget = await target.populate('material');
+
+    emit(req, 'inventory:updated', { action: 'moved', data: { source: populatedSource, target: populatedTarget, quantity } }, ['dashboard', 'inventory']);
+    success(res, { source: populatedSource, target: populatedTarget, movedQuantity: quantity }, 'Inventory moved');
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.deleteMany = async (req, res, next) => {
   try {
     const { ids } = req.validated.body;

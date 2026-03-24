@@ -1,0 +1,44 @@
+---
+title: Update Pricing Settings
+api: PUT /api/pricing-settings
+description: Update glass pricing configuration
+---
+
+Updates the singleton pricing settings document. Only the fields you include will be changed — omitted fields are left untouched.
+
+Requires **admin** or **manager** role.
+
+After a successful update, the server emits a `pricing:updated` WebSocket event to all clients in the `pricing` room.
+
+## Request Body
+
+<ParamField body="glassPrices" type="object" optional>
+  Nested map of glass type → thickness → pricing. Each entry must have `pricePerSqFt` (number, min 0) and `grindingRate` (number, min 0).
+
+  ```json
+  {
+    "Clear": {
+      "5mm": { "pricePerSqFt": 55, "grindingRate": 50 },
+      "6mm": { "pricePerSqFt": 60, "grindingRate": 50 }
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField body="holePriceEach" type="number" optional>
+  Price per hole. Must be ≥ 0.
+</ParamField>
+
+<ParamField body="notchPrice" type="number" optional>
+  Price per notch. Must be ≥ 0.
+</ParamField>
+
+## Response
+
+Returns the full updated pricing settings object (same shape as GET).
+
+## WebSocket Side Effect
+
+| Event | Room | Payload |
+|---|---|---|
+| `pricing:updated` | `pricing` | The full updated pricing settings object |

@@ -184,46 +184,42 @@ async function testOrders(tokens, customerId, materialId, workerId) {
   return { ordId };
 }
 
-async function testRequests(tokens, customerId, workerId) {
-  console.log('\n=== Requests (all create/update, admin+manager delete, worker sees own) ===\n');
+async function testRequests(tokens, customerId) {
+  console.log('\n=== Requests (admin+manager only for all CRUD) ===\n');
   const path = '/api/requests';
   const body = { details: { type: 'cut', quantity: 5 }, customer: customerId };
 
-  const r1 = await api('POST', path, tokens.admin, { ...body, assignedTo: workerId });
-  check('POST   /requests            (admin)', r1.status, 201);
-  const reqId = r1.data.data?._id;
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /requests            (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /requests            (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /requests            (worker)', r3.status, 403);
 
-  const r2 = await api('POST', path, tokens.manager, body);
-  check('POST   /requests            (manager)', r2.status, 201);
-  const reqId2 = r2.data.data?._id;
+  const r4 = await api('POST', path, tokens.admin, body);
+  check('POST   /requests            (admin)', r4.status, 201);
+  const reqId = r4.data.data?._id;
 
-  const r3 = await api('POST', path, tokens.worker, body);
-  check('POST   /requests            (worker)', r3.status, 201);
-  const reqId3 = r3.data.data?._id;
+  const r5 = await api('POST', path, tokens.manager, body);
+  check('POST   /requests            (manager)', r5.status, 201);
+  const reqId2 = r5.data.data?._id;
 
-  const r4 = await api('GET', path, tokens.admin);
-  check('GET    /requests            (admin)', r4.status, 200);
-  const r5 = await api('GET', path, tokens.worker);
-  check('GET    /requests            (worker — own only)', r5.status, 200);
-  console.log(`          worker sees ${r5.data.data?.length || 0} request(s), admin sees ${r4.data.data?.length || 0}`);
+  const r6 = await api('POST', path, tokens.worker, body);
+  check('POST   /requests            (worker)', r6.status, 403);
 
   if (reqId) {
-    const r6 = await api('PATCH', `${path}/${reqId}`, tokens.worker, { deliveryLocation: 'Updated' });
-    check('PATCH  /requests/:id        (worker — assigned)', r6.status, 200);
+    const r7 = await api('PATCH', `${path}/${reqId}`, tokens.manager, { deliveryLocation: 'Updated' });
+    check('PATCH  /requests/:id        (manager)', r7.status, 200);
+    const r8 = await api('PATCH', `${path}/${reqId}`, tokens.worker, { deliveryLocation: 'Hacked' });
+    check('PATCH  /requests/:id        (worker)', r8.status, 403);
 
-    if (reqId2) {
-      const r7 = await api('PATCH', `${path}/${reqId2}`, tokens.worker, { deliveryLocation: 'Hacked' });
-      check('PATCH  /requests/:id        (worker — not assigned)', r7.status, 403);
-    }
+    const r9 = await api('DELETE', `${path}/${reqId}`, tokens.worker);
+    check('DELETE /requests/:id        (worker)', r9.status, 403);
+    const r10 = await api('DELETE', `${path}/${reqId}`, tokens.manager);
+    check('DELETE /requests/:id        (manager)', r10.status, 200);
   }
 
-  const r8 = await api('DELETE', `${path}/${reqId}`, tokens.worker);
-  check('DELETE /requests/:id        (worker)', r8.status, 403);
-  const r9 = await api('DELETE', `${path}/${reqId}`, tokens.manager);
-  check('DELETE /requests/:id        (manager)', r9.status, 200);
-
   if (reqId2) await api('DELETE', `${path}/${reqId2}`, tokens.admin);
-  if (reqId3) await api('DELETE', `${path}/${reqId3}`, tokens.admin);
 }
 
 async function testWithdrawals(tokens, materialId, workerId) {
@@ -381,6 +377,103 @@ async function testNotifications(tokens, workerId) {
   if (notifId2) await api('DELETE', `${path}/${notifId2}`, tokens.admin);
 }
 
+async function testPanes(tokens, customerId, materialId) {
+  console.log('\n=== Panes (admin+manager CU, admin-only D) ===\n');
+  const path = '/api/panes';
+
+  const ord = await api('POST', '/api/orders', tokens.admin, { customer: customerId, material: materialId, quantity: 5 });
+  const ordId = ord.data.data._id;
+  const body = { order: ordId, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' };
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /panes               (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /panes               (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /panes               (worker)', r3.status, 200);
+
+  const r4 = await api('POST', path, tokens.admin, body);
+  check('POST   /panes               (admin)', r4.status, 201);
+  const paneId = r4.data.data?._id;
+  check('  has paneNumber', typeof r4.data.data?.paneNumber, 'string');
+  check('  has qrCode', typeof r4.data.data?.qrCode, 'string');
+
+  const r5 = await api('POST', path, tokens.manager, body);
+  check('POST   /panes               (manager)', r5.status, 201);
+  const paneId2 = r5.data.data?._id;
+
+  const r6 = await api('POST', path, tokens.worker, body);
+  check('POST   /panes               (worker)', r6.status, 403);
+
+  if (paneId) {
+    const r7 = await api('PATCH', `${path}/${paneId}`, tokens.manager, { currentStation: 'cutting' });
+    check('PATCH  /panes/:id           (manager)', r7.status, 200);
+    const r8 = await api('PATCH', `${path}/${paneId}`, tokens.worker, { currentStation: 'edging' });
+    check('PATCH  /panes/:id           (worker)', r8.status, 403);
+
+    const r9 = await api('DELETE', `${path}/${paneId}`, tokens.worker);
+    check('DELETE /panes/:id           (worker)', r9.status, 403);
+    const r10 = await api('DELETE', `${path}/${paneId}`, tokens.manager);
+    check('DELETE /panes/:id           (manager)', r10.status, 403);
+    const r11 = await api('DELETE', `${path}/${paneId}`, tokens.admin);
+    check('DELETE /panes/:id           (admin)', r11.status, 200);
+  }
+
+  if (paneId2) await api('DELETE', `${path}/${paneId2}`, tokens.admin);
+  await api('DELETE', `/api/orders/${ordId}`, tokens.admin);
+}
+
+async function testProductionLogs(tokens, customerId, materialId) {
+  console.log('\n=== Production Logs (all create, admin+manager update, admin-only delete) ===\n');
+  const path = '/api/production-logs';
+
+  const me = await api('GET', '/api/auth/me', tokens.worker);
+  const workerId = me.data.data._id;
+
+  const ord = await api('POST', '/api/orders', tokens.admin, { customer: customerId, material: materialId, quantity: 1 });
+  const ordId = ord.data.data._id;
+  const pane = await api('POST', '/api/panes', tokens.admin, { order: ordId });
+  const paneId = pane.data.data._id;
+
+  const body = { pane: paneId, order: ordId, station: 'cutting', action: 'scan_in', operator: workerId };
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /production-logs     (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.worker);
+  check('GET    /production-logs     (worker)', r2.status, 200);
+
+  const r3 = await api('POST', path, tokens.admin, body);
+  check('POST   /production-logs     (admin)', r3.status, 201);
+  const logId = r3.data.data?._id;
+
+  const r4 = await api('POST', path, tokens.manager, { ...body, action: 'start' });
+  check('POST   /production-logs     (manager)', r4.status, 201);
+  const logId2 = r4.data.data?._id;
+
+  const r5 = await api('POST', path, tokens.worker, { ...body, action: 'complete' });
+  check('POST   /production-logs     (worker)', r5.status, 201);
+  const logId3 = r5.data.data?._id;
+
+  if (logId) {
+    const r6 = await api('PATCH', `${path}/${logId}`, tokens.manager, { status: 'pass' });
+    check('PATCH  /production-logs/:id (manager)', r6.status, 200);
+    const r7 = await api('PATCH', `${path}/${logId}`, tokens.worker, { status: 'fail' });
+    check('PATCH  /production-logs/:id (worker)', r7.status, 403);
+
+    const r8 = await api('DELETE', `${path}/${logId}`, tokens.worker);
+    check('DELETE /production-logs/:id (worker)', r8.status, 403);
+    const r9 = await api('DELETE', `${path}/${logId}`, tokens.manager);
+    check('DELETE /production-logs/:id (manager)', r9.status, 403);
+    const r10 = await api('DELETE', `${path}/${logId}`, tokens.admin);
+    check('DELETE /production-logs/:id (admin)', r10.status, 200);
+  }
+
+  if (logId2) await api('DELETE', `${path}/${logId2}`, tokens.admin);
+  if (logId3) await api('DELETE', `${path}/${logId3}`, tokens.admin);
+  await api('DELETE', `/api/panes/${paneId}`, tokens.admin);
+  await api('DELETE', `/api/orders/${ordId}`, tokens.admin);
+}
+
 async function testNotificationPreferences(tokens) {
   console.log('\n=== Notification Preferences (self-update via /auth/me) ===\n');
 
@@ -441,6 +534,106 @@ async function testNotificationPreferences(tokens) {
   });
 }
 
+async function testStickerTemplates(tokens) {
+  console.log('\n=== Sticker Templates (admin+manager CU, admin-only D) ===\n');
+  const path = '/api/sticker-templates';
+  const body = { width: 100, height: 50, elements: [{ type: 'text', value: 'test' }] };
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /sticker-templates   (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /sticker-templates   (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /sticker-templates   (worker)', r3.status, 200);
+
+  const r4 = await api('POST', path, tokens.admin, { ...body, name: 'rbac-admin' });
+  check('POST   /sticker-templates   (admin)', r4.status, 201);
+  const id1 = r4.data.data?._id;
+
+  const r5 = await api('POST', path, tokens.manager, { ...body, name: 'rbac-manager' });
+  check('POST   /sticker-templates   (manager)', r5.status, 201);
+  const id2 = r5.data.data?._id;
+
+  const r6 = await api('POST', path, tokens.worker, { ...body, name: 'rbac-worker' });
+  check('POST   /sticker-templates   (worker)', r6.status, 403);
+
+  if (id1) {
+    const r7 = await api('PATCH', `${path}/${id1}`, tokens.manager, { width: 200 });
+    check('PATCH  /sticker-templates/:id (manager)', r7.status, 200);
+    const r8 = await api('PATCH', `${path}/${id1}`, tokens.worker, { width: 300 });
+    check('PATCH  /sticker-templates/:id (worker)', r8.status, 403);
+
+    const r9 = await api('DELETE', `${path}/${id1}`, tokens.worker);
+    check('DELETE /sticker-templates/:id (worker)', r9.status, 403);
+    const r10 = await api('DELETE', `${path}/${id1}`, tokens.manager);
+    check('DELETE /sticker-templates/:id (manager)', r10.status, 403);
+    const r11 = await api('DELETE', `${path}/${id1}`, tokens.admin);
+    check('DELETE /sticker-templates/:id (admin)', r11.status, 200);
+  }
+
+  if (id2) await api('DELETE', `${path}/${id2}`, tokens.admin);
+}
+
+async function testPricingSettings(tokens) {
+  console.log('\n=== Pricing Settings (all read, admin+manager update) ===\n');
+  const path = '/api/pricing-settings';
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /pricing-settings    (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /pricing-settings    (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /pricing-settings    (worker)', r3.status, 200);
+
+  const r4 = await api('PUT', path, tokens.admin, { holePriceEach: 75 });
+  check('PUT    /pricing-settings    (admin)', r4.status, 200);
+
+  const r5 = await api('PUT', path, tokens.manager, { holePriceEach: 80 });
+  check('PUT    /pricing-settings    (manager)', r5.status, 200);
+
+  const r6 = await api('PUT', path, tokens.worker, { holePriceEach: 99 });
+  check('PUT    /pricing-settings    (worker)', r6.status, 403);
+
+  // Restore default
+  await api('PUT', path, tokens.admin, { holePriceEach: 50 });
+}
+
+async function testAuthEdgeCases(tokens) {
+  console.log('\n=== Auth Edge Cases ===\n');
+
+  // No token
+  const r1 = await api('GET', '/api/workers', null);
+  check('GET    /workers (no token)', r1.status, 401);
+
+  // Malformed Bearer header
+  const r2 = await fetch(`${API}/api/workers`, {
+    headers: { Authorization: 'Bearer' },
+  });
+  check('GET    /workers (empty Bearer)', r2.status, 401);
+
+  // Invalid token
+  const r3 = await api('GET', '/api/workers', 'invalid-token-string');
+  check('GET    /workers (invalid token)', r3.status, 401);
+
+  // Logout (stateless — should return 200)
+  const r4 = await api('POST', '/api/auth/logout', tokens.worker);
+  check('POST   /auth/logout (worker)', r4.status, 200);
+
+  // Invalid login
+  const r5 = await api('POST', '/api/auth/login', null, { username: 'admin', password: 'wrongpass' });
+  check('POST   /auth/login (bad password)', r5.status, 401);
+
+  const r6 = await api('POST', '/api/auth/login', null, { username: 'nonexistent', password: 'test123' });
+  check('POST   /auth/login (bad username)', r6.status, 401);
+
+  // Missing fields
+  const r7 = await api('POST', '/api/auth/login', null, { username: 'admin' });
+  check('POST   /auth/login (missing password)', r7.status, 400);
+
+  const r8 = await api('POST', '/api/auth/login', null, {});
+  check('POST   /auth/login (empty body)', r8.status, 400);
+}
+
 async function main() {
   console.log('=== RBAC Test Suite ===\n');
   console.log('Setting up users...');
@@ -489,11 +682,16 @@ async function main() {
   // Test resources with ownership
   await testMaterialLogs(tokens, matId);
   await testOrders(tokens, custId, matId, workerId);
-  await testRequests(tokens, custId, workerId);
+  await testRequests(tokens, custId);
   await testWithdrawals(tokens, matId, workerId);
   await testClaims(tokens, custId, matId, workerId, adminId);
+  await testPanes(tokens, custId, matId);
+  await testProductionLogs(tokens, custId, matId);
   await testNotifications(tokens, workerId);
   await testNotificationPreferences(tokens);
+  await testStickerTemplates(tokens);
+  await testPricingSettings(tokens);
+  await testAuthEdgeCases(tokens);
 
   // Cleanup shared test data
   await api('DELETE', `/api/materials/${matId}`, adminToken);

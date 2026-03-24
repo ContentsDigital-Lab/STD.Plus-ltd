@@ -44,6 +44,72 @@ socket.emit('join_me', (ack) => {
 | `join_withdrawal` | OUTBOUND | `withdrawal` | Join withdrawal page |
 | `join_order` | OUTBOUND | `order` | Join order page |
 | `join_claim` | OUTBOUND | `claim` | Join claim page |
+| `join_pane` | OUTBOUND | `pane` | Join pane page |
+| `join_production` | OUTBOUND | `production` | Join production tracking page |
+| `join_pricing` | OUTBOUND | `pricing` | Join pricing settings page |
+| `join_station_room` | OUTBOUND | `station:<stationId>` | Join a specific station's work view |
+| `leave_station_room` | OUTBOUND | `station:<stationId>` | Leave a specific station's work view |
+
+### Station Room Events
+
+Join or leave a **specific station's room** to receive real-time check-in/check-out events for that station only.
+
+<CodeGroup>
+```javascript Join a station room
+socket.emit('join_station_room', { stationId: '69a98ee25bb1d35efb8cc1ff' }, (ack) => {
+  console.log(ack); // { ok: true, room: "station:69a98ee..." }
+});
+```
+
+```javascript Leave a station room
+socket.emit('leave_station_room', { stationId: '69a98ee25bb1d35efb8cc1ff' }, (ack) => {
+  console.log(ack); // { ok: true, room: "station:69a98ee..." }
+});
+```
+</CodeGroup>
+
+| Event | Direction | Room joined/left | Description |
+|---|---|---|---|
+| `join_station_room` | OUTBOUND | `station:<stationId>` | Join a specific station's room |
+| `leave_station_room` | OUTBOUND | `station:<stationId>` | Leave a specific station's room |
+
+**Payload:** `{ stationId: "<station _id>" }`
+
+<Note>
+  These are **dynamic rooms** scoped to individual stations, unlike `join_station` which joins a single shared room for the stations page. `stationId` is required — the callback returns `{ ok: false, error: "stationId is required" }` if omitted.
+</Note>
+
+### QR Check-in Events
+
+Used by the [QR check-in system](/scanning/qr-checkin) for worker presence at stations. The station screen joins with `join-station` and receives `scan-confirmed` when a mobile device emits `mobile-scan`.
+
+<CodeGroup>
+```javascript Station screen — join and listen
+socket.emit('join-station', 'cutting', (ack) => {
+  console.log(ack); // { ok: true, room: "station:cutting" }
+});
+
+socket.on('scan-confirmed', ({ worker, time }) => {
+  console.log(`${worker} checked in at ${time}`);
+});
+```
+
+```javascript Mobile device — send scan
+socket.emit('mobile-scan', { stationId: 'cutting', worker: 'Boss' }, (ack) => {
+  console.log(ack); // { ok: true }
+});
+```
+</CodeGroup>
+
+| Event | Direction | Description |
+|---|---|---|
+| `join-station` | OUTBOUND | Station screen joins `station:<stationId>`. Receives replayed `scan-confirmed` if a scan occurred within the last 15 seconds. |
+| `mobile-scan` | OUTBOUND | Mobile sends `{ stationId, worker? }`. Server broadcasts `scan-confirmed` to the station room. `worker` defaults to the authenticated user's name if omitted. |
+| `scan-confirmed` | INBOUND | Sent to `station:<stationId>` with `{ worker, time }` when a worker checks in. |
+
+<Note>
+  `join-station` uses a hyphenated name (not underscore) to distinguish it from `join_station` which joins the shared stations page room. Both require JWT authentication.
+</Note>
 
 ### Leave Events
 
@@ -63,6 +129,10 @@ socket.emit('leave_dashboard', (ack) => {
 | `leave_withdrawal` | OUTBOUND | `withdrawal` | Leave withdrawal page |
 | `leave_order` | OUTBOUND | `order` | Leave order page |
 | `leave_claim` | OUTBOUND | `claim` | Leave claim page |
+| `leave_pane` | OUTBOUND | `pane` | Leave pane page |
+| `leave_production` | OUTBOUND | `production` | Leave production tracking page |
+| `leave_pricing` | OUTBOUND | `pricing` | Leave pricing settings page |
+| `leave_station_room` | OUTBOUND | `station:<stationId>` | Leave a specific station's work view |
 
 ## Data Events
 
@@ -89,7 +159,12 @@ socket.on('order:updated', (payload) => {
 | `withdrawal:updated` | INBOUND | `dashboard`, `withdrawal` | Withdrawal create / update / delete |
 | `claim:updated` | INBOUND | `dashboard`, `claim` | Claim create / update / delete |
 | `station:updated` | INBOUND | `dashboard`, `station` | Station create / update / delete |
+| `pane:updated` | INBOUND | `dashboard`, `pane`, `production`, `station:<name>` | Pane create / update / delete / QR scan |
+| `production-log:updated` | INBOUND | `dashboard`, `production` | Production log create / update / delete / QR scan |
 | `station-template:updated` | INBOUND | `dashboard`, `station` | Station template create / update / delete |
+| `pricing:updated` | INBOUND | `pricing` | Pricing settings update |
+| `station:check_in` | INBOUND | `station:<stationId>` | Order update with station changes |
+| `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | QR scan with `scan_out` action |
 
 **Payload format:**
 
@@ -103,9 +178,140 @@ socket.on('order:updated', (payload) => {
 }
 ```
 
+### Station Check-In
+
+Emitted to a **specific station's room** when an order enters or exits that station (triggered by order updates that modify `stationHistory` or `currentStationIndex`).
+
+```javascript
+socket.on('station:check_in', (payload) => {
+  console.log(payload.orderId);   // "69a98ee25bb1d35efb8cc1ff"
+  console.log(payload.stationId); // "69b12cd35bb1d35efb8cc200"
+  console.log(payload.action);    // "entered" | "exited"
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `station:check_in` | INBOUND | `station:<stationId>` | Order update with station changes |
+
+**Payload:**
+
+```json
+{
+  "orderId": "69a98ee25bb1d35efb8cc1ff",
+  "stationId": "69b12cd35bb1d35efb8cc200",
+  "action": "entered"
+}
+```
+
+| Field | Description |
+|---|---|
+| `orderId` | The order that moved |
+| `stationId` | The station where it happened |
+| `action` | `entered` (order arrived) or `exited` (order completed/left) |
+
+### Pane Arrived (QR Scan)
+
+Emitted when a pane is scanned with the `scan_out` action and advances to the next station. Sent to the next station's room and the general `station` room.
+
+```javascript
+socket.on('station:pane_arrived', (payload) => {
+  console.log(payload.paneNumber);  // "PNE-0001"
+  console.log(payload.fromStation); // "cutting"
+  console.log(payload.toStation);   // "edging"
+  console.log(payload.orderId);     // "69a98ee25bb1d35efb8cc1ff"
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | POST `/api/panes/{paneNumber}/scan` with `action: "scan_out"` |
+
+**Payload:**
+
+```json
+{
+  "paneNumber": "PNE-0001",
+  "paneId": "69a98ee25bb1d35efb8cc1ff",
+  "fromStation": "cutting",
+  "toStation": "edging",
+  "orderId": "69b12cd35bb1d35efb8cc200"
+}
+```
+
+| Field | Description |
+|---|---|
+| `paneNumber` | The pane that moved (e.g. `PNE-0001`) |
+| `paneId` | The pane's `_id` |
+| `fromStation` | The station the pane just completed |
+| `toStation` | The station the pane moved to |
+| `orderId` | The associated order ID (if any) |
+
+### Pricing Updated
+
+Emitted to the `pricing` room when pricing settings are updated via `PUT /api/pricing-settings`.
+
+```javascript
+socket.on('pricing:updated', (settings) => {
+  console.log(settings.glassPrices);
+  console.log(settings.holePriceEach);
+  console.log(settings.notchPrice);
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `pricing:updated` | INBOUND | `pricing` | PUT `/api/pricing-settings` |
+
+**Payload:** The full pricing settings object (same as GET response).
+
+### Order Arrived (Station Notification)
+
+Emitted to a **specific station's room** when a new order is created with stations, or when an existing order advances to a new station. This notifies the station screen that work is incoming.
+
+```javascript
+socket.on('notification', (payload) => {
+  if (payload.type === 'order_arrived') {
+    console.log(payload.title);   // "มีออเดอร์ใหม่เข้า" or "มีออเดอร์เข้า"
+    console.log(payload.message); // "ออเดอร์ ORD-0001 เข้าสถานีนี้แล้ว"
+  }
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `notification` | INBOUND | `station:<stationId>` | Order create (first station) or order update (station advancement) |
+
+**Payload:**
+
+```json
+{
+  "type": "order_arrived",
+  "title": "มีออเดอร์ใหม่เข้า",
+  "message": "ออเดอร์ ORD-0001 เข้าสถานีนี้แล้ว",
+  "referenceId": "69a98ee25bb1d35efb8cc1ff",
+  "referenceType": "Order",
+  "priority": "high",
+  "readStatus": false
+}
+```
+
+| Field | Description |
+|---|---|
+| `type` | Always `order_arrived` |
+| `title` | Thai text — "มีออเดอร์ใหม่เข้า" (new order) or "มีออเดอร์เข้า" (advanced order) |
+| `message` | Includes the order number |
+| `referenceId` | The order's `_id` |
+| `referenceType` | Always `Order` |
+| `priority` | Always `high` |
+
+<Note>
+  This notification is emitted directly to the station room (not to `user:<id>`), so it's received by any client that has joined `station:<stationId>` via `join_station_room` or `join-station`.
+</Note>
+
 ### Notification
 
-Sent to a specific user's personal room when a notification is created via the REST API.
+Sent to a specific user's personal room when a notification is created via the REST API or the QR scan endpoint.
 
 ```javascript
 socket.on('notification', (notification) => {
@@ -116,7 +322,7 @@ socket.on('notification', (notification) => {
 
 | Event | Direction | Emitted to | Triggered by |
 |---|---|---|---|
-| `notification` | INBOUND | `user:<recipientId>` | POST `/api/notifications` |
+| `notification` | INBOUND | `user:<recipientId>` | POST `/api/notifications`, QR scan `scan_out` action |
 
 **Payload:** The full populated notification object.
 

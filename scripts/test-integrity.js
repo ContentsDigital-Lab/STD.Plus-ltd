@@ -48,91 +48,65 @@ function checkIncludes(label, str, substring) {
 // ──────────────────────────────────────────────
 
 async function testCascadeDeletes(token) {
-  console.log('\n=== Cascade Delete Protection ===\n');
-
-  // Create a material
-  const mat = await api('POST', '/api/materials', token, { name: 'Cascade Glass', unit: 'sheet', reorderPoint: 5 });
-  const matId = mat.data.data._id;
-
-  // Create a customer
-  const cust = await api('POST', '/api/customers', token, { name: 'Cascade Customer' });
-  const custId = cust.data.data._id;
-
-  // Create an inventory referencing the material
-  const inv = await api('POST', '/api/inventories', token, { material: matId, stockType: 'Raw', quantity: 100, location: 'Warehouse A' });
-  const invId = inv.data.data._id;
-
-  // Try to delete material — should be blocked (referenced by inventory)
-  const r1 = await api('DELETE', `/api/materials/${matId}`, token);
-  check('DELETE material with inventory ref', r1.status, 409);
-  checkIncludes('  message mentions inventory', r1.data.message, 'inventory record(s)');
-
-  // Delete the inventory first, then material should succeed
-  await api('DELETE', `/api/inventories/${invId}`, token);
-  const r2 = await api('DELETE', `/api/materials/${matId}`, token);
-  check('DELETE material after inventory removed', r2.status, 200);
-
-  // Create fresh material + order to test customer cascade
-  const mat2 = await api('POST', '/api/materials', token, { name: 'Cascade Glass 2', unit: 'sheet', reorderPoint: 5 });
-  const matId2 = mat2.data.data._id;
-  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId2, quantity: 5 });
-  const ordId = ord.data.data._id;
-
-  // Try to delete customer — should be blocked (referenced by order)
-  const r3 = await api('DELETE', `/api/customers/${custId}`, token);
-  check('DELETE customer with order ref', r3.status, 409);
-  checkIncludes('  message mentions order', r3.data.message, 'order(s)');
-
-  // Try to delete material — should be blocked (referenced by order)
-  const r4 = await api('DELETE', `/api/materials/${matId2}`, token);
-  check('DELETE material with order ref', r4.status, 409);
-
-  // Try to delete order — should succeed (no children yet)
-  const r5 = await api('DELETE', `/api/orders/${ordId}`, token);
-  check('DELETE order with no children', r5.status, 200);
-
-  // Now create order + claim, test order cascade
-  const ord2 = await api('POST', '/api/orders', token, { customer: custId, material: matId2, quantity: 3 });
-  const ordId2 = ord2.data.data._id;
+  console.log('\n=== Cascade Delete ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
   const workerId = me.data.data._id;
 
-  const claim = await api('POST', `/api/orders/${ordId2}/claims`, token, {
+  // Material → cascades inventory
+  const mat = await api('POST', '/api/materials', token, { name: 'Cascade Glass', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const inv = await api('POST', '/api/inventories', token, { material: matId, stockType: 'Raw', quantity: 100, location: 'WH-A' });
+  const invId = inv.data.data._id;
+
+  const r1 = await api('DELETE', `/api/materials/${matId}`, token);
+  check('DELETE material cascades inventory', r1.status, 200);
+  const r1b = await api('GET', `/api/inventories/${invId}`, token);
+  check('  inventory also deleted', r1b.status, 404);
+
+  // Order → cascades claims, panes, production logs
+  const mat2 = await api('POST', '/api/materials', token, { name: 'Cascade Glass 2', unit: 'sheet', reorderPoint: 5 });
+  const matId2 = mat2.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'Cascade Customer' });
+  const custId = cust.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId2, quantity: 5 });
+  const ordId = ord.data.data._id;
+
+  const claim = await api('POST', `/api/orders/${ordId}/claims`, token, {
     source: 'worker', material: matId2, description: 'Test claim', reportedBy: workerId,
   });
   const claimId = claim.data.data._id;
 
-  // Try to delete order — should be blocked (has claim)
-  const r6 = await api('DELETE', `/api/orders/${ordId2}`, token);
-  check('DELETE order with claim ref', r6.status, 409);
-  checkIncludes('  message mentions claim', r6.data.message, 'claim(s)');
+  const pane = await api('POST', '/api/panes', token, { order: ordId });
+  const paneId = pane.data.data._id;
 
-  // Delete claim, then order, then material, then customer
-  await api('DELETE', `/api/claims/${claimId}`, token);
-  await api('DELETE', `/api/orders/${ordId2}`, token);
-  await api('DELETE', `/api/materials/${matId2}`, token);
-  await api('DELETE', `/api/customers/${custId}`, token);
+  const r2 = await api('DELETE', `/api/orders/${ordId}`, token);
+  check('DELETE order cascades children', r2.status, 200);
+  const r2b = await api('GET', `/api/claims/${claimId}`, token);
+  check('  claim also deleted', r2b.status, 404);
+  const r2c = await api('GET', `/api/panes/${paneId}`, token);
+  check('  pane also deleted', r2c.status, 404);
 
-  // Test bulk delete protection
+  // Customer → cascades orders + requests
+  const ord2 = await api('POST', '/api/orders', token, { customer: custId, material: matId2, quantity: 3 });
+  const ordId2 = ord2.data.data._id;
+
+  const r3 = await api('DELETE', `/api/customers/${custId}`, token);
+  check('DELETE customer cascades orders', r3.status, 200);
+  const r3b = await api('GET', `/api/orders/${ordId2}`, token);
+  check('  order also deleted', r3b.status, 404);
+
+  // Bulk delete materials with inventory refs → cascades
   const mat3 = await api('POST', '/api/materials', token, { name: 'Bulk Mat A', unit: 'kg', reorderPoint: 1 });
   const mat4 = await api('POST', '/api/materials', token, { name: 'Bulk Mat B', unit: 'kg', reorderPoint: 1 });
   const matId3 = mat3.data.data._id;
   const matId4 = mat4.data.data._id;
+  await api('POST', '/api/inventories', token, { material: matId3, stockType: 'Raw', quantity: 10, location: 'WH' });
 
-  const inv2 = await api('POST', '/api/inventories', token, { material: matId3, stockType: 'Raw', quantity: 10, location: 'WH' });
-  const invId2 = inv2.data.data._id;
+  const r4 = await api('DELETE', '/api/materials', token, { ids: [matId3, matId4] });
+  check('DELETE MANY materials cascades inventory', r4.status, 200);
 
-  // Bulk delete both materials — should be blocked (matId3 has inventory)
-  const r7 = await api('DELETE', '/api/materials', token, { ids: [matId3, matId4] });
-  check('DELETE MANY materials with ref', r7.status, 409);
-
-  // Clean up and retry
-  await api('DELETE', `/api/inventories/${invId2}`, token);
-  const r8 = await api('DELETE', '/api/materials', token, { ids: [matId3, matId4] });
-  check('DELETE MANY materials after cleanup', r8.status, 200);
-
-  // Worker cascade: create worker, assign to order, try delete
+  // Worker → cascades orders, notifications
   const w = await api('POST', '/api/workers', token, { name: 'Temp Worker', username: 'temp_cascade', password: 'temp123456', position: 'temp' });
   const wId = w.data.data._id;
   const mat5 = await api('POST', '/api/materials', token, { name: 'Worker Mat', unit: 'pc', reorderPoint: 1 });
@@ -142,14 +116,12 @@ async function testCascadeDeletes(token) {
   const ord3 = await api('POST', '/api/orders', token, { customer: custId2, material: matId5, quantity: 1, assignedTo: wId });
   const ordId3 = ord3.data.data._id;
 
-  const r9 = await api('DELETE', `/api/workers/${wId}`, token);
-  check('DELETE worker with order assignment', r9.status, 409);
-  checkIncludes('  message mentions order', r9.data.message, 'order(s)');
+  const r5 = await api('DELETE', `/api/workers/${wId}`, token);
+  check('DELETE worker cascades orders', r5.status, 200);
+  const r5b = await api('GET', `/api/orders/${ordId3}`, token);
+  check('  order also deleted', r5b.status, 404);
 
-  // Clean up
-  await api('DELETE', `/api/orders/${ordId3}`, token);
-  const r10 = await api('DELETE', `/api/workers/${wId}`, token);
-  check('DELETE worker after order removed', r10.status, 200);
+  await api('DELETE', `/api/materials/${matId2}`, token);
   await api('DELETE', `/api/materials/${matId5}`, token);
   await api('DELETE', `/api/customers/${custId2}`, token);
 }
@@ -237,8 +209,7 @@ async function testReferentialChecks(token) {
   check('UPDATE station with fake templateId', r13.status, 400);
   checkIncludes('  message says Station template', r13.data.message, 'Station template not found');
 
-  // Clean up
-  await api('DELETE', `/api/stations/${stationId}`, token);
+  // Clean up — cascade handles station under template
   await api('DELETE', `/api/station-templates/${tmplId}`, token);
   await api('DELETE', `/api/orders/${ordId}`, token);
   await api('DELETE', `/api/materials/${matId}`, token);
@@ -355,15 +326,10 @@ async function testMaterialLogCascade(token) {
   const child = await api('POST', '/api/material-logs', token, { material: matId, actionType: 'cut', quantityChanged: -10, parentLog: parentId });
   const childId = child.data.data._id;
 
-  // Try delete parent — should be blocked
   const r1 = await api('DELETE', `/api/material-logs/${parentId}`, token);
-  check('DELETE parent log with child ref', r1.status, 409);
-  checkIncludes('  message mentions child', r1.data.message, 'child log(s)');
-
-  // Delete child first, then parent
-  await api('DELETE', `/api/material-logs/${childId}`, token);
-  const r2 = await api('DELETE', `/api/material-logs/${parentId}`, token);
-  check('DELETE parent log after child removed', r2.status, 200);
+  check('DELETE parent log cascades child', r1.status, 200);
+  const r1b = await api('GET', `/api/material-logs/${childId}`, token);
+  check('  child log also deleted', r1b.status, 404);
 
   await api('DELETE', `/api/materials/${matId}`, token);
 }
@@ -383,19 +349,18 @@ async function testRequestCascade(token) {
   const req = await api('POST', '/api/requests', token, { details: { type: 'cut', quantity: 5 }, customer: custId });
   const reqId = req.data.data._id;
 
-  // Create order referencing this request
   const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 5, request: reqId });
   const ordId = ord.data.data._id;
 
-  // Try delete request — should be blocked
-  const r1 = await api('DELETE', `/api/requests/${reqId}`, token);
-  check('DELETE request with order ref', r1.status, 409);
-  checkIncludes('  message mentions order', r1.data.message, 'order(s)');
+  const pane = await api('POST', '/api/panes', token, { request: reqId, order: ordId });
+  const paneId = pane.data.data._id;
 
-  // Delete order first, then request
-  await api('DELETE', `/api/orders/${ordId}`, token);
-  const r2 = await api('DELETE', `/api/requests/${reqId}`, token);
-  check('DELETE request after order removed', r2.status, 200);
+  const r1 = await api('DELETE', `/api/requests/${reqId}`, token);
+  check('DELETE request cascades order + pane', r1.status, 200);
+  const r1b = await api('GET', `/api/orders/${ordId}`, token);
+  check('  order also deleted', r1b.status, 404);
+  const r1c = await api('GET', `/api/panes/${paneId}`, token);
+  check('  pane also deleted', r1c.status, 404);
 
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
@@ -414,17 +379,12 @@ async function testStationTemplateCascade(token) {
   const station = await api('POST', '/api/stations', token, { name: 'Cascade Station', templateId: tmplId });
   const stationId = station.data.data._id;
 
-  // Try delete template — should be blocked (referenced by station)
   const r1 = await api('DELETE', `/api/station-templates/${tmplId}`, token);
-  check('DELETE template with station ref', r1.status, 409);
-  checkIncludes('  message mentions station', r1.data.message, 'station(s)');
+  check('DELETE template cascades station', r1.status, 200);
+  const r1b = await api('GET', `/api/stations/${stationId}`, token);
+  check('  station also deleted', r1b.status, 404);
 
-  // Delete station first, then template should succeed
-  await api('DELETE', `/api/stations/${stationId}`, token);
-  const r2 = await api('DELETE', `/api/station-templates/${tmplId}`, token);
-  check('DELETE template after station removed', r2.status, 200);
-
-  // Bulk delete protection
+  // Bulk delete with refs
   const tmpl2 = await api('POST', '/api/station-templates', token, { name: 'Bulk A' });
   const tmpl3 = await api('POST', '/api/station-templates', token, { name: 'Bulk B' });
   const tmplId2 = tmpl2.data.data._id;
@@ -433,14 +393,10 @@ async function testStationTemplateCascade(token) {
   const station2 = await api('POST', '/api/stations', token, { name: 'Ref Station', templateId: tmplId2 });
   const stationId2 = station2.data.data._id;
 
-  // Bulk delete both templates — should be blocked (tmplId2 has station)
-  const r3 = await api('DELETE', '/api/station-templates', token, { ids: [tmplId2, tmplId3] });
-  check('DELETE MANY templates with ref', r3.status, 409);
-
-  // Clean up and retry
-  await api('DELETE', `/api/stations/${stationId2}`, token);
-  const r4 = await api('DELETE', '/api/station-templates', token, { ids: [tmplId2, tmplId3] });
-  check('DELETE MANY templates after cleanup', r4.status, 200);
+  const r2 = await api('DELETE', '/api/station-templates', token, { ids: [tmplId2, tmplId3] });
+  check('DELETE MANY templates cascades stations', r2.status, 200);
+  const r2b = await api('GET', `/api/stations/${stationId2}`, token);
+  check('  station also deleted', r2b.status, 404);
 }
 
 // ──────────────────────────────────────────────
@@ -749,6 +705,616 @@ async function testOrderNumbering(token) {
 }
 
 // ──────────────────────────────────────────────
+// 12. CLAIM AUTO-NUMBERING
+// ──────────────────────────────────────────────
+
+async function testClaimNumbering(token) {
+  console.log('\n=== Claim Auto-Numbering ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const mat = await api('POST', '/api/materials', token, { name: 'ClmNum Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'ClmNum Cust' });
+  const custId = cust.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 5 });
+  const ordId = ord.data.data._id;
+
+  // Create first claim — should get a claimNumber
+  const r1 = await api('POST', `/api/orders/${ordId}/claims`, token, {
+    source: 'worker', material: matId, description: 'Claim 1', reportedBy: workerId,
+  });
+  check('CREATE claim has claimNumber', r1.status, 201);
+  const num1 = r1.data.data.claimNumber;
+  check('  claimNumber is a string', typeof num1, 'string');
+  check('  claimNumber starts with CLM-', num1.startsWith('CLM-'), true);
+  console.log(`          got: ${num1}`);
+
+  // Create second claim — should get a different (incremented) number
+  const r2 = await api('POST', `/api/orders/${ordId}/claims`, token, {
+    source: 'customer', material: matId, description: 'Claim 2', reportedBy: workerId,
+  });
+  check('CREATE second claim has claimNumber', r2.status, 201);
+  const num2 = r2.data.data.claimNumber;
+  check('  claimNumber is different from first', num1 !== num2, true);
+  console.log(`          got: ${num2}`);
+
+  // Verify sequential
+  const seq1 = parseInt(num1.split('-')[1]);
+  const seq2 = parseInt(num2.split('-')[1]);
+  check('  second number is sequential', seq2, seq1 + 1);
+
+  // GET should include claimNumber
+  const r3 = await api('GET', `/api/claims/${r1.data.data._id}`, token);
+  check('GET claim includes claimNumber', r3.data.data.claimNumber, num1);
+
+  // Update should NOT change claimNumber
+  const r4 = await api('PATCH', `/api/claims/${r1.data.data._id}`, token, { description: 'Updated' });
+  check('UPDATE does not change claimNumber', r4.data.data.claimNumber, num1);
+
+  // Clean up — deleting order cascades claims
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 12b. CLAIM FROM PANE + PHOTOS
+// ──────────────────────────────────────────────
+
+async function testClaimFromPane(token) {
+  console.log('\n=== Claim From Pane + Photos ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const mat = await api('POST', '/api/materials', token, { name: 'ClaimPane Glass', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'ClaimPane Cust' });
+  const custId = cust.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 5 });
+  const ordId = ord.data.data._id;
+
+  const pane = await api('POST', '/api/panes', token, { order: ordId, material: matId });
+  const paneNumber = pane.data.data.paneNumber;
+  const paneId = pane.data.data._id;
+
+  // Create claim from pane number
+  const r1 = await api('POST', '/api/claims/from-pane', token, {
+    paneNumber,
+    source: 'worker',
+    description: 'Defect found via scan',
+    defectCode: 'scratch',
+    reportedBy: workerId,
+    photos: ['https://example.com/photo1.jpg', 'https://example.com/photo2.jpg'],
+  });
+  check('CREATE claim from pane', r1.status, 201);
+  check('  order auto-resolved', r1.data.data.order._id || r1.data.data.order, ordId);
+  check('  material auto-resolved', r1.data.data.material._id || r1.data.data.material, matId);
+  check('  pane linked', r1.data.data.pane._id || r1.data.data.pane, paneId);
+  check('  has claimNumber', typeof r1.data.data.claimNumber, 'string');
+  check('  photos array length', r1.data.data.photos.length, 2);
+  check('  photo URL correct', r1.data.data.photos[0], 'https://example.com/photo1.jpg');
+
+  // Create claim from fake pane number
+  const r2 = await api('POST', '/api/claims/from-pane', token, {
+    paneNumber: 'PNE-9999',
+    source: 'worker',
+    description: 'Fake pane',
+    reportedBy: workerId,
+  });
+  check('CREATE claim from fake pane', r2.status, 404);
+
+  // Photos on regular claim create (via order)
+  const r3 = await api('POST', `/api/orders/${ordId}/claims`, token, {
+    source: 'customer', material: matId, description: 'With photos', reportedBy: workerId,
+    photos: ['https://example.com/defect.jpg'],
+  });
+  check('CREATE regular claim with photos', r3.status, 201);
+  check('  photos included', r3.data.data.photos.length, 1);
+
+  // Claim without photos defaults to empty array
+  const r4 = await api('POST', `/api/orders/${ordId}/claims`, token, {
+    source: 'customer', material: matId, description: 'No photos', reportedBy: workerId,
+  });
+  check('CREATE claim without photos', r4.status, 201);
+  check('  photos defaults to empty', r4.data.data.photos.length, 0);
+
+  // Update claim photos
+  const r5 = await api('PATCH', `/api/claims/${r4.data.data._id}`, token, {
+    photos: ['https://example.com/added.jpg'],
+  });
+  check('UPDATE claim photos', r5.status, 200);
+  check('  photos updated', r5.data.data.photos.length, 1);
+
+  // Clean up
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 13. PANE AUTO-NUMBERING + QR CODE
+// ──────────────────────────────────────────────
+
+async function testPaneNumbering(token) {
+  console.log('\n=== Pane Auto-Numbering + QR Code ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'PaneNum Cust' });
+  const custId = cust.data.data._id;
+  const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 5 } });
+  const reqId = reqRes.data.data._id;
+
+  const r1 = await api('POST', '/api/panes', token, {
+    request: reqId, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered',
+  });
+  check('CREATE pane has paneNumber', r1.status, 201);
+  const num1 = r1.data.data.paneNumber;
+  check('  paneNumber is a string', typeof num1, 'string');
+  check('  paneNumber starts with PNE-', num1.startsWith('PNE-'), true);
+  console.log(`          got: ${num1}`);
+
+  const qr1 = r1.data.data.qrCode;
+  check('  qrCode is a string', typeof qr1, 'string');
+  check('  qrCode starts with STDPLUS:', qr1.startsWith('STDPLUS:'), true);
+  check('  qrCode matches paneNumber', qr1, `STDPLUS:${num1}`);
+  console.log(`          qrCode: ${qr1}`);
+
+  const r2 = await api('POST', '/api/panes', token, { request: reqId });
+  check('CREATE second pane has paneNumber', r2.status, 201);
+  const num2 = r2.data.data.paneNumber;
+  check('  paneNumber is different', num1 !== num2, true);
+  console.log(`          got: ${num2}`);
+
+  const seq1 = parseInt(num1.split('-')[1]);
+  const seq2 = parseInt(num2.split('-')[1]);
+  check('  second number is sequential', seq2, seq1 + 1);
+
+  const r3 = await api('GET', `/api/panes/${r1.data.data._id}`, token);
+  check('GET pane includes paneNumber', r3.data.data.paneNumber, num1);
+  check('GET pane includes qrCode', r3.data.data.qrCode, qr1);
+
+  const r4 = await api('PATCH', `/api/panes/${r1.data.data._id}`, token, { currentStation: 'cutting' });
+  check('UPDATE does not change paneNumber', r4.data.data.paneNumber, num1);
+  check('UPDATE does not change qrCode', r4.data.data.qrCode, qr1);
+
+  await api('DELETE', `/api/panes/${r1.data.data._id}`, token);
+  await api('DELETE', `/api/panes/${r2.data.data._id}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 14. PANE CASCADE DELETE
+// ──────────────────────────────────────────────
+
+async function testPaneCascade(token) {
+  console.log('\n=== Pane Cascade Delete ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const mat = await api('POST', '/api/materials', token, { name: 'PaneCasc Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'PaneCasc Cust' });
+  const custId = cust.data.data._id;
+  const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 1 } });
+  const reqId = reqRes.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1, request: reqId });
+  const ordId = ord.data.data._id;
+
+  const pane = await api('POST', '/api/panes', token, { request: reqId, order: ordId });
+  const paneId = pane.data.data._id;
+
+  const log = await api('POST', '/api/production-logs', token, {
+    pane: paneId, order: ordId, station: 'cutting', action: 'scan_in', operator: workerId,
+  });
+  const logId = log.data.data._id;
+
+  // Pane with production log → cascade deletes it
+  const r1 = await api('DELETE', `/api/panes/${paneId}`, token);
+  check('DELETE pane cascades production log', r1.status, 200);
+  const r1b = await api('GET', `/api/production-logs/${logId}`, token);
+  check('  production log also deleted', r1b.status, 404);
+
+  // Request with order → cascade deletes everything
+  const pane2 = await api('POST', '/api/panes', token, { request: reqId, order: ordId });
+  const pane2Id = pane2.data.data._id;
+
+  const r2 = await api('DELETE', `/api/requests/${reqId}`, token);
+  check('DELETE request cascades order + pane', r2.status, 200);
+  const r2b = await api('GET', `/api/orders/${ordId}`, token);
+  check('  order also deleted', r2b.status, 404);
+  const r2c = await api('GET', `/api/panes/${pane2Id}`, token);
+  check('  pane also deleted', r2c.status, 404);
+
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 15. PANE + PRODUCTION LOG REFERENTIAL CHECKS
+// ──────────────────────────────────────────────
+
+async function testPaneReferentialChecks(token) {
+  console.log('\n=== Pane + ProductionLog Referential Checks ===\n');
+
+  const fakeId = '000000000000000000000000';
+
+  // Create pane with fake request
+  const r0 = await api('POST', '/api/panes', token, { request: fakeId });
+  check('CREATE pane with fake request', r0.status, 400);
+  checkIncludes('  message says Request', r0.data.message, 'Request not found');
+
+  // Create valid request + pane (no order yet)
+  const mat = await api('POST', '/api/materials', token, { name: 'PaneRef Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'PaneRef Cust' });
+  const custId = cust.data.data._id;
+  const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 1 } });
+  const reqId = reqRes.data.data._id;
+
+  const pane = await api('POST', '/api/panes', token, { request: reqId });
+  check('CREATE pane with valid request (no order)', pane.status, 201);
+  const paneId = pane.data.data._id;
+  check('  pane.order is null', pane.data.data.order, null);
+  check('  pane.request is set', !!pane.data.data.request, true);
+
+  // Create order from request → panes get backfilled
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1, request: reqId });
+  const ordId = ord.data.data._id;
+  check('CREATE order from request', ord.status, 201);
+
+  const paneAfter = await api('GET', `/api/panes/${paneId}`, token);
+  check('  pane.order backfilled after order created', !!paneAfter.data.data.order, true);
+
+  // Create production log with fake pane
+  const r2 = await api('POST', '/api/production-logs', token, {
+    pane: fakeId, order: ordId, station: 'cutting', action: 'scan_in',
+  });
+  check('CREATE production-log with fake pane', r2.status, 400);
+  checkIncludes('  message says Pane', r2.data.message, 'Pane not found');
+
+  // Create production log with fake order
+  const r3 = await api('POST', '/api/production-logs', token, {
+    pane: paneId, order: fakeId, station: 'cutting', action: 'scan_in',
+  });
+  check('CREATE production-log with fake order', r3.status, 400);
+  checkIncludes('  message says Order', r3.data.message, 'Order not found');
+
+  // Create valid production log
+  const r4 = await api('POST', '/api/production-logs', token, {
+    pane: paneId, order: ordId, station: 'cutting', action: 'scan_in',
+  });
+  check('CREATE production-log with valid refs', r4.status, 201);
+
+  // Clean up — cascade deletes handle children automatically
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 16. REQUEST WITH INLINE PANES
+// ──────────────────────────────────────────────
+
+async function testRequestWithPanes(token) {
+  console.log('\n=== Request with Inline Panes ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'InlinePane Cust' });
+  const custId = cust.data.data._id;
+
+  const r1 = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 3 },
+    panes: [
+      { dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' },
+      { dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated' },
+      { dimensions: { width: 600, height: 400, thickness: 4 }, glassType: 'tempered' },
+    ],
+  });
+  check('CREATE request with panes', r1.status, 201);
+  check('  response includes panes array', Array.isArray(r1.data.data.panes), true);
+  check('  panes count matches', r1.data.data.panes.length, 3);
+
+  const reqId = r1.data.data._id;
+  const pane1 = r1.data.data.panes[0];
+  const pane2 = r1.data.data.panes[1];
+  const pane3 = r1.data.data.panes[2];
+
+  check('  pane 1 has paneNumber', !!pane1.paneNumber, true);
+  check('  pane 1 has qrCode', !!pane1.qrCode, true);
+  check('  pane 1 linked to request', pane1.request.toString(), reqId);
+  check('  pane 1 order is null', pane1.order, null);
+  check('  pane 2 has different paneNumber', pane1.paneNumber !== pane2.paneNumber, true);
+
+  // Verify panes via GET
+  const paneGet = await api('GET', `/api/panes/${pane1._id}`, token);
+  check('  GET pane linked to request', paneGet.status, 200);
+
+  // Create request without panes (still works)
+  const r2 = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'clear', quantity: 1 },
+  });
+  check('CREATE request without panes', r2.status, 201);
+  check('  no panes property', r2.data.data.panes, undefined);
+
+  // Clean up — cascade deletes handle panes automatically
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/requests/${r2.data.data._id}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 17. STICKER TEMPLATE CRUD
+// ──────────────────────────────────────────────
+
+async function testStickerTemplateCrud(token) {
+  console.log('\n=== Sticker Template CRUD ===\n');
+
+  const r1 = await api('POST', '/api/sticker-templates', token, {
+    width: 100, height: 50, elements: [{ type: 'text', value: 'PNE-0001' }],
+  });
+  check('CREATE sticker template', r1.status, 201);
+  const id1 = r1.data.data._id;
+  check('  name defaults to "default"', r1.data.data.name, 'default');
+  check('  width persisted', r1.data.data.width, 100);
+  check('  height persisted', r1.data.data.height, 50);
+  check('  elements is array', Array.isArray(r1.data.data.elements), true);
+  check('  elements length', r1.data.data.elements.length, 1);
+
+  const r2 = await api('POST', '/api/sticker-templates', token, {
+    name: 'large-label', width: 200, height: 100, elements: [],
+  });
+  check('CREATE second sticker template', r2.status, 201);
+  const id2 = r2.data.data._id;
+  check('  custom name persisted', r2.data.data.name, 'large-label');
+
+  const r3 = await api('GET', `/api/sticker-templates/${id1}`, token);
+  check('GET sticker template by ID', r3.status, 200);
+  check('  correct width', r3.data.data.width, 100);
+
+  const r4 = await api('GET', '/api/sticker-templates', token);
+  check('GET all sticker templates', r4.status, 200);
+  check('  returns array', Array.isArray(r4.data.data), true);
+
+  const r5 = await api('PATCH', `/api/sticker-templates/${id1}`, token, {
+    width: 150, elements: [{ type: 'text', value: 'updated' }, { type: 'barcode', value: 'QR' }],
+  });
+  check('UPDATE sticker template', r5.status, 200);
+  check('  width updated', r5.data.data.width, 150);
+  check('  elements updated', r5.data.data.elements.length, 2);
+
+  const r6 = await api('DELETE', `/api/sticker-templates/${id1}`, token);
+  check('DELETE sticker template', r6.status, 200);
+
+  const r7 = await api('GET', `/api/sticker-templates/${id1}`, token);
+  check('GET deleted template returns 404', r7.status, 404);
+
+  const r8 = await api('DELETE', '/api/sticker-templates', token, { ids: [id2] });
+  check('BULK DELETE sticker templates', r8.status, 200);
+}
+
+// ──────────────────────────────────────────────
+// 18. PRICING SETTINGS
+// ──────────────────────────────────────────────
+
+async function testPricingSettings(token) {
+  console.log('\n=== Pricing Settings (Singleton CRUD) ===\n');
+
+  // GET — auto-creates singleton with defaults on first access
+  const r1 = await api('GET', '/api/pricing-settings', token);
+  check('GET pricing-settings', r1.status, 200);
+  check('  singleton is true', r1.data.data.singleton, true);
+  check('  has glassPrices', typeof r1.data.data.glassPrices, 'object');
+  check('  has holePriceEach', typeof r1.data.data.holePriceEach, 'number');
+  check('  has notchPrice', typeof r1.data.data.notchPrice, 'number');
+  check('  default holePriceEach', r1.data.data.holePriceEach, 50);
+  check('  default notchPrice', r1.data.data.notchPrice, 100);
+
+  // Check default glass prices structure
+  const gp = r1.data.data.glassPrices;
+  const hasGlassTypes = gp && typeof gp === 'object' && Object.keys(gp).length > 0;
+  check('  glassPrices has entries', hasGlassTypes, true);
+
+  // PUT — update holePriceEach
+  const r2 = await api('PUT', '/api/pricing-settings', token, { holePriceEach: 75 });
+  check('PUT pricing-settings holePriceEach', r2.status, 200);
+  check('  holePriceEach updated', r2.data.data.holePriceEach, 75);
+  check('  notchPrice unchanged', r2.data.data.notchPrice, 100);
+
+  // PUT — update notchPrice
+  const r3 = await api('PUT', '/api/pricing-settings', token, { notchPrice: 150 });
+  check('PUT pricing-settings notchPrice', r3.status, 200);
+  check('  notchPrice updated', r3.data.data.notchPrice, 150);
+  check('  holePriceEach preserved', r3.data.data.holePriceEach, 75);
+
+  // PUT — update glassPrices partially
+  const r4 = await api('PUT', '/api/pricing-settings', token, {
+    glassPrices: { Custom: { '4mm': { pricePerSqFt: 40, grindingRate: 30 } } },
+  });
+  check('PUT pricing-settings glassPrices', r4.status, 200);
+  check('  Custom glass type added', r4.data.data.glassPrices.Custom !== undefined, true);
+  check('  Custom 4mm pricePerSqFt', r4.data.data.glassPrices.Custom['4mm'].pricePerSqFt, 40);
+
+  // PUT — updatedBy is set
+  check('  updatedBy is set', r4.data.data.updatedBy !== null, true);
+
+  // GET again — verify persistence
+  const r5 = await api('GET', '/api/pricing-settings', token);
+  check('GET after updates — holePriceEach', r5.data.data.holePriceEach, 75);
+  check('GET after updates — notchPrice', r5.data.data.notchPrice, 150);
+
+  // Restore defaults (including glassPrices)
+  await api('PUT', '/api/pricing-settings', token, {
+    holePriceEach: 50, notchPrice: 100,
+    glassPrices: r1.data.data.glassPrices,
+  });
+}
+
+// ──────────────────────────────────────────────
+// 19. PANE LOGS
+// ──────────────────────────────────────────────
+
+async function testPaneLogs(token) {
+  console.log('\n=== Pane Logs (GET + Timeline) ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const cust = await api('POST', '/api/customers', token, { name: 'PaneLog Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'PaneLog Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  // Create request with panes that have routing
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 1 },
+    panes: [{ routing: ['cutting', 'qc'], material: matId }],
+  });
+  const reqId = reqRes.data.data._id;
+  const pane = reqRes.data.data.panes[0];
+
+  const ordRes = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1, assignedTo: workerId,
+  });
+  const ordId = ordRes.data.data._id;
+
+  // Scan pane to create pane logs via the scan endpoint
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'scan_in' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
+
+  // GET /pane-logs — should have logs
+  const r1 = await api('GET', '/api/pane-logs', token);
+  check('GET /pane-logs', r1.status, 200);
+  check('  returns array', Array.isArray(r1.data.data), true);
+  check('  has logs', r1.data.data.length > 0, true);
+
+  // GET /pane-logs with filters
+  const r2 = await api('GET', '/api/pane-logs?station=cutting', token);
+  check('GET /pane-logs?station=cutting', r2.status, 200);
+  const cuttingLogs = r2.data.data.filter((l) => l.station === 'cutting');
+  check('  all logs are for cutting station', cuttingLogs.length, r2.data.data.length);
+
+  const r3 = await api('GET', '/api/pane-logs?action=scan_in', token);
+  check('GET /pane-logs?action=scan_in', r3.status, 200);
+
+  // Create a material log for timeline
+  const matLog = await api('POST', '/api/material-logs', token, {
+    material: matId, actionType: 'import', quantityChanged: 50,
+  });
+  const matLogId = matLog.data.data._id;
+
+  // GET /pane-logs/timeline?materialId=X
+  const r4 = await api('GET', `/api/pane-logs/timeline?materialId=${matId}`, token);
+  check('GET /pane-logs/timeline', r4.status, 200);
+  check('  returns array', Array.isArray(r4.data.data), true);
+  check('  has timeline entries', r4.data.data.length > 0, true);
+
+  // Verify timeline has both log types
+  const logTypes = [...new Set(r4.data.data.map((e) => e.logType))];
+  check('  has material_log entries', logTypes.includes('material_log'), true);
+
+  // Timeline without materialId should fail
+  const r5 = await api('GET', '/api/pane-logs/timeline', token);
+  check('GET /pane-logs/timeline (no materialId)', r5.status, 400);
+
+  // Cleanup — cascade deletes handle nested children
+  await api('DELETE', `/api/material-logs/${matLogId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 20. INVENTORY MOVE
+// ──────────────────────────────────────────────
+
+async function testInventoryMove(token) {
+  console.log('\n=== Inventory Move ===\n');
+
+  const mat = await api('POST', '/api/materials', token, { name: 'Move Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const inv = await api('POST', '/api/inventories', token, {
+    material: matId, stockType: 'Raw', quantity: 100, location: 'WH-A', storageColor: 'blue',
+  });
+  const sourceId = inv.data.data._id;
+
+  // Move 30 from WH-A to WH-B
+  const r1 = await api('POST', `/api/inventories/${sourceId}/move`, token, {
+    quantity: 30, toLocation: 'WH-B',
+  });
+  check('MOVE 30 from WH-A to WH-B', r1.status, 200);
+  check('  source quantity decreased', r1.data.data.source.quantity, 70);
+  check('  target quantity', r1.data.data.target.quantity, 30);
+  check('  target location', r1.data.data.target.location, 'WH-B');
+  check('  movedQuantity', r1.data.data.movedQuantity, 30);
+  const targetId = r1.data.data.target._id;
+
+  // Move 20 more to same location — should merge into existing target
+  const r2 = await api('POST', `/api/inventories/${sourceId}/move`, token, {
+    quantity: 20, toLocation: 'WH-B',
+  });
+  check('MOVE 20 more to WH-B (merge)', r2.status, 200);
+  check('  source quantity decreased', r2.data.data.source.quantity, 50);
+  check('  target quantity merged', r2.data.data.target.quantity, 50);
+  check('  target _id same as before', r2.data.data.target._id, targetId);
+
+  // Move with storageColor
+  const r3 = await api('POST', `/api/inventories/${sourceId}/move`, token, {
+    quantity: 10, toLocation: 'WH-C', toStorageColor: 'red',
+  });
+  check('MOVE with storageColor', r3.status, 200);
+  check('  target storageColor', r3.data.data.target.storageColor, 'red');
+  const targetId2 = r3.data.data.target._id;
+
+  // Insufficient stock — should fail
+  const r4 = await api('POST', `/api/inventories/${sourceId}/move`, token, {
+    quantity: 999, toLocation: 'WH-D',
+  });
+  check('MOVE insufficient stock', r4.status, 400);
+  checkIncludes('  message mentions insufficient', r4.data.message, 'Insufficient');
+
+  // Verify source unchanged after failed move
+  const r5 = await api('GET', `/api/inventories/${sourceId}`, token);
+  check('  source unchanged after failed move', r5.data.data.quantity, 40);
+
+  // Move from non-existent inventory
+  const r6 = await api('POST', '/api/inventories/000000000000000000000000/move', token, {
+    quantity: 1, toLocation: 'WH-X',
+  });
+  check('MOVE non-existent inventory', r6.status, 404);
+
+  // Cleanup
+  await api('DELETE', `/api/inventories/${sourceId}`, token);
+  await api('DELETE', `/api/inventories/${targetId}`, token);
+  await api('DELETE', `/api/inventories/${targetId2}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 21. HEALTH ENDPOINT
+// ──────────────────────────────────────────────
+
+async function testHealthEndpoint() {
+  console.log('\n=== Health Endpoint ===\n');
+
+  const res = await fetch(`${API}/api/health`);
+  const data = await res.json();
+
+  check('GET /health status', res.status, 200);
+  check('  success is true', data.success, true);
+  check('  data.status is healthy', data.data.status, 'healthy');
+  check('  has uptime', typeof data.data.uptime, 'number');
+  check('  has timestamp', typeof data.data.timestamp, 'string');
+  check('  uptime > 0', data.data.uptime >= 0, true);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -769,6 +1335,17 @@ async function main() {
   await testWithdrawalNotes(token);
   await testRequestNumbering(token);
   await testOrderNumbering(token);
+  await testClaimNumbering(token);
+  await testClaimFromPane(token);
+  await testPaneNumbering(token);
+  await testPaneCascade(token);
+  await testPaneReferentialChecks(token);
+  await testRequestWithPanes(token);
+  await testStickerTemplateCrud(token);
+  await testPricingSettings(token);
+  await testPaneLogs(token);
+  await testInventoryMove(token);
+  await testHealthEndpoint();
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

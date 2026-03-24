@@ -162,6 +162,8 @@ async function main() {
     '/api/stations',
     '/api/material-logs',
     '/api/notifications',
+    '/api/production-logs',
+    '/api/sticker-templates',
   ];
 
   for (const ep of endpoints) {
@@ -171,9 +173,78 @@ async function main() {
   }
 
   // ──────────────────────────────────────────
+  // 8. Pane endpoint (custom pagination)
+  // ──────────────────────────────────────────
+  console.log('\n=== Pane Endpoint (Custom) ===\n');
+
+  // Setup: create customer, material, order, panes
+  const cust = await api('POST', '/api/customers', token, { name: 'PaginationCust' });
+  const custId = cust.data.data._id;
+  const mat1 = await api('POST', '/api/materials', token, { name: 'PaginationMat', unit: 'sheet', reorderPoint: 1 });
+  const mat1Id = mat1.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: mat1Id, quantity: 5 });
+  const ordId = ord.data.data._id;
+
+  const paneIds = [];
+  for (let i = 0; i < 5; i++) {
+    const p = await api('POST', '/api/panes', token, {
+      order: ordId,
+      routing: ['cutting', 'qc'],
+      dimensions: { width: 100 * (i + 1), height: 200, thickness: 5 },
+      glassType: 'tempered',
+    });
+    paneIds.push(p.data.data._id);
+  }
+
+  const rPanes = await api('GET', '/api/panes', token);
+  check('GET /panes returns array', Array.isArray(rPanes.data.data), true);
+  check('GET /panes returns data', rPanes.data.data.length >= 5, true);
+
+  // Limit works
+  const rPanesLim = await api('GET', '/api/panes?limit=2', token);
+  check('GET /panes?limit=2', rPanesLim.data.data.length <= 2, true);
+
+  // Filter by order
+  const rPanesOrd = await api('GET', `/api/panes?order=${ordId}`, token);
+  check('GET /panes?order= filter', rPanesOrd.data.data.length, 5);
+
+  // Filter by station
+  const rPanesSt = await api('GET', '/api/panes?station=cutting', token);
+  check('GET /panes?station=cutting filter', rPanesSt.status, 200);
+  const allCutting = rPanesSt.data.data.every((p) => p.currentStation === 'cutting');
+  check('  all results at cutting', allCutting, true);
+
+  // Filter by status
+  const rPanesStat = await api('GET', '/api/panes?status=pending', token);
+  check('GET /panes?status=pending filter', rPanesStat.status, 200);
+
+  // Filter by material
+  const rPanesMat = await api('GET', `/api/panes?material=${mat1Id}`, token);
+  check('GET /panes?material= filter', rPanesMat.status, 200);
+
+  // ──────────────────────────────────────────
+  // 9. Pane Logs endpoint (no pagination metadata, just limit)
+  // ──────────────────────────────────────────
+  console.log('\n=== Pane Logs Endpoint ===\n');
+
+  const rPaneLogs = await api('GET', '/api/pane-logs', token);
+  check('GET /pane-logs returns data', rPaneLogs.status, 200);
+  check('  returns array', Array.isArray(rPaneLogs.data.data), true);
+
+  const rPaneLogsLim = await api('GET', '/api/pane-logs?limit=3', token);
+  check('GET /pane-logs?limit=3', rPaneLogsLim.status, 200);
+  check('  respects limit', rPaneLogsLim.data.data.length <= 3, true);
+
+  // ──────────────────────────────────────────
   // Cleanup
   // ──────────────────────────────────────────
-  console.log('\n--- Cleanup: deleting 25 materials ---\n');
+  console.log('\n--- Cleanup ---\n');
+  await api('DELETE', '/api/panes', token, { ids: paneIds });
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+  await api('DELETE', `/api/materials/${mat1Id}`, token);
+
+  console.log('--- Cleanup: deleting 25 materials ---\n');
   await api('DELETE', '/api/materials', token, { ids: materialIds });
   console.log('   Done\n');
 

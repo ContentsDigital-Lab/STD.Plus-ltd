@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const claimSchema = new mongoose.Schema({
+  claimNumber: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
   order: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Order',
@@ -16,10 +21,24 @@ const claimSchema = new mongoose.Schema({
     ref: 'Material',
     required: true,
   },
+  pane: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Pane',
+    default: null,
+  },
   description: {
     type: String,
     required: true,
     trim: true,
+  },
+  defectCode: {
+    type: String,
+    enum: ['broken', 'chipped', 'dimension_wrong', 'scratch', 'other'],
+    default: null,
+  },
+  defectStation: {
+    type: String,
+    default: null,
   },
   status: {
     type: String,
@@ -40,6 +59,15 @@ const claimSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Worker',
     default: null,
+  },
+  remadePane: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Pane',
+    default: null,
+  },
+  photos: {
+    type: [String],
+    default: [],
   },
   claimDate: {
     type: Date,

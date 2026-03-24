@@ -279,7 +279,25 @@
           "deadline": { "type": "string", "format": "date-time" },
           "deliveryLocation": { "type": "string" },
           "assignedTo": { "type": "string", "minLength": 1 },
-          "expectedDeliveryDate": { "type": "string", "format": "date-time" }
+          "expectedDeliveryDate": { "type": "string", "format": "date-time" },
+          "panes": {
+            "type": "array",
+            "description": "Optional array of panes to create alongside the request",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currentStation": { "type": "string", "description": "Current station name (matches routing entries)" },
+                "routing": { "type": "array", "items": { "type": "string" } },
+                "customRouting": { "type": "boolean" },
+                "dimensions": { "$ref": "#/components/schemas/Dimensions" },
+                "glassType": { "type": "string" },
+                "glassTypeLabel": { "type": "string" },
+                "processes": { "type": "array", "items": { "type": "string" } },
+                "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
+                "notes": { "type": "string" }
+              }
+            }
+          }
         }
       },
       "RequestUpdateBody": {
@@ -323,6 +341,10 @@
           "currentStationIndex": { "type": "integer", "minimum": 0 },
           "stationHistory": { "type": "array", "items": { "$ref": "#/components/schemas/StationHistoryEntry" } },
           "stationData": { "type": "object", "additionalProperties": true },
+          "paneCount": { "type": "integer", "default": 0 },
+          "panesCompleted": { "type": "integer", "default": 0 },
+          "progressPercent": { "type": "number", "default": 0 },
+          "stationBreakdown": { "type": "object", "additionalProperties": { "type": "integer" } },
           "notes": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
           "claim": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Claim" }] },
@@ -357,6 +379,10 @@
             }
           },
           "stationData": { "type": "object", "additionalProperties": true },
+          "paneCount": { "type": "integer", "minimum": 0, "description": "Total number of panes in this order" },
+          "panesCompleted": { "type": "integer", "minimum": 0, "description": "Number of panes completed" },
+          "progressPercent": { "type": "number", "minimum": 0, "maximum": 100, "description": "Overall completion percentage" },
+          "stationBreakdown": { "type": "object", "additionalProperties": { "type": "integer" }, "description": "Pane count per station" },
           "notes": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
           "claim": { "type": "string", "minLength": 1 },
@@ -388,6 +414,10 @@
             }
           },
           "stationData": { "type": "object", "additionalProperties": true },
+          "paneCount": { "type": "integer", "minimum": 0, "description": "Total number of panes in this order" },
+          "panesCompleted": { "type": "integer", "minimum": 0, "description": "Number of panes completed" },
+          "progressPercent": { "type": "number", "minimum": 0, "maximum": 100, "description": "Overall completion percentage" },
+          "stationBreakdown": { "type": "object", "additionalProperties": { "type": "integer" }, "description": "Pane count per station" },
           "notes": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
           "claim": { "type": "string", "minLength": 1 },
@@ -400,12 +430,14 @@
         "properties": {
           "_id": { "type": "string" },
           "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }] },
+          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
           "withdrawnBy": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
           "quantity": { "type": "integer", "minimum": 1 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "default": "pending" },
           "approvedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
+          "withdrawnDimensions": { "$ref": "#/components/schemas/Dimensions" },
           "notes": { "type": "string" },
           "withdrawnDate": { "type": "string", "format": "date-time" },
           "createdAt": { "type": "string", "format": "date-time" },
@@ -417,12 +449,14 @@
         "required": ["withdrawnBy", "material", "quantity", "stockType"],
         "properties": {
           "order": { "type": "string", "minLength": 1 },
+          "pane": { "type": "string", "minLength": 1 },
           "withdrawnBy": { "type": "string", "minLength": 1 },
           "material": { "type": "string", "minLength": 1 },
           "quantity": { "type": "integer", "minimum": 1 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "approvedBy": { "type": "string", "minLength": 1 },
+          "withdrawnDimensions": { "$ref": "#/components/schemas/Dimensions" },
           "notes": { "type": "string" },
           "withdrawnDate": { "type": "string", "format": "date-time" }
         }
@@ -431,12 +465,14 @@
         "type": "object",
         "properties": {
           "order": { "type": "string", "minLength": 1 },
+          "pane": { "type": "string", "minLength": 1 },
           "withdrawnBy": { "type": "string", "minLength": 1 },
           "material": { "type": "string", "minLength": 1 },
           "quantity": { "type": "integer", "minimum": 1 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "approvedBy": { "type": "string", "minLength": 1 },
+          "withdrawnDimensions": { "$ref": "#/components/schemas/Dimensions" },
           "notes": { "type": "string" },
           "withdrawnDate": { "type": "string", "format": "date-time" }
         }
@@ -445,14 +481,20 @@
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
+          "claimNumber": { "type": "string", "description": "Auto-generated unique identifier (e.g. CLM-0001)", "example": "CLM-0001" },
           "order": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Order" }] },
+          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
           "source": { "type": "string", "enum": ["customer", "worker"] },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
           "description": { "type": "string" },
+          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "other"], "nullable": true },
+          "defectStation": { "type": "string", "nullable": true },
           "decision": { "type": "string", "enum": ["destroy", "keep"], "nullable": true },
           "reportedBy": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "default": "pending" },
           "approvedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
+          "remadePane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
+          "photos": { "type": "array", "items": { "type": "string", "format": "uri" }, "default": [] },
           "claimDate": { "type": "string", "format": "date-time" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
@@ -464,11 +506,34 @@
         "properties": {
           "source": { "type": "string", "enum": ["customer", "worker"] },
           "material": { "type": "string", "minLength": 1 },
+          "pane": { "type": "string", "minLength": 1 },
           "description": { "type": "string", "minLength": 1 },
+          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "other"] },
+          "defectStation": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "decision": { "type": "string", "enum": ["destroy", "keep"] },
           "reportedBy": { "type": "string", "minLength": 1 },
           "approvedBy": { "type": "string", "minLength": 1 },
+          "remadePane": { "type": "string", "minLength": 1 },
+          "photos": { "type": "array", "items": { "type": "string", "format": "uri" } },
+          "claimDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ClaimFromPaneBody": {
+        "type": "object",
+        "required": ["paneNumber", "source", "description", "reportedBy"],
+        "properties": {
+          "paneNumber": { "type": "string", "minLength": 1, "description": "Pane number (e.g. PNE-0001). The endpoint auto-resolves the order and material from the pane.", "example": "PNE-0001" },
+          "source": { "type": "string", "enum": ["customer", "worker"] },
+          "description": { "type": "string", "minLength": 1 },
+          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "other"] },
+          "defectStation": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+          "decision": { "type": "string", "enum": ["destroy", "keep"] },
+          "reportedBy": { "type": "string", "minLength": 1 },
+          "approvedBy": { "type": "string", "minLength": 1 },
+          "remadePane": { "type": "string", "minLength": 1 },
+          "photos": { "type": "array", "items": { "type": "string", "format": "uri" } },
           "claimDate": { "type": "string", "format": "date-time" }
         }
       },
@@ -477,11 +542,16 @@
         "properties": {
           "source": { "type": "string", "enum": ["customer", "worker"] },
           "material": { "type": "string", "minLength": 1 },
+          "pane": { "type": "string", "minLength": 1 },
           "description": { "type": "string", "minLength": 1 },
+          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "other"] },
+          "defectStation": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "decision": { "type": "string", "enum": ["destroy", "keep"] },
           "reportedBy": { "type": "string", "minLength": 1 },
           "approvedBy": { "type": "string", "minLength": 1 },
+          "remadePane": { "type": "string", "minLength": 1 },
+          "photos": { "type": "array", "items": { "type": "string", "format": "uri" } },
           "claimDate": { "type": "string", "format": "date-time" }
         }
       },
@@ -546,7 +616,8 @@
         "properties": {
           "_id": { "type": "string" },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
-          "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut"] },
+          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
+          "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "nullable": true },
           "referenceType": { "type": "string", "enum": ["claim", "withdrawal"], "nullable": true },
           "quantityChanged": { "type": "number" },
@@ -563,7 +634,8 @@
         "required": ["material", "actionType", "quantityChanged"],
         "properties": {
           "material": { "type": "string", "minLength": 1 },
-          "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut"] },
+          "pane": { "type": "string", "minLength": 1 },
+          "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "minLength": 1 },
           "referenceType": { "type": "string", "enum": ["claim", "withdrawal"] },
           "quantityChanged": { "type": "number" },
@@ -577,7 +649,8 @@
         "type": "object",
         "properties": {
           "material": { "type": "string", "minLength": 1 },
-          "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut"] },
+          "pane": { "type": "string", "minLength": 1 },
+          "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "minLength": 1 },
           "referenceType": { "type": "string", "enum": ["claim", "withdrawal"] },
           "quantityChanged": { "type": "number" },
@@ -627,6 +700,205 @@
           "referenceType": { "type": "string", "minLength": 1 },
           "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
           "readStatus": { "type": "boolean" }
+        }
+      },
+      "Dimensions": {
+        "type": "object",
+        "properties": {
+          "width": { "type": "number", "minimum": 0 },
+          "height": { "type": "number", "minimum": 0 },
+          "thickness": { "type": "number", "minimum": 0 }
+        }
+      },
+      "EdgeTask": {
+        "type": "object",
+        "properties": {
+          "side": { "type": "string" },
+          "edgeProfile": { "type": "string" },
+          "machineType": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "in_progress", "completed"], "default": "pending" }
+        }
+      },
+      "QcResult": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "passed": { "type": "boolean" },
+          "note": { "type": "string" }
+        }
+      },
+      "Pane": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "paneNumber": { "type": "string", "description": "Auto-generated unique identifier (e.g. PNE-0001)", "example": "PNE-0001" },
+          "qrCode": { "type": "string", "description": "QR code value (e.g. STDPLUS:PNE-0001)", "example": "STDPLUS:PNE-0001" },
+          "request": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Request" }] },
+          "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }], "description": "Populated when an order is created from the request" },
+          "currentStation": { "type": "string", "description": "Current station name — defaults to first station in routing, or 'ready' if no routing" },
+          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"], "default": "pending" },
+          "routing": { "type": "array", "items": { "type": "string" } },
+          "customRouting": { "type": "boolean", "default": false },
+          "dimensions": { "$ref": "#/components/schemas/Dimensions" },
+          "glassType": { "type": "string" },
+          "glassTypeLabel": { "type": "string" },
+          "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
+          "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
+          "withdrawal": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Withdrawal" }] },
+          "remakeOf": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
+          "startedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "completedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "deliveredAt": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "PaneCreateBody": {
+        "type": "object",
+        "required": ["request"],
+        "properties": {
+          "request": { "type": "string", "minLength": 1, "description": "Request ID this pane belongs to" },
+          "order": { "type": "string", "minLength": 1, "description": "Order ID (optional, auto-filled when order is created from request)" },
+          "currentStation": { "type": "string", "minLength": 1, "description": "Station name (any valid station)" },
+          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"] },
+          "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "customRouting": { "type": "boolean" },
+          "dimensions": { "$ref": "#/components/schemas/Dimensions" },
+          "glassType": { "type": "string" },
+          "glassTypeLabel": { "type": "string" },
+          "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
+          "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
+          "withdrawal": { "type": "string", "minLength": 1 },
+          "remakeOf": { "type": "string", "minLength": 1 },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "completedAt": { "type": "string", "format": "date-time" },
+          "deliveredAt": { "type": "string", "format": "date-time" },
+          "notes": { "type": "string" }
+        }
+      },
+      "ScanBody": {
+        "type": "object",
+        "required": ["station", "action"],
+        "properties": {
+          "station": { "type": "string", "minLength": 1, "description": "The station where the scan is happening (must match the pane's current station)", "example": "cutting" },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out"], "description": "`scan_in` — acknowledge arrival, `start` — begin work, `complete` — mark work done (pane stays at station with `awaiting_scan_out` status), `scan_out` — handoff pane to next station (or mark completed if last station)" },
+          "operator": { "type": "string", "minLength": 1, "description": "Worker ID of the operator performing the scan. Defaults to the authenticated user if omitted." }
+        }
+      },
+      "ScanResult": {
+        "type": "object",
+        "properties": {
+          "pane": { "$ref": "#/components/schemas/Pane" },
+          "log": { "$ref": "#/components/schemas/ProductionLog" },
+          "nextStation": { "type": "string", "description": "The station the pane moved to (only present on `complete` action)", "example": "edging" }
+        }
+      },
+      "PaneUpdateBody": {
+        "type": "object",
+        "properties": {
+          "request": { "type": "string", "minLength": 1 },
+          "order": { "type": "string", "minLength": 1 },
+          "currentStation": { "type": "string", "minLength": 1, "description": "Station name (any valid station)" },
+          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"] },
+          "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "customRouting": { "type": "boolean" },
+          "dimensions": { "$ref": "#/components/schemas/Dimensions" },
+          "glassType": { "type": "string" },
+          "glassTypeLabel": { "type": "string" },
+          "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
+          "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
+          "withdrawal": { "type": "string", "minLength": 1 },
+          "remakeOf": { "type": "string", "minLength": 1 },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "completedAt": { "type": "string", "format": "date-time" },
+          "deliveredAt": { "type": "string", "format": "date-time" },
+          "notes": { "type": "string" }
+        }
+      },
+      "ProductionLog": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "pane": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Pane" }] },
+          "order": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Order" }] },
+          "station": { "type": "string" },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
+          "operator": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
+          "defectCode": { "type": "string", "nullable": true },
+          "reworkReason": { "type": "string", "nullable": true },
+          "qcResults": { "type": "array", "items": { "$ref": "#/components/schemas/QcResult" } },
+          "status": { "type": "string", "enum": ["pass", "fail", "rework"], "nullable": true },
+          "startedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "completedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "durationMs": { "type": "number", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProductionLogCreateBody": {
+        "type": "object",
+        "required": ["pane", "order", "station", "action"],
+        "properties": {
+          "pane": { "type": "string", "minLength": 1 },
+          "order": { "type": "string", "minLength": 1 },
+          "station": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
+          "operator": { "type": "string", "minLength": 1 },
+          "defectCode": { "type": "string" },
+          "reworkReason": { "type": "string" },
+          "qcResults": { "type": "array", "items": { "$ref": "#/components/schemas/QcResult" } },
+          "status": { "type": "string", "enum": ["pass", "fail", "rework"] },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "completedAt": { "type": "string", "format": "date-time" },
+          "durationMs": { "type": "number", "minimum": 0 }
+        }
+      },
+      "ProductionLogUpdateBody": {
+        "type": "object",
+        "properties": {
+          "pane": { "type": "string", "minLength": 1 },
+          "order": { "type": "string", "minLength": 1 },
+          "station": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
+          "operator": { "type": "string", "minLength": 1 },
+          "defectCode": { "type": "string" },
+          "reworkReason": { "type": "string" },
+          "qcResults": { "type": "array", "items": { "$ref": "#/components/schemas/QcResult" } },
+          "status": { "type": "string", "enum": ["pass", "fail", "rework"] },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "completedAt": { "type": "string", "format": "date-time" },
+          "durationMs": { "type": "number", "minimum": 0 }
+        }
+      },
+      "StickerTemplate": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string", "default": "default" },
+          "width": { "type": "number" },
+          "height": { "type": "number" },
+          "elements": { "type": "array", "items": {}, "description": "JSON array of sticker layout elements" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "StickerTemplateCreateBody": {
+        "type": "object",
+        "required": ["width", "height"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "description": "Unique name (defaults to 'default')" },
+          "width": { "type": "number", "minimum": 0 },
+          "height": { "type": "number", "minimum": 0 },
+          "elements": { "type": "array", "items": {}, "description": "JSON array of sticker layout elements" }
+        }
+      },
+      "StickerTemplateUpdateBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "width": { "type": "number", "minimum": 0 },
+          "height": { "type": "number", "minimum": 0 },
+          "elements": { "type": "array", "items": {}, "description": "JSON array of sticker layout elements" }
         }
       }
     },
@@ -1275,6 +1547,61 @@
         }
       }
     },
+    "/api/inventories/{id}/move": {
+      "post": {
+        "tags": ["Inventories"],
+        "summary": "Move inventory to another location",
+        "description": "Moves a specified quantity from the source inventory record to a target location. If an inventory record already exists at the target location (same material and stock type), the quantity is added to it; otherwise a new record is created. Any authenticated user can perform this action.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["quantity", "toLocation"],
+                "properties": {
+                  "quantity": { "type": "number", "minimum": 1, "description": "Amount to move" },
+                  "toLocation": { "type": "string", "minLength": 1, "description": "Destination location name" },
+                  "toStorageColor": { "type": "string", "description": "Storage color at destination (optional)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inventory moved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "source": { "$ref": "#/components/schemas/Inventory" },
+                            "target": { "$ref": "#/components/schemas/Inventory" },
+                            "movedQuantity": { "type": "number" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
     "/api/material-logs": {
       "get": {
         "tags": ["Material Logs"],
@@ -1362,6 +1689,7 @@
       "get": {
         "tags": ["Requests"],
         "summary": "List all requests",
+        "description": "Any authenticated user can list requests (read-only).",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           { "$ref": "#/components/parameters/PageParam" },
@@ -1370,18 +1698,21 @@
         ],
         "responses": {
           "200": { "description": "List of requests", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Request" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "post": {
         "tags": ["Requests"],
         "summary": "Create a request",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RequestCreateBody" } } } },
         "responses": {
           "201": { "description": "Request created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Request" } } }] } } } },
           "400": { "$ref": "#/components/responses/400" },
-          "401": { "$ref": "#/components/responses/401" }
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
         }
       },
       "delete": {
@@ -1402,18 +1733,20 @@
       "get": {
         "tags": ["Requests"],
         "summary": "Get request by ID",
+        "description": "Any authenticated user can view a request (read-only).",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
           "200": { "description": "Request found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Request" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
         }
       },
       "patch": {
         "tags": ["Requests"],
         "summary": "Update a request",
-        "description": "Workers can only update their own assigned resources.",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RequestUpdateBody" } } } },
@@ -1649,6 +1982,28 @@
           "200": { "description": "Claims deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/claims/from-pane": {
+      "post": {
+        "tags": ["Claims"],
+        "summary": "Create claim from pane number",
+        "description": "Convenience endpoint that accepts a `paneNumber` (e.g. `PNE-0001`) and automatically resolves the pane's `order` and `material`. No need to provide order ID in the URL or material ID in the body.\n\nRequires authentication. Any role can create.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ClaimFromPaneBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Claim created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Claim" } } }] } } } },
+          "400": { "description": "Pane has no associated order or material", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "description": "Pane not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
@@ -1938,6 +2293,466 @@
           "404": { "$ref": "#/components/responses/404" }
         }
       }
+    },
+    "/api/panes": {
+      "get": {
+        "tags": ["Panes"],
+        "summary": "List all panes",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
+        "responses": {
+          "200": { "description": "List of panes", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Pane" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Panes"],
+        "summary": "Create a pane",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaneCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Pane created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Pane" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Panes"],
+        "summary": "Delete multiple panes",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Panes deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "$ref": "#/components/responses/409" }
+        }
+      }
+    },
+    "/api/panes/{id}": {
+      "get": {
+        "tags": ["Panes"],
+        "summary": "Get pane by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Pane found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Pane" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Panes"],
+        "summary": "Update a pane",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaneUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Pane updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Pane" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Panes"],
+        "summary": "Delete a pane",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Pane deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "$ref": "#/components/responses/409" }
+        }
+      }
+    },
+    "/api/production-logs": {
+      "get": {
+        "tags": ["Production Logs"],
+        "summary": "List all production logs",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
+        "responses": {
+          "200": { "description": "List of production logs", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/ProductionLog" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Production Logs"],
+        "summary": "Create a production log",
+        "description": "Core endpoint — scan QR, log action, update pane state.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductionLogCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Production log created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/ProductionLog" } } }] } } } },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "delete": {
+        "tags": ["Production Logs"],
+        "summary": "Delete multiple production logs",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Production logs deleted", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/production-logs/{id}": {
+      "get": {
+        "tags": ["Production Logs"],
+        "summary": "Get production log by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Production log found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/ProductionLog" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Production Logs"],
+        "summary": "Update a production log",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductionLogUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Production log updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/ProductionLog" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Production Logs"],
+        "summary": "Delete a production log",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Production log deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/panes/{paneNumber}/scan": {
+      "post": {
+        "tags": ["QR Scanning"],
+        "summary": "Scan a pane (QR scan endpoint)",
+        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Two-step completion flow:**\n1. `complete` — Marks work as done at the current station. Pane stays at the same station with status `awaiting_scan_out`.\n2. `scan_out` — Hands off the pane to the next station (sets status to `pending`). If it's the last station, pane is marked `completed`.\n\n**Actions:**\n- `scan_in` — Acknowledge the pane at the station. Sets `startedAt` but does not move the pane.\n- `start` — Mark work as in-progress at the station.\n- `complete` — Finish work at the station. Pane stays at the station with status `awaiting_scan_out`, ready for handoff.\n- `scan_out` — Handoff: advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set.\n\n**Side effects:**\n- Creates a `PaneLog` entry for every scan action.\n- On `scan_out`: updates associated `Order` progress (`panesCompleted`, `progressPercent`) and order `status`.\n- On `scan_out`: emits WebSocket events `pane:updated`, `station:pane_arrived`, `order:updated`, `notification`.\n- On `scan_out`: creates a `Notification` for the order's assigned worker (if any).\n\n**Validations:**\n- `complete` and `scan_out` must be performed at the pane's `currentStation`.\n- `scan_out` requires pane status to be `awaiting_scan_out` (i.e. `complete` must be called first).\n- Scanning a pane that is already `completed` returns 400.\n\nRequires authentication. Any role can scan.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "paneNumber",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The pane number (e.g. `PNE-0001`). Strip the `STDPLUS:` prefix from QR codes before sending.",
+            "example": "PNE-0001"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ScanBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scan processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/ScanResult" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error — wrong station, already completed, or invalid operator", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "description": "Pane not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/pane-logs": {
+      "get": {
+        "tags": ["Pane Logs"],
+        "summary": "List pane logs",
+        "description": "Returns pane scan/action logs. Supports filtering by `station`, `action`, `orderId`, `paneId`, and `materialId`. Results are sorted by newest first.\n\nRequires authentication. All roles can read.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "station", "in": "query", "schema": { "type": "string" }, "description": "Filter by station name" },
+          { "name": "action", "in": "query", "schema": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out"] }, "description": "Filter by action type" },
+          { "name": "orderId", "in": "query", "schema": { "type": "string" }, "description": "Filter by order ID" },
+          { "name": "paneId", "in": "query", "schema": { "type": "string" }, "description": "Filter by pane ID" },
+          { "name": "materialId", "in": "query", "schema": { "type": "string" }, "description": "Filter by material ID" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "maximum": 500 }, "description": "Max number of logs to return (default 100, max 500)" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pane logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "_id": { "type": "string" },
+                              "pane": { "type": "object", "properties": { "_id": { "type": "string" }, "paneNumber": { "type": "string" }, "glassTypeLabel": { "type": "string" } } },
+                              "paneId": { "type": "object", "description": "Same as pane (frontend compatibility alias)" },
+                              "order": { "type": "string" },
+                              "orderId": { "type": "string", "description": "Same as order (frontend compatibility alias)" },
+                              "material": { "type": "string" },
+                              "station": { "type": "string" },
+                              "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out"] },
+                              "completedAt": { "type": "string", "format": "date-time", "nullable": true },
+                              "createdAt": { "type": "string", "format": "date-time" },
+                              "updatedAt": { "type": "string", "format": "date-time" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+    "/api/pane-logs/timeline": {
+      "get": {
+        "tags": ["Pane Logs"],
+        "summary": "Get material timeline",
+        "description": "Returns a merged, chronologically-sorted timeline of all events for a given material. Combines:\n- **MaterialLog** entries (import, withdraw, claim, cut, remake)\n- **PaneLog** entries (scan_in, start, complete at each station)\n\nEach entry has a `logType` field (`material_log` or `pane_log`) to distinguish the source.\n\nRequires authentication. All roles can read.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The material ID to get the timeline for"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Merged timeline of material and pane logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "_id": { "type": "string" },
+                              "logType": { "type": "string", "enum": ["material_log", "pane_log"] },
+                              "material": { "type": "string" },
+                              "createdAt": { "type": "string", "format": "date-time" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "materialId is required", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+    "/api/sticker-templates": {
+      "get": {
+        "tags": ["Sticker Templates"],
+        "summary": "List all sticker templates",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/PageParam" }, { "$ref": "#/components/parameters/LimitParam" }, { "$ref": "#/components/parameters/SortParam" }],
+        "responses": {
+          "200": { "description": "List of sticker templates", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/StickerTemplate" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Sticker Templates"],
+        "summary": "Create a sticker template",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StickerTemplateCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Sticker template created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/StickerTemplate" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      },
+      "delete": {
+        "tags": ["Sticker Templates"],
+        "summary": "Bulk delete sticker templates",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
+        "responses": {
+          "200": { "description": "Sticker templates deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/sticker-templates/{id}": {
+      "get": {
+        "tags": ["Sticker Templates"],
+        "summary": "Get a sticker template by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Sticker template found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/StickerTemplate" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Sticker Templates"],
+        "summary": "Update a sticker template",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StickerTemplateUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Sticker template updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/StickerTemplate" } } }] } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "tags": ["Sticker Templates"],
+        "summary": "Delete a sticker template",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Sticker template deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+    "/api/pricing-settings": {
+      "get": {
+        "tags": ["Pricing Settings"],
+        "summary": "Get pricing settings",
+        "description": "Returns the singleton pricing settings document. Auto-creates with defaults if none exists. Any authenticated user can read.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Pricing settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "_id": { "type": "string" },
+                            "singleton": { "type": "boolean", "example": true },
+                            "glassPrices": { "type": "object", "description": "Nested map: glass type → thickness → { pricePerSqFt, grindingRate }", "additionalProperties": { "type": "object", "additionalProperties": { "type": "object", "properties": { "pricePerSqFt": { "type": "number" }, "grindingRate": { "type": "number" } } } } },
+                            "holePriceEach": { "type": "number", "example": 50 },
+                            "notchPrice": { "type": "number", "example": 100 },
+                            "updatedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "type": "object", "properties": { "_id": { "type": "string" }, "name": { "type": "string" }, "role": { "type": "string" } } }] },
+                            "createdAt": { "type": "string", "format": "date-time" },
+                            "updatedAt": { "type": "string", "format": "date-time" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "put": {
+        "tags": ["Pricing Settings"],
+        "summary": "Update pricing settings",
+        "description": "Updates the singleton pricing settings. Requires **admin** or **manager** role. Emits `pricing:updated` WebSocket event to the `pricing` room.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "glassPrices": { "type": "object", "description": "Nested map: glass type → thickness → { pricePerSqFt, grindingRate }", "additionalProperties": { "type": "object", "additionalProperties": { "type": "object", "properties": { "pricePerSqFt": { "type": "number", "minimum": 0 }, "grindingRate": { "type": "number", "minimum": 0 } }, "required": ["pricePerSqFt", "grindingRate"] } } },
+                  "holePriceEach": { "type": "number", "minimum": 0 },
+                  "notchPrice": { "type": "number", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Pricing settings updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
     }
   },
   "tags": [
@@ -1954,6 +2769,12 @@
     { "name": "Claims" },
     { "name": "Station Templates" },
     { "name": "Stations" },
-    { "name": "Notifications" }
+    { "name": "Notifications" },
+    { "name": "Panes" },
+    { "name": "Pane Logs" },
+    { "name": "QR Scanning" },
+    { "name": "Production Logs" },
+    { "name": "Sticker Templates" },
+    { "name": "Pricing Settings" }
   ]
 }

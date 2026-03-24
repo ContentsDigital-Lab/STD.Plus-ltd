@@ -18,6 +18,10 @@
             "pages": ["index", "quickstart", "authentication"]
           },
           {
+            "group": "QR Scanning",
+            "pages": ["scanning/overview", "scanning/qr-checkin"]
+          },
+          {
             "group": "WebSocket",
             "pages": ["websocket/overview", "websocket/events"]
           }
@@ -80,7 +84,8 @@
               "api-reference/inventories/delete-multiple-inventories",
               "api-reference/inventories/get-inventory-by-id",
               "api-reference/inventories/update-an-inventory",
-              "api-reference/inventories/delete-an-inventory"
+              "api-reference/inventories/delete-an-inventory",
+              "api-reference/inventories/move-inventory"
             ]
           },
           {
@@ -131,11 +136,47 @@
             "group": "Claims",
             "pages": [
               "api-reference/claims/create-a-claim-for-an-order",
+              "api-reference/claims/create-a-claim-from-pane",
               "api-reference/claims/list-all-claims",
               "api-reference/claims/delete-multiple-claims",
               "api-reference/claims/get-claim-by-id",
               "api-reference/claims/update-a-claim",
               "api-reference/claims/delete-a-claim"
+            ]
+          },
+          {
+            "group": "Panes",
+            "pages": [
+              "api-reference/panes/list-all-panes",
+              "api-reference/panes/create-a-pane",
+              "api-reference/panes/delete-multiple-panes",
+              "api-reference/panes/get-pane-by-id",
+              "api-reference/panes/update-a-pane",
+              "api-reference/panes/delete-a-pane"
+            ]
+          },
+          {
+            "group": "Pane Logs",
+            "pages": [
+              "api-reference/pane-logs/list-pane-logs",
+              "api-reference/pane-logs/get-material-timeline"
+            ]
+          },
+          {
+            "group": "QR Scanning",
+            "pages": [
+              "api-reference/scanning/scan-a-pane"
+            ]
+          },
+          {
+            "group": "Production Logs",
+            "pages": [
+              "api-reference/production-logs/list-all-production-logs",
+              "api-reference/production-logs/create-a-production-log",
+              "api-reference/production-logs/delete-multiple-production-logs",
+              "api-reference/production-logs/get-production-log-by-id",
+              "api-reference/production-logs/update-a-production-log",
+              "api-reference/production-logs/delete-a-production-log"
             ]
           },
           {
@@ -169,6 +210,24 @@
               "api-reference/notifications/get-notification-by-id",
               "api-reference/notifications/update-a-notification",
               "api-reference/notifications/delete-a-notification"
+            ]
+          },
+          {
+            "group": "Sticker Templates",
+            "pages": [
+              "api-reference/sticker-templates/list-all-sticker-templates",
+              "api-reference/sticker-templates/create-a-sticker-template",
+              "api-reference/sticker-templates/delete-multiple-sticker-templates",
+              "api-reference/sticker-templates/get-sticker-template-by-id",
+              "api-reference/sticker-templates/update-a-sticker-template",
+              "api-reference/sticker-templates/delete-a-sticker-template"
+            ]
+          },
+          {
+            "group": "Pricing Settings",
+            "pages": [
+              "api-reference/pricing-settings/get-pricing-settings",
+              "api-reference/pricing-settings/update-pricing-settings"
             ]
           }
         ]

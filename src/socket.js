@@ -29,7 +29,10 @@ const setupSocket = (httpServer) => {
     }
   });
 
-  const ROOMS = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pricing', 'pane'];
+  const ROOMS = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production', 'pricing'];
+
+  const lastScanByStation = new Map();
+  const REPLAY_WINDOW_MS = 15000;
 
   io.on('connection', (socket) => {
     console.log(`[socket] ${socket.user.name} connected (${socket.id})`);
@@ -56,22 +59,63 @@ const setupSocket = (httpServer) => {
       });
     }
 
-    // Per-station rooms — workers join when viewing a specific station page
-    // stationId can be a MongoDB ObjectId string or any station identifier
-    socket.on('join_station_room', (stationId, callback) => {
-      if (!stationId || typeof stationId !== 'string') return;
-      const roomId = `station:${stationId}`;
-      socket.join(roomId);
-      console.log(`[socket] ${socket.user.name} joined station room ${roomId}`);
-      if (typeof callback === 'function') callback({ ok: true, room: roomId });
+    socket.on('join_station_room', (data, callback) => {
+      const stationId = data?.stationId;
+      if (!stationId) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
+        return;
+      }
+      const room = `station:${stationId}`;
+      socket.join(room);
+      console.log(`[socket] ${socket.user.name} joined room ${room}`);
+      if (typeof callback === 'function') callback({ ok: true, room });
     });
 
-    socket.on('leave_station_room', (stationId, callback) => {
-      if (!stationId || typeof stationId !== 'string') return;
-      const roomId = `station:${stationId}`;
-      socket.leave(roomId);
-      console.log(`[socket] ${socket.user.name} left station room ${roomId}`);
-      if (typeof callback === 'function') callback({ ok: true, room: roomId });
+    socket.on('leave_station_room', (data, callback) => {
+      const stationId = data?.stationId;
+      if (!stationId) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
+        return;
+      }
+      const room = `station:${stationId}`;
+      socket.leave(room);
+      console.log(`[socket] ${socket.user.name} left room ${room}`);
+      if (typeof callback === 'function') callback({ ok: true, room });
+    });
+
+    // QR check-in: station screen joins its room and receives replayed scans
+    socket.on('join-station', (stationId, callback) => {
+      if (!stationId || typeof stationId !== 'string') {
+        if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
+        return;
+      }
+      const room = `station:${stationId}`;
+      socket.join(room);
+      console.log(`[socket] ${socket.user.name} joined station ${stationId}`);
+
+      const last = lastScanByStation.get(stationId);
+      if (last && Date.now() - last.at < REPLAY_WINDOW_MS) {
+        socket.emit('scan-confirmed', { worker: last.worker, time: last.time });
+      }
+      if (typeof callback === 'function') callback({ ok: true, room });
+    });
+
+    // QR check-in: mobile sends scan, server broadcasts to the station room
+    socket.on('mobile-scan', (data, callback) => {
+      if (!data?.stationId) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
+        return;
+      }
+
+      const worker = data.worker || socket.user.name;
+      const time = new Date().toLocaleTimeString();
+      const room = `station:${data.stationId}`;
+
+      lastScanByStation.set(data.stationId, { worker, time, at: Date.now() });
+      io.to(room).emit('scan-confirmed', { worker, time });
+
+      console.log(`[socket] mobile-scan from ${socket.user.name} at station ${data.stationId}`);
+      if (typeof callback === 'function') callback({ ok: true });
     });
 
     socket.on('system_alert', (data) => {

@@ -30,7 +30,7 @@ All REST API routes are prefixed with `/api`.
 
 <Columns cols={2}>
   <Card title="REST API" icon="server" href="/quickstart">
-    Full CRUD for 11 resource types with Zod validation and JWT auth.
+    Full CRUD for 17 resource types with Zod validation and JWT auth.
   </Card>
   <Card title="Real-time WebSocket" icon="bolt" href="/websocket/overview">
     Live data events via Socket.IO with room-based subscriptions.
@@ -39,7 +39,7 @@ All REST API routes are prefixed with `/api`.
     JWT authentication with role-based access control (admin, manager, worker).
   </Card>
   <Card title="API Reference" icon="terminal" href="/api-reference/health/health-check">
-    71 endpoints across 13 resource groups with interactive playground.
+    97 endpoints across 19 resource groups with interactive playground.
   </Card>
 </Columns>
 
@@ -58,5 +58,11 @@ The API manages the following resources:
 | **Withdrawals** | Material withdrawal records |
 | **Orders** | Production orders |
 | **Claims** | Defect/claim reports tied to orders |
+| **Panes** | Individual glass panes tracked through production |
+| **Pane Logs** | Scan/action history and material timeline for panes |
+| **Production Logs** | Action history for every pane at each station |
+| **Station Templates** | Configurable UI schemas for station types |
 | **Stations** | Work stations in the production line |
 | **Notifications** | Real-time alerts for workers |
+| **Sticker Templates** | Configurable sticker label layouts |
+| **Pricing Settings** | Singleton pricing configuration for glass types |

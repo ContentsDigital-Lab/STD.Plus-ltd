@@ -10,22 +10,32 @@ const verifyReferences = async (refs) => {
   }
 };
 
-const blockDeleteIfReferenced = async (id, dependents) => {
-  for (const { model, field, label } of dependents) {
-    const count = await model.countDocuments({ [field]: id });
-    if (count > 0) {
-      throw new AppError(`Cannot delete: referenced by ${count} ${label}`, 409);
+const cascadeDeleteReferenced = async (id, dependents) => {
+  for (const { model, field, cascade, beforeDelete } of dependents) {
+    if (cascade || beforeDelete) {
+      const docs = await model.find({ [field]: id }).lean();
+      if (docs.length > 0) {
+        const ids = docs.map(d => d._id);
+        if (cascade) await cascadeDeleteManyReferenced(ids, cascade);
+        if (beforeDelete) await beforeDelete(docs);
+      }
     }
+    await model.deleteMany({ [field]: id });
   }
 };
 
-const blockDeleteManyIfReferenced = async (ids, dependents) => {
-  for (const { model, field, label } of dependents) {
-    const count = await model.countDocuments({ [field]: { $in: ids } });
-    if (count > 0) {
-      throw new AppError(`Cannot delete: referenced by ${count} ${label}`, 409);
+const cascadeDeleteManyReferenced = async (ids, dependents) => {
+  for (const { model, field, cascade, beforeDelete } of dependents) {
+    if (cascade || beforeDelete) {
+      const docs = await model.find({ [field]: { $in: ids } }).lean();
+      if (docs.length > 0) {
+        const childIds = docs.map(d => d._id);
+        if (cascade) await cascadeDeleteManyReferenced(childIds, cascade);
+        if (beforeDelete) await beforeDelete(docs);
+      }
     }
+    await model.deleteMany({ [field]: { $in: ids } });
   }
 };
 
-module.exports = { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced };
+module.exports = { verifyReferences, cascadeDeleteReferenced, cascadeDeleteManyReferenced };
