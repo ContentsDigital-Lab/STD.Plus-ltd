@@ -11,12 +11,23 @@ const emit = require('../utils/emitEvent');
 const { verifyReferences, blockDeleteIfReferenced, blockDeleteManyIfReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
+const Claim = require('../models/Claim');
+const MaterialLog = require('../models/MaterialLog');
+
 const POPULATE_FIELDS = [
   { path: 'order',    select: 'orderNumber code customer material' },
   { path: 'request',  select: 'code' },
   { path: 'withdrawal' },
   { path: 'remakeOf' },
   { path: 'material', select: 'name' },
+];
+
+const PANE_DEPENDENTS = [
+  { model: PaneLog, field: 'pane', label: 'pane log(s)' },
+  { model: ProductionLog, field: 'pane', label: 'production log(s)' },
+  { model: Claim, field: 'pane', label: 'claim(s)' },
+  { model: MaterialLog, field: 'pane', label: 'material log(s)' },
+  { model: Withdrawal, field: 'pane', label: 'withdrawal(s)' },
 ];
 
 // ── GET /panes ────────────────────────────────────────────────────────────────

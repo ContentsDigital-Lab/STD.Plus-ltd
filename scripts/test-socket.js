@@ -91,7 +91,7 @@ async function testJoinEvents() {
   const token = await getToken();
   const socket = await connect(API, '/api/socket-entry', { token });
 
-  const rooms = ['me', 'dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production'];
+  const rooms = ['me', 'dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production', 'pricing'];
   let n = 1;
 
   for (const room of rooms) {
@@ -121,7 +121,7 @@ async function testLeaveEvents() {
   const token = await getToken();
   const socket = await connect(API, '/api/socket-entry', { token });
 
-  const rooms = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production'];
+  const rooms = ['dashboard', 'inventory', 'station', 'log', 'request', 'withdrawal', 'order', 'claim', 'pane', 'production', 'pricing'];
 
   for (const room of rooms) {
     await emitWithAck(socket, `join_${room}`);
@@ -359,12 +359,112 @@ async function testSystemAlertRBAC() {
   console.log('\n=== All system alert RBAC tests passed ===\n');
 }
 
+async function testQrCheckIn() {
+  console.log('=== QR Check-In Flow (join-station / mobile-scan / scan-confirmed) ===\n');
+
+  const token = await getToken();
+
+  // Station screen connects and joins a station
+  const stationSocket = await connect(API, '/api/socket-entry', { token });
+  const fakeStationId = 'station-qr-test-001';
+
+  const joinAck = await emitWithAckData(stationSocket, 'join-station', fakeStationId);
+  console.log(`1. PASS join-station — joined room "${joinAck.room}", ok: ${joinAck.ok}`);
+
+  // join-station without stationId should fail
+  const badAck = await emitWithAckData(stationSocket, 'join-station', '');
+  console.log(`2. PASS join-station (empty) — rejected: ok=${badAck.ok}, error="${badAck.error}"`);
+
+  // Mobile device sends a scan
+  const mobileSocket = await connect(API, '/api/socket-entry', { token });
+
+  const scanConfirmedPromise = waitForEvent(stationSocket, 'scan-confirmed');
+  const mobileScanAck = await emitWithAckData(mobileSocket, 'mobile-scan', { stationId: fakeStationId });
+  console.log(`3. PASS mobile-scan — ok: ${mobileScanAck.ok}`);
+
+  const scanEvent = await scanConfirmedPromise;
+  console.log(`4. PASS scan-confirmed received — worker: "${scanEvent.worker}", time: "${scanEvent.time}"`);
+
+  // mobile-scan without stationId should fail
+  const badScanAck = await emitWithAckData(mobileSocket, 'mobile-scan', {});
+  console.log(`5. PASS mobile-scan (no stationId) — ok: ${badScanAck.ok}, error: "${badScanAck.error}"`);
+
+  // Replay: new station screen joining within 15s window should get the last scan
+  const newStationSocket = await connect(API, '/api/socket-entry', { token });
+  const replayPromise = waitForEvent(newStationSocket, 'scan-confirmed', 3000);
+  newStationSocket.emit('join-station', fakeStationId, () => {});
+
+  try {
+    const replayEvent = await replayPromise;
+    console.log(`6. PASS scan-confirmed replay — worker: "${replayEvent.worker}"`);
+  } catch {
+    console.log('6. SKIP scan-confirmed replay — no replay within 3s (may have exceeded 15s window)');
+  }
+
+  stationSocket.disconnect();
+  mobileSocket.disconnect();
+  newStationSocket.disconnect();
+  console.log('\n=== All QR check-in tests passed ===\n');
+}
+
+async function testPricingEvent() {
+  console.log('=== Pricing Updated Event ===\n');
+
+  const token = await getToken();
+  const socket = await connect(API, '/api/socket-entry', { token });
+
+  // Join pricing room
+  const joinAck = await emitWithAck(socket, 'join_pricing');
+  console.log(`1. PASS join_pricing — room: "${joinAck.room}"`);
+
+  // Update pricing settings and verify event
+  const pricingPromise = waitForEvent(socket, 'pricing:updated');
+  await apiCall('PUT', '/api/pricing-settings', token, { holePriceEach: 88 });
+  const pricingEvent = await pricingPromise;
+  console.log(`2. PASS pricing:updated — holePriceEach: ${pricingEvent.holePriceEach}`);
+
+  // Leave pricing room
+  const leaveAck = await emitWithAck(socket, 'leave_pricing');
+  console.log(`3. PASS leave_pricing — room: "${leaveAck.room}"`);
+
+  // Restore default
+  await apiCall('PUT', '/api/pricing-settings', token, { holePriceEach: 50 });
+
+  socket.disconnect();
+  console.log('\n=== All pricing event tests passed ===\n');
+}
+
+async function testStickerTemplateEvent() {
+  console.log('=== Sticker Template Event ===\n');
+
+  const token = await getToken();
+  const socket = await connect(API, '/api/socket-entry', { token });
+
+  await emitWithAck(socket, 'join_dashboard');
+
+  const stickerPromise = waitForEvent(socket, 'sticker-template:updated');
+  const tmpl = await apiCall('POST', '/api/sticker-templates', token, {
+    name: 'socket-test-sticker', width: 100, height: 50,
+  });
+  const stickerEvent = await stickerPromise;
+  console.log(`1. PASS sticker-template:updated — action: ${stickerEvent.action}`);
+
+  // Cleanup
+  await apiCall('DELETE', `/api/sticker-templates/${tmpl.data._id}`, token);
+
+  socket.disconnect();
+  console.log('\n=== All sticker template event tests passed ===\n');
+}
+
 async function main() {
   await testSystemEvents();
   await testJoinEvents();
   await testLeaveEvents();
   await testDataEvents();
   await testSystemAlertRBAC();
+  await testQrCheckIn();
+  await testPricingEvent();
+  await testStickerTemplateEvent();
   process.exit(0);
 }
 

@@ -1082,6 +1082,234 @@ async function testStickerTemplateCrud(token) {
 }
 
 // ──────────────────────────────────────────────
+// 18. PRICING SETTINGS
+// ──────────────────────────────────────────────
+
+async function testPricingSettings(token) {
+  console.log('\n=== Pricing Settings (Singleton CRUD) ===\n');
+
+  // GET — auto-creates singleton with defaults on first access
+  const r1 = await api('GET', '/api/pricing-settings', token);
+  check('GET pricing-settings', r1.status, 200);
+  check('  singleton is true', r1.data.data.singleton, true);
+  check('  has glassPrices', typeof r1.data.data.glassPrices, 'object');
+  check('  has holePriceEach', typeof r1.data.data.holePriceEach, 'number');
+  check('  has notchPrice', typeof r1.data.data.notchPrice, 'number');
+  check('  default holePriceEach', r1.data.data.holePriceEach, 50);
+  check('  default notchPrice', r1.data.data.notchPrice, 100);
+
+  // Check default glass prices structure
+  const gp = r1.data.data.glassPrices;
+  check('  has Clear glass type', gp.Clear !== undefined, true);
+  check('  Clear has 5mm', gp.Clear['5mm'] !== undefined, true);
+  check('  Clear 5mm has pricePerSqFt', typeof gp.Clear['5mm'].pricePerSqFt, 'number');
+  check('  Clear 5mm has grindingRate', typeof gp.Clear['5mm'].grindingRate, 'number');
+
+  // PUT — update holePriceEach
+  const r2 = await api('PUT', '/api/pricing-settings', token, { holePriceEach: 75 });
+  check('PUT pricing-settings holePriceEach', r2.status, 200);
+  check('  holePriceEach updated', r2.data.data.holePriceEach, 75);
+  check('  notchPrice unchanged', r2.data.data.notchPrice, 100);
+
+  // PUT — update notchPrice
+  const r3 = await api('PUT', '/api/pricing-settings', token, { notchPrice: 150 });
+  check('PUT pricing-settings notchPrice', r3.status, 200);
+  check('  notchPrice updated', r3.data.data.notchPrice, 150);
+  check('  holePriceEach preserved', r3.data.data.holePriceEach, 75);
+
+  // PUT — update glassPrices partially
+  const r4 = await api('PUT', '/api/pricing-settings', token, {
+    glassPrices: { Custom: { '4mm': { pricePerSqFt: 40, grindingRate: 30 } } },
+  });
+  check('PUT pricing-settings glassPrices', r4.status, 200);
+  check('  Custom glass type added', r4.data.data.glassPrices.Custom !== undefined, true);
+  check('  Custom 4mm pricePerSqFt', r4.data.data.glassPrices.Custom['4mm'].pricePerSqFt, 40);
+
+  // PUT — updatedBy is set
+  check('  updatedBy is set', r4.data.data.updatedBy !== null, true);
+
+  // GET again — verify persistence
+  const r5 = await api('GET', '/api/pricing-settings', token);
+  check('GET after updates — holePriceEach', r5.data.data.holePriceEach, 75);
+  check('GET after updates — notchPrice', r5.data.data.notchPrice, 150);
+
+  // Restore defaults
+  await api('PUT', '/api/pricing-settings', token, { holePriceEach: 50, notchPrice: 100 });
+}
+
+// ──────────────────────────────────────────────
+// 19. PANE LOGS
+// ──────────────────────────────────────────────
+
+async function testPaneLogs(token) {
+  console.log('\n=== Pane Logs (GET + Timeline) ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const cust = await api('POST', '/api/customers', token, { name: 'PaneLog Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'PaneLog Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  // Create request with panes that have routing
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 1 },
+    panes: [{ routing: ['cutting', 'qc'], material: matId }],
+  });
+  const reqId = reqRes.data.data._id;
+  const pane = reqRes.data.data.panes[0];
+
+  const ordRes = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1, assignedTo: workerId,
+  });
+  const ordId = ordRes.data.data._id;
+
+  // Scan pane to create pane logs via the scan endpoint
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'scan_in' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
+
+  // GET /pane-logs — should have logs
+  const r1 = await api('GET', '/api/pane-logs', token);
+  check('GET /pane-logs', r1.status, 200);
+  check('  returns array', Array.isArray(r1.data.data), true);
+  check('  has logs', r1.data.data.length > 0, true);
+
+  // GET /pane-logs with filters
+  const r2 = await api('GET', '/api/pane-logs?station=cutting', token);
+  check('GET /pane-logs?station=cutting', r2.status, 200);
+  const cuttingLogs = r2.data.data.filter((l) => l.station === 'cutting');
+  check('  all logs are for cutting station', cuttingLogs.length, r2.data.data.length);
+
+  const r3 = await api('GET', '/api/pane-logs?action=scan_in', token);
+  check('GET /pane-logs?action=scan_in', r3.status, 200);
+
+  // Create a material log for timeline
+  const matLog = await api('POST', '/api/material-logs', token, {
+    material: matId, actionType: 'import', quantityChanged: 50,
+  });
+  const matLogId = matLog.data.data._id;
+
+  // GET /pane-logs/timeline?materialId=X
+  const r4 = await api('GET', `/api/pane-logs/timeline?materialId=${matId}`, token);
+  check('GET /pane-logs/timeline', r4.status, 200);
+  check('  returns array', Array.isArray(r4.data.data), true);
+  check('  has timeline entries', r4.data.data.length > 0, true);
+
+  // Verify timeline has both log types
+  const logTypes = [...new Set(r4.data.data.map((e) => e.logType))];
+  check('  has material_log entries', logTypes.includes('material_log'), true);
+
+  // Timeline without materialId should fail
+  const r5 = await api('GET', '/api/pane-logs/timeline', token);
+  check('GET /pane-logs/timeline (no materialId)', r5.status, 400);
+
+  // Cleanup
+  const prodLogs = await api('GET', '/api/production-logs?limit=100', token);
+  const paneProdLogs = prodLogs.data.data.filter((l) => (l.pane?._id || l.pane) === pane._id);
+  if (paneProdLogs.length > 0) {
+    await api('DELETE', '/api/production-logs', token, { ids: paneProdLogs.map((l) => l._id) });
+  }
+  const notifs = await api('GET', '/api/notifications?limit=100', token);
+  const scanNotifs = notifs.data.data.filter((n) => n.type === 'pane_arrived');
+  if (scanNotifs.length > 0) {
+    await api('DELETE', '/api/notifications', token, { ids: scanNotifs.map((n) => n._id) });
+  }
+  await api('DELETE', `/api/material-logs/${matLogId}`, token);
+  await api('DELETE', `/api/panes/${pane._id}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 20. INVENTORY MOVE
+// ──────────────────────────────────────────────
+
+async function testInventoryMove(token) {
+  console.log('\n=== Inventory Move ===\n');
+
+  const mat = await api('POST', '/api/materials', token, { name: 'Move Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const inv = await api('POST', '/api/inventories', token, {
+    material: matId, stockType: 'Raw', quantity: 100, location: 'WH-A', storageColor: 'blue',
+  });
+  const sourceId = inv.data.data._id;
+
+  // Move 30 from WH-A to WH-B
+  const r1 = await api('POST', `/api/inventories/${sourceId}/move`, token, {
+    quantity: 30, toLocation: 'WH-B',
+  });
+  check('MOVE 30 from WH-A to WH-B', r1.status, 200);
+  check('  source quantity decreased', r1.data.data.source.quantity, 70);
+  check('  target quantity', r1.data.data.target.quantity, 30);
+  check('  target location', r1.data.data.target.location, 'WH-B');
+  check('  movedQuantity', r1.data.data.movedQuantity, 30);
+  const targetId = r1.data.data.target._id;
+
+  // Move 20 more to same location — should merge into existing target
+  const r2 = await api('POST', `/api/inventories/${sourceId}/move`, token, {
+    quantity: 20, toLocation: 'WH-B',
+  });
+  check('MOVE 20 more to WH-B (merge)', r2.status, 200);
+  check('  source quantity decreased', r2.data.data.source.quantity, 50);
+  check('  target quantity merged', r2.data.data.target.quantity, 50);
+  check('  target _id same as before', r2.data.data.target._id, targetId);
+
+  // Move with storageColor
+  const r3 = await api('POST', `/api/inventories/${sourceId}/move`, token, {
+    quantity: 10, toLocation: 'WH-C', toStorageColor: 'red',
+  });
+  check('MOVE with storageColor', r3.status, 200);
+  check('  target storageColor', r3.data.data.target.storageColor, 'red');
+  const targetId2 = r3.data.data.target._id;
+
+  // Insufficient stock — should fail
+  const r4 = await api('POST', `/api/inventories/${sourceId}/move`, token, {
+    quantity: 999, toLocation: 'WH-D',
+  });
+  check('MOVE insufficient stock', r4.status, 400);
+  checkIncludes('  message mentions insufficient', r4.data.message, 'Insufficient');
+
+  // Verify source unchanged after failed move
+  const r5 = await api('GET', `/api/inventories/${sourceId}`, token);
+  check('  source unchanged after failed move', r5.data.data.quantity, 40);
+
+  // Move from non-existent inventory
+  const r6 = await api('POST', '/api/inventories/000000000000000000000000/move', token, {
+    quantity: 1, toLocation: 'WH-X',
+  });
+  check('MOVE non-existent inventory', r6.status, 404);
+
+  // Cleanup
+  await api('DELETE', `/api/inventories/${sourceId}`, token);
+  await api('DELETE', `/api/inventories/${targetId}`, token);
+  await api('DELETE', `/api/inventories/${targetId2}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 21. HEALTH ENDPOINT
+// ──────────────────────────────────────────────
+
+async function testHealthEndpoint() {
+  console.log('\n=== Health Endpoint ===\n');
+
+  const res = await fetch(`${API}/api/health`);
+  const data = await res.json();
+
+  check('GET /health status', res.status, 200);
+  check('  success is true', data.success, true);
+  check('  data.status is healthy', data.data.status, 'healthy');
+  check('  has uptime', typeof data.data.uptime, 'number');
+  check('  has timestamp', typeof data.data.timestamp, 'string');
+  check('  uptime > 0', data.data.uptime >= 0, true);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -1108,6 +1336,10 @@ async function main() {
   await testPaneReferentialChecks(token);
   await testRequestWithPanes(token);
   await testStickerTemplateCrud(token);
+  await testPricingSettings(token);
+  await testPaneLogs(token);
+  await testInventoryMove(token);
+  await testHealthEndpoint();
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

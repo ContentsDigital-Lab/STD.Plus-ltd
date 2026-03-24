@@ -40,6 +40,24 @@ async function blast(method, path, token, count) {
   return results;
 }
 
+async function testHealthEndpoint() {
+  console.log('\n=== Health Endpoint Verification ===\n');
+
+  const res = await fetch(`${API}/api/health`);
+  const data = await res.json();
+
+  check('GET /health status', res.status, 200);
+  check('  success is true', data.success, true);
+  check('  data.status is healthy', data.data.status, 'healthy');
+  check('  has uptime (number)', typeof data.data.uptime, 'number');
+  check('  uptime >= 0', data.data.uptime >= 0, true);
+  check('  has timestamp (string)', typeof data.data.timestamp, 'string');
+
+  // Verify timestamp is valid ISO date
+  const ts = new Date(data.data.timestamp);
+  check('  timestamp is valid date', !isNaN(ts.getTime()), true);
+}
+
 async function testPublicRateLimit() {
   console.log('\n=== Public Rate Limit (IP-based) ===\n');
 
@@ -112,6 +130,7 @@ async function testAuthRateLimit() {
 async function main() {
   console.log('=== Rate Limit Test Suite ===');
 
+  await testHealthEndpoint();
   await testPublicRateLimit();
   await waitForWindowReset();
   await testAuthRateLimit();

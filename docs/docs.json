@@ -155,6 +155,13 @@
             ]
           },
           {
+            "group": "Pane Logs",
+            "pages": [
+              "api-reference/pane-logs/list-pane-logs",
+              "api-reference/pane-logs/get-material-timeline"
+            ]
+          },
+          {
             "group": "QR Scanning",
             "pages": [
               "api-reference/scanning/scan-a-pane"

@@ -2463,6 +2463,111 @@
         }
       }
     },
+    "/api/pane-logs": {
+      "get": {
+        "tags": ["Pane Logs"],
+        "summary": "List pane logs",
+        "description": "Returns pane scan/action logs. Supports filtering by `station`, `action`, `orderId`, `paneId`, and `materialId`. Results are sorted by newest first.\n\nRequires authentication. All roles can read.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "station", "in": "query", "schema": { "type": "string" }, "description": "Filter by station name" },
+          { "name": "action", "in": "query", "schema": { "type": "string", "enum": ["scan_in", "start", "complete"] }, "description": "Filter by action type" },
+          { "name": "orderId", "in": "query", "schema": { "type": "string" }, "description": "Filter by order ID" },
+          { "name": "paneId", "in": "query", "schema": { "type": "string" }, "description": "Filter by pane ID" },
+          { "name": "materialId", "in": "query", "schema": { "type": "string" }, "description": "Filter by material ID" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "maximum": 500 }, "description": "Max number of logs to return (default 100, max 500)" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pane logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "_id": { "type": "string" },
+                              "pane": { "type": "object", "properties": { "_id": { "type": "string" }, "paneNumber": { "type": "string" }, "glassTypeLabel": { "type": "string" } } },
+                              "paneId": { "type": "object", "description": "Same as pane (frontend compatibility alias)" },
+                              "order": { "type": "string" },
+                              "orderId": { "type": "string", "description": "Same as order (frontend compatibility alias)" },
+                              "material": { "type": "string" },
+                              "station": { "type": "string" },
+                              "action": { "type": "string", "enum": ["scan_in", "start", "complete"] },
+                              "completedAt": { "type": "string", "format": "date-time", "nullable": true },
+                              "createdAt": { "type": "string", "format": "date-time" },
+                              "updatedAt": { "type": "string", "format": "date-time" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+    "/api/pane-logs/timeline": {
+      "get": {
+        "tags": ["Pane Logs"],
+        "summary": "Get material timeline",
+        "description": "Returns a merged, chronologically-sorted timeline of all events for a given material. Combines:\n- **MaterialLog** entries (import, withdraw, claim, cut, remake)\n- **PaneLog** entries (scan_in, start, complete at each station)\n\nEach entry has a `logType` field (`material_log` or `pane_log`) to distinguish the source.\n\nRequires authentication. All roles can read.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The material ID to get the timeline for"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Merged timeline of material and pane logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "_id": { "type": "string" },
+                              "logType": { "type": "string", "enum": ["material_log", "pane_log"] },
+                              "material": { "type": "string" },
+                              "createdAt": { "type": "string", "format": "date-time" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "materialId is required", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
     "/api/sticker-templates": {
       "get": {
         "tags": ["Sticker Templates"],
@@ -2623,6 +2728,7 @@
     { "name": "Stations" },
     { "name": "Notifications" },
     { "name": "Panes" },
+    { "name": "Pane Logs" },
     { "name": "QR Scanning" },
     { "name": "Production Logs" },
     { "name": "Sticker Templates" },

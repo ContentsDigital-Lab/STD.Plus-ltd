@@ -534,6 +534,106 @@ async function testNotificationPreferences(tokens) {
   });
 }
 
+async function testStickerTemplates(tokens) {
+  console.log('\n=== Sticker Templates (admin+manager CU, admin-only D) ===\n');
+  const path = '/api/sticker-templates';
+  const body = { width: 100, height: 50, elements: [{ type: 'text', value: 'test' }] };
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /sticker-templates   (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /sticker-templates   (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /sticker-templates   (worker)', r3.status, 200);
+
+  const r4 = await api('POST', path, tokens.admin, { ...body, name: 'rbac-admin' });
+  check('POST   /sticker-templates   (admin)', r4.status, 201);
+  const id1 = r4.data.data?._id;
+
+  const r5 = await api('POST', path, tokens.manager, { ...body, name: 'rbac-manager' });
+  check('POST   /sticker-templates   (manager)', r5.status, 201);
+  const id2 = r5.data.data?._id;
+
+  const r6 = await api('POST', path, tokens.worker, { ...body, name: 'rbac-worker' });
+  check('POST   /sticker-templates   (worker)', r6.status, 403);
+
+  if (id1) {
+    const r7 = await api('PATCH', `${path}/${id1}`, tokens.manager, { width: 200 });
+    check('PATCH  /sticker-templates/:id (manager)', r7.status, 200);
+    const r8 = await api('PATCH', `${path}/${id1}`, tokens.worker, { width: 300 });
+    check('PATCH  /sticker-templates/:id (worker)', r8.status, 403);
+
+    const r9 = await api('DELETE', `${path}/${id1}`, tokens.worker);
+    check('DELETE /sticker-templates/:id (worker)', r9.status, 403);
+    const r10 = await api('DELETE', `${path}/${id1}`, tokens.manager);
+    check('DELETE /sticker-templates/:id (manager)', r10.status, 403);
+    const r11 = await api('DELETE', `${path}/${id1}`, tokens.admin);
+    check('DELETE /sticker-templates/:id (admin)', r11.status, 200);
+  }
+
+  if (id2) await api('DELETE', `${path}/${id2}`, tokens.admin);
+}
+
+async function testPricingSettings(tokens) {
+  console.log('\n=== Pricing Settings (all read, admin+manager update) ===\n');
+  const path = '/api/pricing-settings';
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /pricing-settings    (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /pricing-settings    (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /pricing-settings    (worker)', r3.status, 200);
+
+  const r4 = await api('PUT', path, tokens.admin, { holePriceEach: 75 });
+  check('PUT    /pricing-settings    (admin)', r4.status, 200);
+
+  const r5 = await api('PUT', path, tokens.manager, { holePriceEach: 80 });
+  check('PUT    /pricing-settings    (manager)', r5.status, 200);
+
+  const r6 = await api('PUT', path, tokens.worker, { holePriceEach: 99 });
+  check('PUT    /pricing-settings    (worker)', r6.status, 403);
+
+  // Restore default
+  await api('PUT', path, tokens.admin, { holePriceEach: 50 });
+}
+
+async function testAuthEdgeCases(tokens) {
+  console.log('\n=== Auth Edge Cases ===\n');
+
+  // No token
+  const r1 = await api('GET', '/api/workers', null);
+  check('GET    /workers (no token)', r1.status, 401);
+
+  // Malformed Bearer header
+  const r2 = await fetch(`${API}/api/workers`, {
+    headers: { Authorization: 'Bearer' },
+  });
+  check('GET    /workers (empty Bearer)', r2.status, 401);
+
+  // Invalid token
+  const r3 = await api('GET', '/api/workers', 'invalid-token-string');
+  check('GET    /workers (invalid token)', r3.status, 401);
+
+  // Logout (stateless — should return 200)
+  const r4 = await api('POST', '/api/auth/logout', tokens.worker);
+  check('POST   /auth/logout (worker)', r4.status, 200);
+
+  // Invalid login
+  const r5 = await api('POST', '/api/auth/login', null, { username: 'admin', password: 'wrongpass' });
+  check('POST   /auth/login (bad password)', r5.status, 401);
+
+  const r6 = await api('POST', '/api/auth/login', null, { username: 'nonexistent', password: 'test123' });
+  check('POST   /auth/login (bad username)', r6.status, 401);
+
+  // Missing fields
+  const r7 = await api('POST', '/api/auth/login', null, { username: 'admin' });
+  check('POST   /auth/login (missing password)', r7.status, 400);
+
+  const r8 = await api('POST', '/api/auth/login', null, {});
+  check('POST   /auth/login (empty body)', r8.status, 400);
+}
+
 async function main() {
   console.log('=== RBAC Test Suite ===\n');
   console.log('Setting up users...');
@@ -589,6 +689,9 @@ async function main() {
   await testProductionLogs(tokens, custId, matId);
   await testNotifications(tokens, workerId);
   await testNotificationPreferences(tokens);
+  await testStickerTemplates(tokens);
+  await testPricingSettings(tokens);
+  await testAuthEdgeCases(tokens);
 
   // Cleanup shared test data
   await api('DELETE', `/api/materials/${matId}`, adminToken);
