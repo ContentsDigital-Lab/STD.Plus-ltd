@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const STATION_COLORS = ['sky', 'blue', 'violet', 'pink', 'red', 'orange', 'yellow', 'green', 'teal', 'slate'];
+
 const stationSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -10,6 +12,11 @@ const stationSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'StationTemplate',
     required: true,
+  },
+  colorId: {
+    type: String,
+    enum: STATION_COLORS,
+    default: 'sky',
   },
   status: {
     type: String,

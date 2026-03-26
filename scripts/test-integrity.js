@@ -400,6 +400,57 @@ async function testStationTemplateCascade(token) {
 }
 
 // ──────────────────────────────────────────────
+// 6b. STATION colorId FIELD
+// ──────────────────────────────────────────────
+
+async function testStationColorId(token) {
+  console.log('\n=== Station colorId Field ===\n');
+
+  const tmpl = await api('POST', '/api/station-templates', token, { name: 'Color Template' });
+  const tmplId = tmpl.data.data._id;
+
+  // Create station with colorId
+  const r1 = await api('POST', '/api/stations', token, { name: 'Pink Station', templateId: tmplId, colorId: 'pink' });
+  check('CREATE station with colorId', r1.status, 201);
+  const stationId = r1.data.data._id;
+  check('  colorId persisted', r1.data.data.colorId, 'pink');
+
+  // Create station without colorId — should default to "sky"
+  const r2 = await api('POST', '/api/stations', token, { name: 'Default Station', templateId: tmplId });
+  check('CREATE station without colorId (default)', r2.status, 201);
+  const stationId2 = r2.data.data._id;
+  check('  default colorId is sky', r2.data.data.colorId, 'sky');
+
+  // GET by ID — colorId present
+  const r3 = await api('GET', `/api/stations/${stationId}`, token);
+  check('GET station includes colorId', r3.data.data.colorId, 'pink');
+
+  // GET all — colorId present
+  const r4 = await api('GET', '/api/stations', token);
+  const found = r4.data.data.find((s) => s._id === stationId);
+  check('GET all includes colorId', found?.colorId, 'pink');
+
+  // UPDATE colorId
+  const r5 = await api('PATCH', `/api/stations/${stationId}`, token, { colorId: 'teal' });
+  check('UPDATE station colorId', r5.status, 200);
+  check('  colorId updated', r5.data.data.colorId, 'teal');
+  check('  name preserved', r5.data.data.name, 'Pink Station');
+
+  // UPDATE with invalid colorId — should fail validation
+  const r6 = await api('PATCH', `/api/stations/${stationId}`, token, { colorId: 'rainbow' });
+  check('UPDATE with invalid colorId', r6.status, 400);
+
+  // CREATE with invalid colorId — should fail validation
+  const r7 = await api('POST', '/api/stations', token, { name: 'Bad Station', templateId: tmplId, colorId: 'neon' });
+  check('CREATE with invalid colorId', r7.status, 400);
+
+  // Clean up
+  await api('DELETE', `/api/stations/${stationId}`, token);
+  await api('DELETE', `/api/stations/${stationId2}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // 7. NOTIFICATION PREFERENCES VALIDATION
 // ──────────────────────────────────────────────
 
@@ -1491,6 +1542,7 @@ async function main() {
   await testMaterialLogCascade(token);
   await testRequestCascade(token);
   await testStationTemplateCascade(token);
+  await testStationColorId(token);
   await testNotificationPreferences(token);
   await testOrderNewFields(token);
   await testWithdrawalNotes(token);
