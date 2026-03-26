@@ -35,6 +35,14 @@ const paneSchema = new mongoose.Schema({
     thickness: { type: Number, default: 0 },
   },
 
+  jobType:        { type: String, default: '' },
+  rawGlass: {
+    glassType:     { type: String, default: '' },
+    color:         { type: String, default: '' },
+    thickness:     { type: Number, default: 0  },
+    sheetsPerPane: { type: Number, default: 1  },
+  },
+
   glassType:      { type: String, default: '' },
   glassTypeLabel: { type: String, default: '' },
   processes:      { type: [String], default: [] },

@@ -22,6 +22,13 @@ const paneItemSchema = z.object({
     height: z.number().min(0).optional(),
     thickness: z.number().min(0).optional(),
   }).optional(),
+  jobType: z.string().optional(),
+  rawGlass: z.object({
+    glassType:     z.string().optional(),
+    color:         z.string().optional(),
+    thickness:     z.number().min(0).optional(),
+    sheetsPerPane: z.number().int().min(1).optional(),
+  }).optional(),
   glassType: z.string().optional(),
   glassTypeLabel: z.string().optional(),
   processes: z.array(z.string().min(1)).optional(),

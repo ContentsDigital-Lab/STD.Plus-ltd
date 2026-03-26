@@ -93,8 +93,8 @@ async function testBasicScanFlow(token) {
     customer: custId,
     details: { type: 'tempered', quantity: 2 },
     panes: [
-      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' },
-      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated' },
+      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered', jobType: 'Tempered', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 } },
+      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 } },
     ],
   });
   check('CREATE request with panes', reqRes.status, 201);
@@ -104,6 +104,10 @@ async function testBasicScanFlow(token) {
   const pane2 = reqRes.data.data.panes[1];
   check('  pane 1 has paneNumber', !!pane1.paneNumber, true);
   check('  pane 2 has paneNumber', !!pane2.paneNumber, true);
+  check('  pane 1 jobType', pane1.jobType, 'Tempered');
+  check('  pane 1 rawGlass.sheetsPerPane', pane1.rawGlass.sheetsPerPane, 1);
+  check('  pane 2 jobType', pane2.jobType, 'Laminated');
+  check('  pane 2 rawGlass.sheetsPerPane', pane2.rawGlass.sheetsPerPane, 2);
   console.log(`          pane 1: ${pane1.paneNumber}, pane 2: ${pane2.paneNumber}`);
 
   const ordRes = await api('POST', '/api/orders', token, {
@@ -121,7 +125,8 @@ async function testBasicScanFlow(token) {
   // Verify panes got order + material backfilled
   const pane1Get = await api('GET', `/api/panes/${pane1._id}`, token);
   check('  pane 1 order backfilled', !!pane1Get.data.data.order, true);
-  check('  pane 1 material backfilled', String(pane1Get.data.data.material), String(matId));
+  const backfilledMat = pane1Get.data.data.material;
+  check('  pane 1 material backfilled', String(backfilledMat?._id || backfilledMat), String(matId));
 
   // ── verify pane starts at first routing station (cutting) ──
   check('  pane 1 starts at routing[0]', pane1.currentStation, 'cutting');
@@ -179,6 +184,12 @@ async function testBasicScanFlow(token) {
   check('  pane stays at qc', r6.data.data.pane.currentStation, 'qc');
   check('  status is completed', r6.data.data.pane.currentStatus, 'completed');
   check('  completedAt is set', !!r6.data.data.pane.completedAt, true);
+
+  // ── verify jobType + rawGlass survived scan flow ──
+  const pane1Final = await api('GET', `/api/panes/${pane1._id}`, token);
+  check('  jobType preserved after scan', pane1Final.data.data.jobType, 'Tempered');
+  check('  rawGlass.glassType preserved', pane1Final.data.data.rawGlass.glassType, 'Clear');
+  check('  rawGlass.sheetsPerPane preserved', pane1Final.data.data.rawGlass.sheetsPerPane, 1);
 
   // ── verify order progress ──
   const ordAfter = await api('GET', `/api/orders/${ordId}`, token);
@@ -411,13 +422,13 @@ async function testWebSocketEvents(token) {
   let paneEventPromise = waitForEvent(socket, 'pane:updated');
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'scan_in' });
   const scanInEvent = await paneEventPromise;
-  check('WS pane:updated on scan_in', scanInEvent.action, 'updated');
+  check('WS pane:updated on scan_in', scanInEvent.action, 'scanned');
 
   // ── complete at cutting → expect pane:updated (stays at cutting, awaiting scan_out) ──
   paneEventPromise = waitForEvent(socket, 'pane:updated');
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
   const completeEvent = await paneEventPromise;
-  check('WS pane:updated on complete', completeEvent.action, 'updated');
+  check('WS pane:updated on complete', completeEvent.action, 'scanned');
 
   // ── scan_out at cutting → expect pane:updated + notification (pane arrives at qc) ──
   paneEventPromise = waitForEvent(socket, 'pane:updated');
@@ -425,7 +436,7 @@ async function testWebSocketEvents(token) {
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'scan_out' });
 
   const scanOutEvent = await paneEventPromise;
-  check('WS pane:updated on scan_out', scanOutEvent.action, 'updated');
+  check('WS pane:updated on scan_out', scanOutEvent.action, 'scanned');
 
   const notifEvent = await notifPromise;
   check('WS notification fired', notifEvent.type, 'pane_arrived');
@@ -441,7 +452,7 @@ async function testWebSocketEvents(token) {
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'qc', action: 'scan_out' });
 
   const finalPaneEvent = await paneEventPromise;
-  check('WS pane:updated on final scan_out', finalPaneEvent.action, 'updated');
+  check('WS pane:updated on final scan_out', finalPaneEvent.action, 'scanned');
 
   const orderEvent = await orderEventPromise;
   check('WS order:updated fired', orderEvent.action, 'updated');

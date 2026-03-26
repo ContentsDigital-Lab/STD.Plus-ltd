@@ -968,7 +968,8 @@ async function testPaneReferentialChecks(token) {
 
   const paneAfter = await api('GET', `/api/panes/${paneId}`, token);
   check('  pane.order backfilled after order created', !!paneAfter.data.data.order, true);
-  check('  pane.material backfilled after order created', String(paneAfter.data.data.material), String(matId));
+  const backfilledMat = paneAfter.data.data.material;
+  check('  pane.material backfilled after order created', String(backfilledMat?._id || backfilledMat), String(matId));
 
   // Create production log with fake pane
   const r2 = await api('POST', '/api/production-logs', token, {
@@ -1045,6 +1046,87 @@ async function testRequestWithPanes(token) {
   // Clean up — cascade deletes handle panes automatically
   await api('DELETE', `/api/requests/${reqId}`, token);
   await api('DELETE', `/api/requests/${r2.data.data._id}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 16b. PANE jobType + rawGlass FIELDS
+// ──────────────────────────────────────────────
+
+async function testPaneNewFields(token) {
+  console.log('\n=== Pane jobType + rawGlass Fields ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'PaneFields Cust' });
+  const custId = cust.data.data._id;
+  const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 1 } });
+  const reqId = reqRes.data.data._id;
+
+  // Create pane with jobType + rawGlass
+  const r1 = await api('POST', '/api/panes', token, {
+    request: reqId,
+    dimensions: { width: 800, height: 600, thickness: 5 },
+    jobType: 'Laminated',
+    rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 5, sheetsPerPane: 2 },
+  });
+  check('CREATE pane with jobType + rawGlass', r1.status, 201);
+  const paneId = r1.data.data._id;
+  check('  jobType persisted', r1.data.data.jobType, 'Laminated');
+  check('  rawGlass.glassType', r1.data.data.rawGlass.glassType, 'Clear');
+  check('  rawGlass.color', r1.data.data.rawGlass.color, 'เขียว');
+  check('  rawGlass.thickness', r1.data.data.rawGlass.thickness, 5);
+  check('  rawGlass.sheetsPerPane', r1.data.data.rawGlass.sheetsPerPane, 2);
+
+  // GET — verify persistence
+  const r2 = await api('GET', `/api/panes/${paneId}`, token);
+  check('GET pane jobType', r2.data.data.jobType, 'Laminated');
+  check('  rawGlass.glassType', r2.data.data.rawGlass.glassType, 'Clear');
+  check('  rawGlass.sheetsPerPane', r2.data.data.rawGlass.sheetsPerPane, 2);
+
+  // UPDATE — change jobType and partial rawGlass
+  const r3 = await api('PATCH', `/api/panes/${paneId}`, token, {
+    jobType: 'Tempered',
+    rawGlass: { glassType: 'Tinted', color: 'ชา', thickness: 10, sheetsPerPane: 1 },
+  });
+  check('UPDATE pane jobType', r3.status, 200);
+  check('  jobType updated', r3.data.data.jobType, 'Tempered');
+  check('  rawGlass.glassType updated', r3.data.data.rawGlass.glassType, 'Tinted');
+  check('  rawGlass.color updated', r3.data.data.rawGlass.color, 'ชา');
+  check('  rawGlass.thickness updated', r3.data.data.rawGlass.thickness, 10);
+  check('  rawGlass.sheetsPerPane updated', r3.data.data.rawGlass.sheetsPerPane, 1);
+
+  // CREATE pane without new fields — should get defaults
+  const r4 = await api('POST', '/api/panes', token, { request: reqId });
+  check('CREATE pane without new fields (defaults)', r4.status, 201);
+  const paneId2 = r4.data.data._id;
+  check('  default jobType is empty', r4.data.data.jobType, '');
+  check('  default rawGlass.glassType is empty', r4.data.data.rawGlass.glassType, '');
+  check('  default rawGlass.color is empty', r4.data.data.rawGlass.color, '');
+  check('  default rawGlass.thickness is 0', r4.data.data.rawGlass.thickness, 0);
+  check('  default rawGlass.sheetsPerPane is 1', r4.data.data.rawGlass.sheetsPerPane, 1);
+
+  // Inline panes via request — with jobType + rawGlass
+  const reqRes2 = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'laminated', quantity: 2 },
+    panes: [
+      { jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 } },
+      { jobType: 'Tempered', rawGlass: { glassType: 'Tinted', color: 'เทา', thickness: 6, sheetsPerPane: 1 } },
+    ],
+  });
+  check('CREATE request with inline panes + new fields', reqRes2.status, 201);
+  const reqId2 = reqRes2.data.data._id;
+  const inlinePane1 = reqRes2.data.data.panes[0];
+  const inlinePane2 = reqRes2.data.data.panes[1];
+  check('  inline pane 1 jobType', inlinePane1.jobType, 'Laminated');
+  check('  inline pane 1 rawGlass.sheetsPerPane', inlinePane1.rawGlass.sheetsPerPane, 2);
+  check('  inline pane 2 jobType', inlinePane2.jobType, 'Tempered');
+  check('  inline pane 2 rawGlass.color', inlinePane2.rawGlass.color, 'เทา');
+
+  // Clean up
+  await api('DELETE', `/api/panes/${paneId}`, token);
+  await api('DELETE', `/api/panes/${paneId2}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/requests/${reqId2}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
 }
 
@@ -1342,6 +1424,7 @@ async function main() {
   await testPaneCascade(token);
   await testPaneReferentialChecks(token);
   await testRequestWithPanes(token);
+  await testPaneNewFields(token);
   await testStickerTemplateCrud(token);
   await testPricingSettings(token);
   await testPaneLogs(token);
