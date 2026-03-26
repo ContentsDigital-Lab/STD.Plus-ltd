@@ -89,7 +89,10 @@ exports.create = async (req, res, next) => {
     const order = await Order.create({ ...req.validated.body, orderNumber });
 
     if (order.request) {
-      await Pane.updateMany({ request: order.request, order: null }, { order: order._id });
+      await Pane.updateMany(
+        { request: order.request, order: null },
+        { order: order._id, material: order.material },
+      );
     }
 
     const populated = await order.populate(POPULATE_FIELDS);

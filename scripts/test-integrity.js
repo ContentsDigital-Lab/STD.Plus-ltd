@@ -968,6 +968,7 @@ async function testPaneReferentialChecks(token) {
 
   const paneAfter = await api('GET', `/api/panes/${paneId}`, token);
   check('  pane.order backfilled after order created', !!paneAfter.data.data.order, true);
+  check('  pane.material backfilled after order created', String(paneAfter.data.data.material), String(matId));
 
   // Create production log with fake pane
   const r2 = await api('POST', '/api/production-logs', token, {

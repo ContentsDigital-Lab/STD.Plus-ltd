@@ -118,9 +118,10 @@ async function testBasicScanFlow(token) {
   check('CREATE order from request', ordRes.status, 201);
   const ordId = ordRes.data.data._id;
 
-  // Verify panes got order backfilled
+  // Verify panes got order + material backfilled
   const pane1Get = await api('GET', `/api/panes/${pane1._id}`, token);
   check('  pane 1 order backfilled', !!pane1Get.data.data.order, true);
+  check('  pane 1 material backfilled', String(pane1Get.data.data.material), String(matId));
 
   // ── verify pane starts at first routing station (cutting) ──
   check('  pane 1 starts at routing[0]', pane1.currentStation, 'cutting');

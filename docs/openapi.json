@@ -735,6 +735,7 @@
           "qrCode": { "type": "string", "description": "QR code value (e.g. STDPLUS:PNE-0001)", "example": "STDPLUS:PNE-0001" },
           "request": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Request" }] },
           "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }], "description": "Populated when an order is created from the request" },
+          "material": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Material" }], "description": "Populated when an order is created from the request (inherited from the order's material)" },
           "currentStation": { "type": "string", "description": "Current station name — defaults to first station in routing, or 'ready' if no routing" },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"], "default": "pending" },
           "routing": { "type": "array", "items": { "type": "string" } },
@@ -759,6 +760,7 @@
         "properties": {
           "request": { "type": "string", "minLength": 1, "description": "Request ID this pane belongs to" },
           "order": { "type": "string", "minLength": 1, "description": "Order ID (optional, auto-filled when order is created from request)" },
+          "material": { "type": "string", "minLength": 1, "description": "Material ID (optional, auto-filled from the order's material when order is created from request)" },
           "currentStation": { "type": "string", "minLength": 1, "description": "Station name (any valid station)" },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
@@ -798,6 +800,7 @@
         "properties": {
           "request": { "type": "string", "minLength": 1 },
           "order": { "type": "string", "minLength": 1 },
+          "material": { "type": "string", "minLength": 1 },
           "currentStation": { "type": "string", "minLength": 1, "description": "Station name (any valid station)" },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
@@ -1870,7 +1873,7 @@
       "post": {
         "tags": ["Orders"],
         "summary": "Create an order",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires **admin** or **manager** role.\n\nWhen a `request` ID is provided, all panes linked to that request (that don't already have an order) are automatically updated with the new order's `_id` and `material`.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderCreateBody" } } } },
         "responses": {
