@@ -1,5 +1,4 @@
 const { Router } = require('express');
-const ipLimiter = require('../middleware/rateLimitByIP');
 const healthRoutes = require('./health.routes');
 const authRoutes = require('./auth.routes');
 const workerRoutes = require('./worker.routes');
@@ -23,8 +22,8 @@ const jobTypeRoutes = require('./jobType.routes');
 
 const router = Router();
 
-router.use('/health', ipLimiter, healthRoutes);
-router.use('/auth', ipLimiter, authRoutes);
+router.use('/health', healthRoutes);
+router.use('/auth', authRoutes);
 router.use('/workers', workerRoutes);
 router.use('/materials', materialRoutes);
 router.use('/inventories', inventoryRoutes);

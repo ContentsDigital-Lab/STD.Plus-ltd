@@ -132,30 +132,6 @@ curl http://localhost:3000/api/workers \
   </Accordion>
 </AccordionGroup>
 
-## Rate Limiting
-
-The API uses a **dual rate limiting** strategy:
-
-| Layer | Key | Applies to | Default |
-|---|---|---|---|
-| **IP-based** | Client IP address | Public routes (`/health`, `/auth`) | 1000 req/min |
-| **User-based** | Authenticated user ID | All protected routes | 1000 req/min |
-
-**IP-based limiting** protects public endpoints (like login) from brute-force attacks. All clients sharing the same IP share this limit.
-
-**User-based limiting** ensures each authenticated worker gets their own request budget, regardless of shared network/IP. Workers on the same WiFi do not affect each other's limits.
-
-<AccordionGroup>
-  <Accordion title="Rate limited (429)">
-    ```json
-    {
-      "success": false,
-      "message": "Too many requests, try again in 60s"
-    }
-    ```
-  </Accordion>
-</AccordionGroup>
-
 ## WebSocket Authentication
 
 The same JWT is used for WebSocket connections. Pass it during the Socket.IO handshake:
