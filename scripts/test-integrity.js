@@ -1131,6 +1131,84 @@ async function testPaneNewFields(token) {
 }
 
 // ──────────────────────────────────────────────
+// 16c. JOB TYPE CRUD
+// ──────────────────────────────────────────────
+
+async function testJobTypeCrud(token) {
+  console.log('\n=== Job Type CRUD ===\n');
+
+  // Create
+  const r1 = await api('POST', '/api/job-types', token, {
+    name: 'ลามิเนต', code: 'Laminated', description: 'กระจกลามิเนต 2 แผ่นประกบ',
+    sheetsPerPane: 2, defaultRawGlassTypes: ['Clear', 'Tinted'],
+  });
+  check('CREATE job type', r1.status, 201);
+  const id1 = r1.data.data._id;
+  check('  name persisted', r1.data.data.name, 'ลามิเนต');
+  check('  code persisted', r1.data.data.code, 'Laminated');
+  check('  sheetsPerPane', r1.data.data.sheetsPerPane, 2);
+  check('  defaultRawGlassTypes length', r1.data.data.defaultRawGlassTypes.length, 2);
+  check('  isActive default', r1.data.data.isActive, true);
+
+  // Create second
+  const r2 = await api('POST', '/api/job-types', token, {
+    name: 'เทมเปอร์', code: 'Tempered',
+  });
+  check('CREATE second job type', r2.status, 201);
+  const id2 = r2.data.data._id;
+  check('  sheetsPerPane default', r2.data.data.sheetsPerPane, 1);
+  check('  defaultRawGlassTypes default empty', r2.data.data.defaultRawGlassTypes.length, 0);
+
+  // Duplicate code — should fail
+  const r3 = await api('POST', '/api/job-types', token, { name: 'Dup', code: 'Laminated' });
+  check('CREATE duplicate code', r3.status, 409);
+
+  // GET by ID
+  const r4 = await api('GET', `/api/job-types/${id1}`, token);
+  check('GET job type by ID', r4.status, 200);
+  check('  correct code', r4.data.data.code, 'Laminated');
+
+  // GET all
+  const r5 = await api('GET', '/api/job-types', token);
+  check('GET all job types', r5.status, 200);
+  check('  returns array', Array.isArray(r5.data.data), true);
+  check('  has at least 2', r5.data.data.length >= 2, true);
+
+  // GET with isActive filter
+  const r5b = await api('GET', '/api/job-types?isActive=true', token);
+  check('GET job types ?isActive=true', r5b.status, 200);
+
+  // UPDATE
+  const r6 = await api('PATCH', `/api/job-types/${id1}`, token, {
+    description: 'Updated description', sheetsPerPane: 3, isActive: false,
+  });
+  check('UPDATE job type', r6.status, 200);
+  check('  description updated', r6.data.data.description, 'Updated description');
+  check('  sheetsPerPane updated', r6.data.data.sheetsPerPane, 3);
+  check('  isActive updated', r6.data.data.isActive, false);
+  check('  name preserved', r6.data.data.name, 'ลามิเนต');
+
+  // UPDATE with duplicate code — should fail
+  const r7 = await api('PATCH', `/api/job-types/${id2}`, token, { code: 'Laminated' });
+  check('UPDATE duplicate code', r7.status, 409);
+
+  // GET non-existent
+  const r8 = await api('GET', '/api/job-types/000000000000000000000000', token);
+  check('GET non-existent job type', r8.status, 404);
+
+  // DELETE one
+  const r9 = await api('DELETE', `/api/job-types/${id1}`, token);
+  check('DELETE job type', r9.status, 200);
+
+  const r10 = await api('GET', `/api/job-types/${id1}`, token);
+  check('GET deleted job type returns 404', r10.status, 404);
+
+  // BULK DELETE
+  const r11 = await api('DELETE', '/api/job-types', token, { ids: [id2] });
+  check('BULK DELETE job types', r11.status, 200);
+}
+
+// ──────────────────────────────────────────────
 // 17. STICKER TEMPLATE CRUD
 // ──────────────────────────────────────────────
 
@@ -1425,6 +1503,7 @@ async function main() {
   await testPaneReferentialChecks(token);
   await testRequestWithPanes(token);
   await testPaneNewFields(token);
+  await testJobTypeCrud(token);
   await testStickerTemplateCrud(token);
   await testPricingSettings(token);
   await testPaneLogs(token);

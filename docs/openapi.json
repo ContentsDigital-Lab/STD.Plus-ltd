@@ -879,6 +879,43 @@
           "durationMs": { "type": "number", "minimum": 0 }
         }
       },
+      "JobType": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string", "description": "Display name (e.g. ลามิเนต)" },
+          "code": { "type": "string", "description": "Unique code (e.g. Laminated)" },
+          "description": { "type": "string" },
+          "sheetsPerPane": { "type": "integer", "default": 1, "description": "Number of raw sheets needed per pane (2 for Laminated)" },
+          "defaultRawGlassTypes": { "type": "array", "items": { "type": "string" }, "description": "Suggested raw glass types (e.g. Clear, Tinted)" },
+          "isActive": { "type": "boolean", "default": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "JobTypeCreateBody": {
+        "type": "object",
+        "required": ["name", "code"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "code": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "sheetsPerPane": { "type": "integer", "minimum": 1 },
+          "defaultRawGlassTypes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "isActive": { "type": "boolean" }
+        }
+      },
+      "JobTypeUpdateBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "code": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "sheetsPerPane": { "type": "integer", "minimum": 1 },
+          "defaultRawGlassTypes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "isActive": { "type": "boolean" }
+        }
+      },
       "StickerTemplate": {
         "type": "object",
         "properties": {
@@ -2620,6 +2657,80 @@
         }
       }
     },
+    "/api/job-types": {
+      "get": {
+        "tags": ["Job Types"],
+        "summary": "List all job types",
+        "description": "Returns all job types. Supports `?isActive=true` filter.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "in": "query", "name": "isActive", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Filter by active status" },
+          { "in": "query", "name": "page", "schema": { "type": "integer", "minimum": 1 } },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "minimum": 1 } },
+          { "in": "query", "name": "sort", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of job types", "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" }, "data": { "type": "array", "items": { "$ref": "#/components/schemas/JobType" } } } } } } }
+        }
+      },
+      "post": {
+        "tags": ["Job Types"],
+        "summary": "Create a job type",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobTypeCreateBody" } } } },
+        "responses": {
+          "201": { "description": "Job type created", "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/JobType" } } } } } },
+          "409": { "description": "Duplicate code" }
+        }
+      },
+      "delete": {
+        "tags": ["Job Types"],
+        "summary": "Delete multiple job types",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["ids"], "properties": { "ids": { "type": "array", "items": { "type": "string" }, "minItems": 1 } } } } } },
+        "responses": {
+          "200": { "description": "Job types deleted" }
+        }
+      }
+    },
+    "/api/job-types/{id}": {
+      "get": {
+        "tags": ["Job Types"],
+        "summary": "Get job type by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Job type details", "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/JobType" } } } } } },
+          "404": { "description": "Not found" }
+        }
+      },
+      "patch": {
+        "tags": ["Job Types"],
+        "summary": "Update a job type",
+        "description": "Requires **admin** or **manager** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobTypeUpdateBody" } } } },
+        "responses": {
+          "200": { "description": "Job type updated", "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/JobType" } } } } } },
+          "404": { "description": "Not found" },
+          "409": { "description": "Duplicate code" }
+        }
+      },
+      "delete": {
+        "tags": ["Job Types"],
+        "summary": "Delete a job type",
+        "description": "Requires **admin** role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Job type deleted" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
     "/api/sticker-templates": {
       "get": {
         "tags": ["Sticker Templates"],
@@ -2784,6 +2895,7 @@
     { "name": "QR Scanning" },
     { "name": "Production Logs" },
     { "name": "Sticker Templates" },
+    { "name": "Job Types" },
     { "name": "Pricing Settings" }
   ]
 }

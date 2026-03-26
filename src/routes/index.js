@@ -19,6 +19,7 @@ const productionLogRoutes = require('./productionLog.routes');
 const stickerTemplateRoutes = require('./stickerTemplate.routes');
 const pricingSettingsRoutes = require('./pricingSettings.routes');
 const paneLogRoutes = require('./paneLog.routes');
+const jobTypeRoutes = require('./jobType.routes');
 
 const router = Router();
 
@@ -41,5 +42,6 @@ router.use('/production-logs', productionLogRoutes);
 router.use('/sticker-templates', stickerTemplateRoutes);
 router.use('/pricing-settings', pricingSettingsRoutes);
 router.use('/pane-logs', paneLogRoutes);
+router.use('/job-types', jobTypeRoutes);
 
 module.exports = router;
