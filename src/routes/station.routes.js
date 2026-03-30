@@ -7,10 +7,13 @@ const stationController = require('../controllers/station.controller');
 
 const router = Router();
 
+const stationColors = ['sky', 'blue', 'violet', 'pink', 'red', 'orange', 'yellow', 'green', 'teal', 'slate'];
+
 const createSchema = z.object({
   body: z.object({
     name: z.string().min(1),
     templateId: z.string().min(1),
+    colorId: z.enum(stationColors).optional(),
     status: z.enum(['online', 'offline', 'maintenance']).optional(),
     notes: z.string().optional(),
   }),
@@ -20,6 +23,7 @@ const updateSchema = z.object({
   body: z.object({
     name: z.string().min(1).optional(),
     templateId: z.string().min(1).optional(),
+    colorId: z.enum(stationColors).optional(),
     status: z.enum(['online', 'offline', 'maintenance']).optional(),
     notes: z.string().optional(),
   }),

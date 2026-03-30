@@ -1,5 +1,4 @@
 const { Router } = require('express');
-const ipLimiter = require('../middleware/rateLimitByIP');
 const healthRoutes = require('./health.routes');
 const authRoutes = require('./auth.routes');
 const workerRoutes = require('./worker.routes');
@@ -19,11 +18,12 @@ const productionLogRoutes = require('./productionLog.routes');
 const stickerTemplateRoutes = require('./stickerTemplate.routes');
 const pricingSettingsRoutes = require('./pricingSettings.routes');
 const paneLogRoutes = require('./paneLog.routes');
+const jobTypeRoutes = require('./jobType.routes');
 
 const router = Router();
 
-router.use('/health', ipLimiter, healthRoutes);
-router.use('/auth', ipLimiter, authRoutes);
+router.use('/health', healthRoutes);
+router.use('/auth', authRoutes);
 router.use('/workers', workerRoutes);
 router.use('/materials', materialRoutes);
 router.use('/inventories', inventoryRoutes);
@@ -41,5 +41,6 @@ router.use('/production-logs', productionLogRoutes);
 router.use('/sticker-templates', stickerTemplateRoutes);
 router.use('/pricing-settings', pricingSettingsRoutes);
 router.use('/pane-logs', paneLogRoutes);
+router.use('/job-types', jobTypeRoutes);
 
 module.exports = router;

@@ -400,6 +400,57 @@ async function testStationTemplateCascade(token) {
 }
 
 // ──────────────────────────────────────────────
+// 6b. STATION colorId FIELD
+// ──────────────────────────────────────────────
+
+async function testStationColorId(token) {
+  console.log('\n=== Station colorId Field ===\n');
+
+  const tmpl = await api('POST', '/api/station-templates', token, { name: 'Color Template' });
+  const tmplId = tmpl.data.data._id;
+
+  // Create station with colorId
+  const r1 = await api('POST', '/api/stations', token, { name: 'Pink Station', templateId: tmplId, colorId: 'pink' });
+  check('CREATE station with colorId', r1.status, 201);
+  const stationId = r1.data.data._id;
+  check('  colorId persisted', r1.data.data.colorId, 'pink');
+
+  // Create station without colorId — should default to "sky"
+  const r2 = await api('POST', '/api/stations', token, { name: 'Default Station', templateId: tmplId });
+  check('CREATE station without colorId (default)', r2.status, 201);
+  const stationId2 = r2.data.data._id;
+  check('  default colorId is sky', r2.data.data.colorId, 'sky');
+
+  // GET by ID — colorId present
+  const r3 = await api('GET', `/api/stations/${stationId}`, token);
+  check('GET station includes colorId', r3.data.data.colorId, 'pink');
+
+  // GET all — colorId present
+  const r4 = await api('GET', '/api/stations', token);
+  const found = r4.data.data.find((s) => s._id === stationId);
+  check('GET all includes colorId', found?.colorId, 'pink');
+
+  // UPDATE colorId
+  const r5 = await api('PATCH', `/api/stations/${stationId}`, token, { colorId: 'teal' });
+  check('UPDATE station colorId', r5.status, 200);
+  check('  colorId updated', r5.data.data.colorId, 'teal');
+  check('  name preserved', r5.data.data.name, 'Pink Station');
+
+  // UPDATE with invalid colorId — should fail validation
+  const r6 = await api('PATCH', `/api/stations/${stationId}`, token, { colorId: 'rainbow' });
+  check('UPDATE with invalid colorId', r6.status, 400);
+
+  // CREATE with invalid colorId — should fail validation
+  const r7 = await api('POST', '/api/stations', token, { name: 'Bad Station', templateId: tmplId, colorId: 'neon' });
+  check('CREATE with invalid colorId', r7.status, 400);
+
+  // Clean up
+  await api('DELETE', `/api/stations/${stationId}`, token);
+  await api('DELETE', `/api/stations/${stationId2}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // 7. NOTIFICATION PREFERENCES VALIDATION
 // ──────────────────────────────────────────────
 
@@ -968,6 +1019,8 @@ async function testPaneReferentialChecks(token) {
 
   const paneAfter = await api('GET', `/api/panes/${paneId}`, token);
   check('  pane.order backfilled after order created', !!paneAfter.data.data.order, true);
+  const backfilledMat = paneAfter.data.data.material;
+  check('  pane.material backfilled after order created', String(backfilledMat?._id || backfilledMat), String(matId));
 
   // Create production log with fake pane
   const r2 = await api('POST', '/api/production-logs', token, {
@@ -1045,6 +1098,165 @@ async function testRequestWithPanes(token) {
   await api('DELETE', `/api/requests/${reqId}`, token);
   await api('DELETE', `/api/requests/${r2.data.data._id}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 16b. PANE jobType + rawGlass FIELDS
+// ──────────────────────────────────────────────
+
+async function testPaneNewFields(token) {
+  console.log('\n=== Pane jobType + rawGlass Fields ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'PaneFields Cust' });
+  const custId = cust.data.data._id;
+  const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 1 } });
+  const reqId = reqRes.data.data._id;
+
+  // Create pane with jobType + rawGlass
+  const r1 = await api('POST', '/api/panes', token, {
+    request: reqId,
+    dimensions: { width: 800, height: 600, thickness: 5 },
+    jobType: 'Laminated',
+    rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 5, sheetsPerPane: 2 },
+  });
+  check('CREATE pane with jobType + rawGlass', r1.status, 201);
+  const paneId = r1.data.data._id;
+  check('  jobType persisted', r1.data.data.jobType, 'Laminated');
+  check('  rawGlass.glassType', r1.data.data.rawGlass.glassType, 'Clear');
+  check('  rawGlass.color', r1.data.data.rawGlass.color, 'เขียว');
+  check('  rawGlass.thickness', r1.data.data.rawGlass.thickness, 5);
+  check('  rawGlass.sheetsPerPane', r1.data.data.rawGlass.sheetsPerPane, 2);
+
+  // GET — verify persistence
+  const r2 = await api('GET', `/api/panes/${paneId}`, token);
+  check('GET pane jobType', r2.data.data.jobType, 'Laminated');
+  check('  rawGlass.glassType', r2.data.data.rawGlass.glassType, 'Clear');
+  check('  rawGlass.sheetsPerPane', r2.data.data.rawGlass.sheetsPerPane, 2);
+
+  // UPDATE — change jobType and partial rawGlass
+  const r3 = await api('PATCH', `/api/panes/${paneId}`, token, {
+    jobType: 'Tempered',
+    rawGlass: { glassType: 'Tinted', color: 'ชา', thickness: 10, sheetsPerPane: 1 },
+  });
+  check('UPDATE pane jobType', r3.status, 200);
+  check('  jobType updated', r3.data.data.jobType, 'Tempered');
+  check('  rawGlass.glassType updated', r3.data.data.rawGlass.glassType, 'Tinted');
+  check('  rawGlass.color updated', r3.data.data.rawGlass.color, 'ชา');
+  check('  rawGlass.thickness updated', r3.data.data.rawGlass.thickness, 10);
+  check('  rawGlass.sheetsPerPane updated', r3.data.data.rawGlass.sheetsPerPane, 1);
+
+  // CREATE pane without new fields — should get defaults
+  const r4 = await api('POST', '/api/panes', token, { request: reqId });
+  check('CREATE pane without new fields (defaults)', r4.status, 201);
+  const paneId2 = r4.data.data._id;
+  check('  default jobType is empty', r4.data.data.jobType, '');
+  check('  default rawGlass.glassType is empty', r4.data.data.rawGlass.glassType, '');
+  check('  default rawGlass.color is empty', r4.data.data.rawGlass.color, '');
+  check('  default rawGlass.thickness is 0', r4.data.data.rawGlass.thickness, 0);
+  check('  default rawGlass.sheetsPerPane is 1', r4.data.data.rawGlass.sheetsPerPane, 1);
+
+  // Inline panes via request — with jobType + rawGlass
+  const reqRes2 = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'laminated', quantity: 2 },
+    panes: [
+      { jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 } },
+      { jobType: 'Tempered', rawGlass: { glassType: 'Tinted', color: 'เทา', thickness: 6, sheetsPerPane: 1 } },
+    ],
+  });
+  check('CREATE request with inline panes + new fields', reqRes2.status, 201);
+  const reqId2 = reqRes2.data.data._id;
+  const inlinePane1 = reqRes2.data.data.panes[0];
+  const inlinePane2 = reqRes2.data.data.panes[1];
+  check('  inline pane 1 jobType', inlinePane1.jobType, 'Laminated');
+  check('  inline pane 1 rawGlass.sheetsPerPane', inlinePane1.rawGlass.sheetsPerPane, 2);
+  check('  inline pane 2 jobType', inlinePane2.jobType, 'Tempered');
+  check('  inline pane 2 rawGlass.color', inlinePane2.rawGlass.color, 'เทา');
+
+  // Clean up
+  await api('DELETE', `/api/panes/${paneId}`, token);
+  await api('DELETE', `/api/panes/${paneId2}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/requests/${reqId2}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 16c. JOB TYPE CRUD
+// ──────────────────────────────────────────────
+
+async function testJobTypeCrud(token) {
+  console.log('\n=== Job Type CRUD ===\n');
+
+  // Create
+  const r1 = await api('POST', '/api/job-types', token, {
+    name: 'ลามิเนต', code: 'Laminated', description: 'กระจกลามิเนต 2 แผ่นประกบ',
+    sheetsPerPane: 2, defaultRawGlassTypes: ['Clear', 'Tinted'],
+  });
+  check('CREATE job type', r1.status, 201);
+  const id1 = r1.data.data._id;
+  check('  name persisted', r1.data.data.name, 'ลามิเนต');
+  check('  code persisted', r1.data.data.code, 'Laminated');
+  check('  sheetsPerPane', r1.data.data.sheetsPerPane, 2);
+  check('  defaultRawGlassTypes length', r1.data.data.defaultRawGlassTypes.length, 2);
+  check('  isActive default', r1.data.data.isActive, true);
+
+  // Create second
+  const r2 = await api('POST', '/api/job-types', token, {
+    name: 'เทมเปอร์', code: 'Tempered',
+  });
+  check('CREATE second job type', r2.status, 201);
+  const id2 = r2.data.data._id;
+  check('  sheetsPerPane default', r2.data.data.sheetsPerPane, 1);
+  check('  defaultRawGlassTypes default empty', r2.data.data.defaultRawGlassTypes.length, 0);
+
+  // Duplicate code — should fail
+  const r3 = await api('POST', '/api/job-types', token, { name: 'Dup', code: 'Laminated' });
+  check('CREATE duplicate code', r3.status, 409);
+
+  // GET by ID
+  const r4 = await api('GET', `/api/job-types/${id1}`, token);
+  check('GET job type by ID', r4.status, 200);
+  check('  correct code', r4.data.data.code, 'Laminated');
+
+  // GET all
+  const r5 = await api('GET', '/api/job-types', token);
+  check('GET all job types', r5.status, 200);
+  check('  returns array', Array.isArray(r5.data.data), true);
+  check('  has at least 2', r5.data.data.length >= 2, true);
+
+  // GET with isActive filter
+  const r5b = await api('GET', '/api/job-types?isActive=true', token);
+  check('GET job types ?isActive=true', r5b.status, 200);
+
+  // UPDATE
+  const r6 = await api('PATCH', `/api/job-types/${id1}`, token, {
+    description: 'Updated description', sheetsPerPane: 3, isActive: false,
+  });
+  check('UPDATE job type', r6.status, 200);
+  check('  description updated', r6.data.data.description, 'Updated description');
+  check('  sheetsPerPane updated', r6.data.data.sheetsPerPane, 3);
+  check('  isActive updated', r6.data.data.isActive, false);
+  check('  name preserved', r6.data.data.name, 'ลามิเนต');
+
+  // UPDATE with duplicate code — should fail
+  const r7 = await api('PATCH', `/api/job-types/${id2}`, token, { code: 'Laminated' });
+  check('UPDATE duplicate code', r7.status, 409);
+
+  // GET non-existent
+  const r8 = await api('GET', '/api/job-types/000000000000000000000000', token);
+  check('GET non-existent job type', r8.status, 404);
+
+  // DELETE one
+  const r9 = await api('DELETE', `/api/job-types/${id1}`, token);
+  check('DELETE job type', r9.status, 200);
+
+  const r10 = await api('GET', `/api/job-types/${id1}`, token);
+  check('GET deleted job type returns 404', r10.status, 404);
+
+  // BULK DELETE
+  const r11 = await api('DELETE', '/api/job-types', token, { ids: [id2] });
+  check('BULK DELETE job types', r11.status, 200);
 }
 
 // ──────────────────────────────────────────────
@@ -1330,6 +1542,7 @@ async function main() {
   await testMaterialLogCascade(token);
   await testRequestCascade(token);
   await testStationTemplateCascade(token);
+  await testStationColorId(token);
   await testNotificationPreferences(token);
   await testOrderNewFields(token);
   await testWithdrawalNotes(token);
@@ -1341,6 +1554,8 @@ async function main() {
   await testPaneCascade(token);
   await testPaneReferentialChecks(token);
   await testRequestWithPanes(token);
+  await testPaneNewFields(token);
+  await testJobTypeCrud(token);
   await testStickerTemplateCrud(token);
   await testPricingSettings(token);
   await testPaneLogs(token);

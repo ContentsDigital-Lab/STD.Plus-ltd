@@ -2,6 +2,29 @@ const PricingSettings = require('../models/PricingSettings');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 
+// Mongoose toObject({ flattenMaps: true }) only flattens one level of Map.
+// glassPrices is Map<string, Map<string, schema>> so inner Maps stay as Map objects
+// and serialize to {} in JSON. This helper manually converts both levels.
+function flattenSettings(settings) {
+  const base = settings.toObject({ flattenMaps: true });
+  const glassPrices = {};
+  if (settings.glassPrices instanceof Map) {
+    for (const [glassType, thicknessMap] of settings.glassPrices.entries()) {
+      glassPrices[glassType] = {};
+      if (thicknessMap instanceof Map) {
+        for (const [thickness, price] of thicknessMap.entries()) {
+          glassPrices[glassType][thickness] = price.toObject ? price.toObject() : { ...price };
+        }
+      } else if (thicknessMap && typeof thicknessMap === 'object') {
+        glassPrices[glassType] = thicknessMap;
+      }
+    }
+  } else {
+    Object.assign(glassPrices, base.glassPrices ?? {});
+  }
+  return { ...base, glassPrices };
+}
+
 // Default glassPrices matching frontend DEFAULT_PRICING
 const DEFAULT_GLASS_PRICES = {
   Clear:      { '3mm': { pricePerSqFt: 35,  grindingRate: 50 }, '5mm': { pricePerSqFt: 50,  grindingRate: 50 }, '6mm': { pricePerSqFt: 55,  grindingRate: 50 }, '8mm': { pricePerSqFt: 65,  grindingRate: 50 }, '10mm': { pricePerSqFt: 75,  grindingRate: 50 }, '12mm': { pricePerSqFt: 85,  grindingRate: 75 }, '15mm': { pricePerSqFt: 110, grindingRate: 75 }, '19mm': { pricePerSqFt: 140, grindingRate: 75 } },
@@ -25,7 +48,8 @@ exports.get = async (req, res, next) => {
     }
 
     // Convert Mongoose Maps → plain objects for JSON response
-    const plain = settings.toObject({ flattenMaps: true });
+    // toObject({ flattenMaps: true }) only flattens one level; manually flatten nested Maps
+    const plain = flattenSettings(settings);
     success(res, plain);
   } catch (err) {
     next(err);
@@ -48,7 +72,7 @@ exports.update = async (req, res, next) => {
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
     ).populate('updatedBy', 'name role');
 
-    const plain = settings.toObject({ flattenMaps: true });
+    const plain = flattenSettings(settings);
 
     // Broadcast to all clients subscribed to the 'pricing' room
     emit(req, 'pricing:updated', plain, ['pricing']);

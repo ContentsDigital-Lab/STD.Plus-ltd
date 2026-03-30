@@ -17,6 +17,13 @@ const dimensionsSchema = z.object({
   thickness: z.number().min(0).optional(),
 }).optional();
 
+const rawGlassSchema = z.object({
+  glassType:     z.string().optional(),
+  color:         z.string().optional(),
+  thickness:     z.number().min(0).optional(),
+  sheetsPerPane: z.number().int().min(1).optional(),
+}).optional();
+
 const edgeTaskSchema = z.object({
   side: z.string().min(1),
   edgeProfile: z.string().min(1),
@@ -37,6 +44,8 @@ const createSchema = z.object({
     routing:       z.array(z.string()).optional(),
     customRouting: z.boolean().optional(),
     dimensions:    dimensionsSchema,
+    jobType:       z.string().optional(),
+    rawGlass:      rawGlassSchema,
     glassType:     z.string().optional(),
     glassTypeLabel:z.string().optional(),
     processes:     z.array(z.string().min(1)).optional(),
@@ -61,6 +70,8 @@ const updateSchema = z.object({
     routing:       z.array(z.string().min(1)).optional(),
     customRouting: z.boolean().optional(),
     dimensions:    dimensionsSchema,
+    jobType:       z.string().optional(),
+    rawGlass:      rawGlassSchema,
     glassType:     z.string().optional(),
     glassTypeLabel:z.string().optional(),
     processes:     z.array(z.string().min(1)).optional(),

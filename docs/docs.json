@@ -224,6 +224,17 @@
             ]
           },
           {
+            "group": "Job Types",
+            "pages": [
+              "api-reference/job-types/list-all-job-types",
+              "api-reference/job-types/create-a-job-type",
+              "api-reference/job-types/delete-multiple-job-types",
+              "api-reference/job-types/get-job-type-by-id",
+              "api-reference/job-types/update-a-job-type",
+              "api-reference/job-types/delete-a-job-type"
+            ]
+          },
+          {
             "group": "Pricing Settings",
             "pages": [
               "api-reference/pricing-settings/get-pricing-settings",
