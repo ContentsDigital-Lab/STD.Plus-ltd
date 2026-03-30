@@ -152,16 +152,18 @@ socket.on('order:updated', (payload) => {
 | Event | Direction | Emitted to rooms | Triggered by |
 |---|---|---|---|
 | `material:updated` | INBOUND | `dashboard`, `inventory` | Material create / update / delete |
-| `inventory:updated` | INBOUND | `dashboard`, `inventory` | Inventory create / update / delete |
-| `order:updated` | INBOUND | `dashboard`, `order` | Order create / update / delete |
-| `log:updated` | INBOUND | `dashboard`, `log` | Material log create / update / delete |
+| `inventory:updated` | INBOUND | `dashboard`, `inventory` | Inventory create / update / delete / move; Withdrawal approve / reject |
+| `order:updated` | INBOUND | `dashboard`, `order` | Order create / update / delete; QR scan `scan_out` |
+| `log:updated` | INBOUND | `dashboard`, `log` | Material log create / update / delete; QR scan (all actions) |
 | `request:updated` | INBOUND | `dashboard`, `request` | Request create / update / delete |
 | `withdrawal:updated` | INBOUND | `dashboard`, `withdrawal` | Withdrawal create / update / delete |
 | `claim:updated` | INBOUND | `dashboard`, `claim` | Claim create / update / delete |
 | `station:updated` | INBOUND | `dashboard`, `station` | Station create / update / delete |
-| `pane:updated` | INBOUND | `dashboard`, `pane`, `production`, `station:<name>` | Pane create / update / delete / QR scan |
-| `production-log:updated` | INBOUND | `dashboard`, `production` | Production log create / update / delete / QR scan |
+| `pane:updated` | INBOUND | `dashboard`, `pane`, `production`, `station:<name>` | Pane create / update / delete; QR scan (all actions) |
+| `production-log:updated` | INBOUND | `dashboard`, `production` | Production log create / update / delete |
 | `station-template:updated` | INBOUND | `dashboard`, `station` | Station template create / update / delete |
+| `sticker-template:updated` | INBOUND | `dashboard` | Sticker template create / update / delete |
+| `jobType:updated` | INBOUND | `dashboard` | Job type create / update / delete |
 | `pricing:updated` | INBOUND | `pricing` | Pricing settings update |
 | `station:check_in` | INBOUND | `station:<stationId>` | Order update with station changes |
 | `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | QR scan with `scan_out` action |
@@ -177,6 +179,17 @@ socket.on('order:updated', (payload) => {
   }
 }
 ```
+
+#### Action values
+
+Most events use `created`, `updated`, or `deleted`. Some events have additional action values:
+
+| Event | Extra actions | Description |
+|---|---|---|
+| `pane:updated` | `scanned` | Emitted on every QR scan action (`scan_in`, `start`, `complete`, `scan_out`) |
+| `inventory:updated` | `adjusted` | Emitted when a withdrawal is approved/rejected (inventory quantity changes) |
+| `inventory:updated` | `moved` | Emitted on inventory move/split. Payload: `{ action: "moved", data: { source, target, quantity } }` |
+| `log:updated` | `pane_scanned` | Emitted on every QR scan. Payload: `{ action: "pane_scanned", data: { paneLog, material } }` |
 
 ### Station Check-In
 
@@ -246,6 +259,33 @@ socket.on('station:pane_arrived', (payload) => {
 | `fromStation` | The station the pane just completed |
 | `toStation` | The station the pane moved to |
 | `orderId` | The associated order ID (if any) |
+
+### Pane Arrived (Station Notification)
+
+In addition to `station:pane_arrived`, the scan endpoint also emits a `notification` event directly to the next station's room when a pane moves via `scan_out`. This allows station screens to show an alert.
+
+```javascript
+socket.on('notification', (payload) => {
+  if (payload.type === 'pane_arrived') {
+    console.log(payload.title);   // "มีกระจกเข้าสถานี"
+    console.log(payload.message); // "กระจก PNE-0001 เข้าสถานีนี้แล้ว"
+  }
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `notification` | INBOUND | `station:<nextStation>` | QR scan `scan_out` (pane moves to next station) |
+
+**Payload:**
+
+```json
+{
+  "type": "pane_arrived",
+  "title": "มีกระจกเข้าสถานี",
+  "message": "กระจก PNE-0001 เข้าสถานีนี้แล้ว"
+}
+```
 
 ### Pricing Updated
 

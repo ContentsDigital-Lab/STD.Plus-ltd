@@ -634,6 +634,69 @@ async function testAuthEdgeCases(tokens) {
   check('POST   /auth/login (empty body)', r8.status, 400);
 }
 
+async function testAuthUpdateMe(tokens) {
+  console.log('\n=== Auth Update Me (name & username) ===\n');
+
+  const r1 = await api('PATCH', '/api/auth/me', tokens.worker, { name: 'Worker Updated Name' });
+  check('PATCH  /auth/me name          (worker)', r1.status, 200);
+
+  const r2 = await api('GET', '/api/auth/me', tokens.worker);
+  check('  name updated', r2.data.data.name, 'Worker Updated Name');
+
+  const r3 = await api('PATCH', '/api/auth/me', tokens.worker, { username: 'worker1_updated' });
+  check('PATCH  /auth/me username      (worker)', r3.status, 200);
+
+  const r4 = await api('GET', '/api/auth/me', tokens.worker);
+  check('  username updated', r4.data.data.username, 'worker1_updated');
+
+  await api('PATCH', '/api/auth/me', tokens.worker, { name: 'Worker', username: 'worker1' });
+
+  const r5 = await api('GET', '/api/auth/me', tokens.worker);
+  check('  name restored', r5.data.data.name, 'Worker');
+  check('  username restored', r5.data.data.username, 'worker1');
+}
+
+async function testJobTypeRbac(tokens) {
+  console.log('\n=== Job Types (admin+manager CU, admin-only D) ===\n');
+  const path = '/api/job-types';
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /job-types           (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /job-types           (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /job-types           (worker)', r3.status, 200);
+
+  const body = { name: 'RBAC Test Type', code: 'RBAC_TEST' };
+
+  const r4 = await api('POST', path, tokens.admin, body);
+  check('POST   /job-types           (admin)', r4.status, 201);
+  const id1 = r4.data.data?._id;
+
+  const r5 = await api('POST', path, tokens.manager, { ...body, code: 'RBAC_TEST_M' });
+  check('POST   /job-types           (manager)', r5.status, 201);
+  const id2 = r5.data.data?._id;
+
+  const r6 = await api('POST', path, tokens.worker, { ...body, code: 'RBAC_TEST_W' });
+  check('POST   /job-types           (worker)', r6.status, 403);
+
+  if (id1) {
+    const r7 = await api('PATCH', `${path}/${id1}`, tokens.manager, { name: 'Updated' });
+    check('PATCH  /job-types/:id       (manager)', r7.status, 200);
+    const r8 = await api('PATCH', `${path}/${id1}`, tokens.worker, { name: 'Hacked' });
+    check('PATCH  /job-types/:id       (worker)', r8.status, 403);
+
+    const r9 = await api('DELETE', `${path}/${id1}`, tokens.worker);
+    check('DELETE /job-types/:id       (worker)', r9.status, 403);
+    const r10 = await api('DELETE', `${path}/${id1}`, tokens.manager);
+    check('DELETE /job-types/:id       (manager)', r10.status, 403);
+    const r11 = await api('DELETE', `${path}/${id1}`, tokens.admin);
+    check('DELETE /job-types/:id       (admin)', r11.status, 200);
+  }
+
+  if (id2) await api('DELETE', `${path}/${id2}`, tokens.admin);
+}
+
 async function main() {
   console.log('=== RBAC Test Suite ===\n');
   console.log('Setting up users...');
@@ -691,6 +754,8 @@ async function main() {
   await testNotificationPreferences(tokens);
   await testStickerTemplates(tokens);
   await testPricingSettings(tokens);
+  await testAuthUpdateMe(tokens);
+  await testJobTypeRbac(tokens);
   await testAuthEdgeCases(tokens);
 
   // Cleanup shared test data

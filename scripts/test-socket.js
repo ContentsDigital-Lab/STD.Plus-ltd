@@ -434,26 +434,92 @@ async function testPricingEvent() {
   console.log('\n=== All pricing event tests passed ===\n');
 }
 
-async function testStickerTemplateEvent() {
-  console.log('=== Sticker Template Event ===\n');
+async function testStickerTemplateAllEvents() {
+  console.log('=== Sticker Template All Events (create/update/delete) ===\n');
+
+  const token = await getToken();
+  const socket = await connect(API, '/api/socket-entry', { token });
+  await emitWithAck(socket, 'join_dashboard');
+
+  const createPromise = waitForEvent(socket, 'sticker-template:updated');
+  const tmpl = await apiCall('POST', '/api/sticker-templates', token, {
+    name: 'ws-all-events', width: 100, height: 50,
+  });
+  const createEvent = await createPromise;
+  console.log(`1. PASS sticker-template:updated (create) — action: ${createEvent.action}`);
+  const tmplId = tmpl.data._id;
+
+  const updatePromise = waitForEvent(socket, 'sticker-template:updated');
+  await apiCall('PATCH', `/api/sticker-templates/${tmplId}`, token, { width: 200 });
+  const updateEvent = await updatePromise;
+  console.log(`2. PASS sticker-template:updated (update) — action: ${updateEvent.action}`);
+
+  const deletePromise = waitForEvent(socket, 'sticker-template:updated');
+  await apiCall('DELETE', `/api/sticker-templates/${tmplId}`, token);
+  const deleteEvent = await deletePromise;
+  console.log(`3. PASS sticker-template:updated (delete) — action: ${deleteEvent.action}`);
+
+  socket.disconnect();
+  console.log('\n=== All sticker template event tests passed ===\n');
+}
+
+async function testJobTypeEvent() {
+  console.log('=== Job Type Events ===\n');
+
+  const token = await getToken();
+  const socket = await connect(API, '/api/socket-entry', { token });
+  await emitWithAck(socket, 'join_dashboard');
+
+  const createPromise = waitForEvent(socket, 'jobType:updated');
+  const jt = await apiCall('POST', '/api/job-types', token, {
+    name: 'WS Test Type', code: 'WS_TEST',
+  });
+  const createEvent = await createPromise;
+  console.log(`1. PASS jobType:updated (create) — action: ${createEvent.action}`);
+  const jtId = jt.data._id;
+
+  const updatePromise = waitForEvent(socket, 'jobType:updated');
+  await apiCall('PATCH', `/api/job-types/${jtId}`, token, { name: 'WS Test Updated' });
+  const updateEvent = await updatePromise;
+  console.log(`2. PASS jobType:updated (update) — action: ${updateEvent.action}`);
+
+  const deletePromise = waitForEvent(socket, 'jobType:updated');
+  await apiCall('DELETE', `/api/job-types/${jtId}`, token);
+  const deleteEvent = await deletePromise;
+  console.log(`3. PASS jobType:updated (delete) — action: ${deleteEvent.action}`);
+
+  socket.disconnect();
+  console.log('\n=== All job type event tests passed ===\n');
+}
+
+async function testOrderFirstStationNotification() {
+  console.log('=== Order First-Station Notification ===\n');
 
   const token = await getToken();
   const socket = await connect(API, '/api/socket-entry', { token });
 
-  await emitWithAck(socket, 'join_dashboard');
+  await emitWithAckData(socket, 'join_station_room', { stationId: 'ws_notif_test_stn' });
 
-  const stickerPromise = waitForEvent(socket, 'sticker-template:updated');
-  const tmpl = await apiCall('POST', '/api/sticker-templates', token, {
-    name: 'socket-test-sticker', width: 100, height: 50,
+  const mat = await apiCall('POST', '/api/materials', token, { name: 'NotifTest Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data._id;
+  const cust = await apiCall('POST', '/api/customers', token, { name: 'NotifTest Cust' });
+  const custId = cust.data._id;
+
+  const notifPromise = waitForEvent(socket, 'notification');
+  const ord = await apiCall('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 1, stations: ['ws_notif_test_stn', 'qc'],
   });
-  const stickerEvent = await stickerPromise;
-  console.log(`1. PASS sticker-template:updated — action: ${stickerEvent.action}`);
+  const ordId = ord.data._id;
 
-  // Cleanup
-  await apiCall('DELETE', `/api/sticker-templates/${tmpl.data._id}`, token);
+  const notifEvent = await notifPromise;
+  console.log(`1. PASS notification on order create — type: "${notifEvent.type}", title: "${notifEvent.title}"`);
+  console.log(`   referenceId: ${notifEvent.referenceId}, referenceType: ${notifEvent.referenceType}`);
 
+  await apiCall('DELETE', `/api/orders/${ordId}`, token);
+  await apiCall('DELETE', `/api/materials/${matId}`, token);
+  await apiCall('DELETE', `/api/customers/${custId}`, token);
   socket.disconnect();
-  console.log('\n=== All sticker template event tests passed ===\n');
+  console.log('\n=== Order first-station notification test passed ===\n');
 }
 
 async function main() {
@@ -464,7 +530,9 @@ async function main() {
   await testSystemAlertRBAC();
   await testQrCheckIn();
   await testPricingEvent();
-  await testStickerTemplateEvent();
+  await testStickerTemplateAllEvents();
+  await testJobTypeEvent();
+  await testOrderFirstStationNotification();
   process.exit(0);
 }
 

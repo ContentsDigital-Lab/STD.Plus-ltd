@@ -1527,6 +1527,372 @@ async function testHealthEndpoint() {
 }
 
 // ──────────────────────────────────────────────
+// ──────────────────────────────────────────────
+// NEW COVERAGE TESTS
+// ──────────────────────────────────────────────
+
+async function testWorkerPasswordUpdate(token) {
+  console.log('\n=== Worker Password Update ===\n');
+
+  const w = await api('POST', '/api/workers', token, {
+    name: 'PwdTest', username: 'pwd_test', password: 'original123', position: 'tester',
+  });
+  check('CREATE worker for password test', w.status, 201);
+  const wId = w.data.data._id;
+
+  const r1 = await api('POST', '/api/auth/login', null, { username: 'pwd_test', password: 'original123' });
+  check('LOGIN with original password', r1.status, 200);
+
+  const r2 = await api('PATCH', `/api/workers/${wId}`, token, { password: 'newpass123' });
+  check('UPDATE password via admin', r2.status, 200);
+
+  const r3 = await api('POST', '/api/auth/login', null, { username: 'pwd_test', password: 'original123' });
+  check('LOGIN with old password fails', r3.status, 401);
+
+  const r4 = await api('POST', '/api/auth/login', null, { username: 'pwd_test', password: 'newpass123' });
+  check('LOGIN with new password succeeds', r4.status, 200);
+
+  await api('DELETE', `/api/workers/${wId}`, token);
+}
+
+async function testMaterialLogFilters(token) {
+  console.log('\n=== MaterialLog Query Filters ===\n');
+
+  const mat1 = await api('POST', '/api/materials', token, { name: 'Filter Mat A', unit: 'sheet', reorderPoint: 1 });
+  const mat2 = await api('POST', '/api/materials', token, { name: 'Filter Mat B', unit: 'kg', reorderPoint: 1 });
+  const matId1 = mat1.data.data._id;
+  const matId2 = mat2.data.data._id;
+
+  await api('POST', '/api/material-logs', token, { material: matId1, actionType: 'import', quantityChanged: 50 });
+  await api('POST', '/api/material-logs', token, { material: matId1, actionType: 'cut', quantityChanged: -5 });
+  await api('POST', '/api/material-logs', token, { material: matId2, actionType: 'import', quantityChanged: 30 });
+
+  const r1 = await api('GET', `/api/material-logs?materialId=${matId1}`, token);
+  check('GET material-logs ?materialId filter', r1.status, 200);
+  check('  returns 2 logs for mat1', r1.data.data.length >= 2, true);
+  const allMat1 = r1.data.data.every(l => String(l.material?._id || l.material) === matId1);
+  check('  all logs belong to mat1', allMat1, true);
+
+  const r2 = await api('GET', '/api/material-logs?actionType=import', token);
+  check('GET material-logs ?actionType=import', r2.status, 200);
+  const importOnly = r2.data.data.every(l => l.actionType === 'import');
+  check('  all logs are import type', importOnly, true);
+
+  const r3 = await api('GET', `/api/material-logs?materialId=${matId1}&actionType=cut`, token);
+  check('GET material-logs ?materialId+actionType', r3.status, 200);
+  check('  returns at least 1 log', r3.data.data.length >= 1, true);
+  check('  first log is cut', r3.data.data[0].actionType, 'cut');
+
+  await api('DELETE', `/api/materials/${matId1}`, token);
+  await api('DELETE', `/api/materials/${matId2}`, token);
+}
+
+async function testOrderStationFilter(token) {
+  console.log('\n=== Order stationId Query Filter ===\n');
+
+  const mat = await api('POST', '/api/materials', token, { name: 'StationFilter Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'StationFilter Cust' });
+  const custId = cust.data.data._id;
+
+  const ord1 = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 1, stations: ['sf_cutting', 'sf_polishing'],
+  });
+  const ord2 = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 1, stations: ['sf_cutting', 'sf_qc'],
+  });
+  const ord3 = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 1, stations: ['sf_edging'],
+  });
+  const ordId1 = ord1.data.data._id;
+  const ordId2 = ord2.data.data._id;
+  const ordId3 = ord3.data.data._id;
+
+  const r1 = await api('GET', '/api/orders?stationId=sf_cutting', token);
+  check('GET orders ?stationId=sf_cutting', r1.status, 200);
+  const cuttingIds = r1.data.data.map(o => o._id);
+  check('  includes ord1', cuttingIds.includes(ordId1), true);
+  check('  includes ord2', cuttingIds.includes(ordId2), true);
+  check('  excludes ord3', cuttingIds.includes(ordId3), false);
+
+  const r2 = await api('GET', '/api/orders?stationId=sf_edging', token);
+  check('GET orders ?stationId=sf_edging', r2.status, 200);
+  const edgingIds = r2.data.data.map(o => o._id);
+  check('  includes ord3', edgingIds.includes(ordId3), true);
+  check('  excludes ord1', edgingIds.includes(ordId1), false);
+
+  await api('DELETE', `/api/orders/${ordId1}`, token);
+  await api('DELETE', `/api/orders/${ordId2}`, token);
+  await api('DELETE', `/api/orders/${ordId3}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+async function testPaneWithInventoryCut(token) {
+  console.log('\n=== Pane Creation with Inventory (Auto-Cut MaterialLog) ===\n');
+
+  const mat = await api('POST', '/api/materials', token, { name: 'Cut Log Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const inv = await api('POST', '/api/inventories', token, { material: matId, stockType: 'Raw', quantity: 100, location: 'WH-A' });
+  const invId = inv.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'Cut Log Cust' });
+  const custId = cust.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1 });
+  const ordId = ord.data.data._id;
+
+  const logsBefore = await api('GET', `/api/material-logs?materialId=${matId}`, token);
+  const countBefore = logsBefore.data.data.length;
+
+  const pane = await api('POST', '/api/panes', token, { order: ordId, inventory: invId });
+  check('CREATE pane with inventory', pane.status, 201);
+  const paneId = pane.data.data._id;
+
+  const logsAfter = await api('GET', `/api/material-logs?materialId=${matId}`, token);
+  check('  MaterialLog count increased', logsAfter.data.data.length > countBefore, true);
+  const cutLog = logsAfter.data.data.find(l => l.actionType === 'cut');
+  check('  cut log exists', !!cutLog, true);
+  if (cutLog) check('  cut log quantityChanged is -1', cutLog.quantityChanged, -1);
+
+  await api('DELETE', `/api/panes/${paneId}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/inventories/${invId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+async function testPaneGetByNumber(token) {
+  console.log('\n=== Pane GET by PaneNumber ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'PaneGet Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'PaneGet Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1 });
+  const ordId = ord.data.data._id;
+
+  const pane = await api('POST', '/api/panes', token, { order: ordId });
+  check('CREATE pane', pane.status, 201);
+  const paneId = pane.data.data._id;
+  const paneNumber = pane.data.data.paneNumber;
+
+  const r1 = await api('GET', `/api/panes/${paneId}`, token);
+  check('GET pane by ObjectId', r1.status, 200);
+  check('  correct paneNumber', r1.data.data.paneNumber, paneNumber);
+
+  const r2 = await api('GET', `/api/panes/${paneNumber}`, token);
+  check('GET pane by paneNumber', r2.status, 200);
+  check('  correct _id', r2.data.data._id, paneId);
+
+  const r3 = await api('GET', `/api/panes/${paneNumber.toLowerCase()}`, token);
+  check('GET pane by lowercase paneNumber', r3.status, 200);
+  check('  correct _id', r3.data.data._id, paneId);
+
+  const r4 = await api('GET', '/api/panes/PNE-9999', token);
+  check('GET non-existent paneNumber', r4.status, 404);
+
+  await api('DELETE', `/api/panes/${paneId}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+async function testWithdrawalMaterialLog(token) {
+  console.log('\n=== Withdrawal Auto-Created MaterialLog ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'WdLog Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  await api('POST', '/api/inventories', token, { material: matId, stockType: 'Raw', quantity: 100, location: 'WH' });
+
+  const logsBefore = await api('GET', `/api/material-logs?materialId=${matId}`, token);
+  const countBefore = logsBefore.data.data.length;
+
+  const wd = await api('POST', '/api/withdrawals', token, {
+    withdrawnBy: workerId, material: matId, quantity: 10, stockType: 'Raw',
+  });
+  check('CREATE withdrawal', wd.status, 201);
+  const wdId = wd.data.data._id;
+
+  const logsAfter = await api('GET', `/api/material-logs?materialId=${matId}`, token);
+  check('  MaterialLog count increased', logsAfter.data.data.length > countBefore, true);
+  const withdrawLog = logsAfter.data.data.find(l => l.actionType === 'withdraw');
+  check('  withdraw log exists', !!withdrawLog, true);
+  if (withdrawLog) {
+    check('  quantityChanged is -10', withdrawLog.quantityChanged, -10);
+    check('  stockType is Raw', withdrawLog.stockType, 'Raw');
+  }
+
+  await api('DELETE', `/api/withdrawals/${wdId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+}
+
+async function testPaneDeliveredAt(token) {
+  console.log('\n=== Pane deliveredAt Field ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'Deliver Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'Deliver Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1 });
+  const ordId = ord.data.data._id;
+
+  const pane = await api('POST', '/api/panes', token, { order: ordId });
+  check('CREATE pane without deliveredAt', pane.status, 201);
+  const paneId = pane.data.data._id;
+  check('  deliveredAt is null', pane.data.data.deliveredAt == null, true);
+
+  const now = new Date().toISOString();
+  const r1 = await api('PATCH', `/api/panes/${paneId}`, token, { deliveredAt: now });
+  check('UPDATE pane deliveredAt', r1.status, 200);
+  check('  deliveredAt is set', !!r1.data.data.deliveredAt, true);
+
+  const r2 = await api('GET', `/api/panes/${paneId}`, token);
+  check('  deliveredAt persisted', !!r2.data.data.deliveredAt, true);
+
+  await api('DELETE', `/api/panes/${paneId}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+async function testProductionLogAdvancedFields(token) {
+  console.log('\n=== ProductionLog Advanced Fields ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'ProdAdv Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const cust = await api('POST', '/api/customers', token, { name: 'ProdAdv Cust' });
+  const custId = cust.data.data._id;
+  const ord = await api('POST', '/api/orders', token, { customer: custId, material: matId, quantity: 1 });
+  const ordId = ord.data.data._id;
+  const pane = await api('POST', '/api/panes', token, { order: ordId });
+  const paneId = pane.data.data._id;
+
+  const r1 = await api('POST', '/api/production-logs', token, {
+    pane: paneId, order: ordId, station: 'qc', action: 'qc_pass',
+    operator: workerId,
+    qcResults: [
+      { label: 'Surface quality', passed: true, note: 'No scratches' },
+      { label: 'Dimension check', passed: true },
+      { label: 'Edge smoothness', passed: false, note: 'Minor chip' },
+    ],
+    status: 'pass',
+    durationMs: 45000,
+    startedAt: new Date(Date.now() - 45000).toISOString(),
+    completedAt: new Date().toISOString(),
+  });
+  check('CREATE production log with qcResults', r1.status, 201);
+  const logId1 = r1.data.data._id;
+  check('  qcResults length', r1.data.data.qcResults.length, 3);
+  check('  qcResults[0].label', r1.data.data.qcResults[0].label, 'Surface quality');
+  check('  qcResults[0].passed', r1.data.data.qcResults[0].passed, true);
+  check('  qcResults[2].passed', r1.data.data.qcResults[2].passed, false);
+  check('  status is pass', r1.data.data.status, 'pass');
+  check('  durationMs is 45000', r1.data.data.durationMs, 45000);
+  check('  startedAt is set', !!r1.data.data.startedAt, true);
+  check('  completedAt is set', !!r1.data.data.completedAt, true);
+
+  const r2 = await api('POST', '/api/production-logs', token, {
+    pane: paneId, order: ordId, station: 'cutting', action: 'fail',
+    operator: workerId,
+    defectCode: 'edge_chip',
+    status: 'fail',
+  });
+  check('CREATE production log with defectCode', r2.status, 201);
+  const logId2 = r2.data.data._id;
+  check('  defectCode persisted', r2.data.data.defectCode, 'edge_chip');
+  check('  status is fail', r2.data.data.status, 'fail');
+
+  const r3 = await api('POST', '/api/production-logs', token, {
+    pane: paneId, order: ordId, station: 'cutting', action: 'rework',
+    operator: workerId,
+    reworkReason: 'Edge chip needs re-grinding',
+    status: 'rework',
+  });
+  check('CREATE production log with reworkReason', r3.status, 201);
+  const logId3 = r3.data.data._id;
+  check('  reworkReason persisted', r3.data.data.reworkReason, 'Edge chip needs re-grinding');
+  check('  status is rework', r3.data.data.status, 'rework');
+
+  const r4 = await api('POST', '/api/production-logs', token, {
+    pane: paneId, order: ordId, station: 'tempering', action: 'batch_start',
+    operator: workerId,
+    startedAt: new Date().toISOString(),
+  });
+  check('CREATE production log batch_start', r4.status, 201);
+  const logId4 = r4.data.data._id;
+  check('  action is batch_start', r4.data.data.action, 'batch_start');
+
+  const r5 = await api('POST', '/api/production-logs', token, {
+    pane: paneId, order: ordId, station: 'tempering', action: 'batch_complete',
+    operator: workerId,
+    completedAt: new Date().toISOString(),
+  });
+  check('CREATE production log batch_complete', r5.status, 201);
+  const logId5 = r5.data.data._id;
+  check('  action is batch_complete', r5.data.data.action, 'batch_complete');
+
+  const r6 = await api('GET', `/api/production-logs/${logId1}`, token);
+  check('GET production log includes qcResults', r6.data.data.qcResults.length, 3);
+  check('  includes durationMs', r6.data.data.durationMs, 45000);
+
+  const r7 = await api('PATCH', `/api/production-logs/${logId2}`, token, {
+    defectCode: null, status: null,
+  });
+  check('UPDATE production log clear defectCode', r7.status, 200);
+
+  await api('DELETE', `/api/production-logs/${logId1}`, token);
+  await api('DELETE', `/api/production-logs/${logId2}`, token);
+  await api('DELETE', `/api/production-logs/${logId3}`, token);
+  await api('DELETE', `/api/production-logs/${logId4}`, token);
+  await api('DELETE', `/api/production-logs/${logId5}`, token);
+  await api('DELETE', `/api/panes/${paneId}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+async function testNotificationReferences(token) {
+  console.log('\n=== Notification referenceId/referenceType ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const r1 = await api('POST', '/api/notifications', token, {
+    recipient: workerId,
+    type: 'pane_arrived',
+    title: 'Test notification',
+    message: 'A pane has arrived',
+    referenceId: workerId,
+    referenceType: 'Pane',
+    priority: 'high',
+  });
+  check('CREATE notification with referenceId', r1.status, 201);
+  const notifId = r1.data.data._id;
+  check('  referenceId persisted', r1.data.data.referenceId, workerId);
+  check('  referenceType persisted', r1.data.data.referenceType, 'Pane');
+  check('  priority persisted', r1.data.data.priority, 'high');
+
+  const r2 = await api('GET', `/api/notifications/${notifId}`, token);
+  check('GET notification includes referenceId', r2.data.data.referenceId, workerId);
+  check('  includes referenceType', r2.data.data.referenceType, 'Pane');
+
+  const r3 = await api('POST', '/api/notifications', token, {
+    recipient: workerId,
+    type: 'info',
+    title: 'Simple notification',
+  });
+  check('CREATE notification without referenceId', r3.status, 201);
+  const notifId2 = r3.data.data._id;
+  check('  referenceId defaults to null', r3.data.data.referenceId, null);
+  check('  referenceType defaults to null', r3.data.data.referenceType, null);
+
+  await api('DELETE', `/api/notifications/${notifId}`, token);
+  await api('DELETE', `/api/notifications/${notifId2}`, token);
+}
+
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -1561,6 +1927,15 @@ async function main() {
   await testPaneLogs(token);
   await testInventoryMove(token);
   await testHealthEndpoint();
+  await testWorkerPasswordUpdate(token);
+  await testMaterialLogFilters(token);
+  await testOrderStationFilter(token);
+  await testPaneWithInventoryCut(token);
+  await testPaneGetByNumber(token);
+  await testWithdrawalMaterialLog(token);
+  await testPaneDeliveredAt(token);
+  await testProductionLogAdvancedFields(token);
+  await testNotificationReferences(token);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

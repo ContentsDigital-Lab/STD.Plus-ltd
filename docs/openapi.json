@@ -439,6 +439,7 @@
           "approvedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
           "withdrawnDimensions": { "$ref": "#/components/schemas/Dimensions" },
           "notes": { "type": "string" },
+          "inventory": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Inventory" }], "description": "Inventory slot the material was withdrawn from" },
           "withdrawnDate": { "type": "string", "format": "date-time" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
@@ -458,6 +459,7 @@
           "approvedBy": { "type": "string", "minLength": 1 },
           "withdrawnDimensions": { "$ref": "#/components/schemas/Dimensions" },
           "notes": { "type": "string" },
+          "inventory": { "type": "string", "minLength": 1, "description": "Inventory slot ID" },
           "withdrawnDate": { "type": "string", "format": "date-time" }
         }
       },
@@ -474,6 +476,7 @@
           "approvedBy": { "type": "string", "minLength": 1 },
           "withdrawnDimensions": { "$ref": "#/components/schemas/Dimensions" },
           "notes": { "type": "string" },
+          "inventory": { "type": "string", "minLength": 1, "description": "Inventory slot ID" },
           "withdrawnDate": { "type": "string", "format": "date-time" }
         }
       },
@@ -628,6 +631,7 @@
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"], "nullable": true },
           "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }] },
           "parentLog": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/MaterialLog" }] },
+          "worker": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }], "description": "Worker who performed the action" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
         }
@@ -645,7 +649,8 @@
           "totalPrice": { "type": "number", "minimum": 0 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
           "order": { "type": "string", "minLength": 1 },
-          "parentLog": { "type": "string", "minLength": 1 }
+          "parentLog": { "type": "string", "minLength": 1 },
+          "worker": { "type": "string", "minLength": 1 }
         }
       },
       "MaterialLogUpdateBody": {
@@ -660,7 +665,8 @@
           "totalPrice": { "type": "number", "minimum": 0 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
           "order": { "type": "string", "minLength": 1 },
-          "parentLog": { "type": "string", "minLength": 1 }
+          "parentLog": { "type": "string", "minLength": 1 },
+          "worker": { "type": "string", "minLength": 1 }
         }
       },
       "Notification": {
@@ -739,6 +745,7 @@
           "request": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Request" }] },
           "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }], "description": "Populated when an order is created from the request" },
           "material": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Material" }], "description": "Populated when an order is created from the request (inherited from the order's material)" },
+          "inventory": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Inventory" }], "description": "Inventory slot this pane was cut from (if any)" },
           "currentStation": { "type": "string", "description": "Current station name — defaults to first station in routing, or 'ready' if no routing" },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"], "default": "pending" },
           "routing": { "type": "array", "items": { "type": "string" } },
@@ -766,6 +773,7 @@
           "request": { "type": "string", "minLength": 1, "description": "Request ID this pane belongs to" },
           "order": { "type": "string", "minLength": 1, "description": "Order ID (optional, auto-filled when order is created from request)" },
           "material": { "type": "string", "minLength": 1, "description": "Material ID (optional, auto-filled from the order's material when order is created from request)" },
+          "inventory": { "type": "string", "minLength": 1, "description": "Inventory slot ID. If provided, a 'cut' MaterialLog is auto-created for traceability." },
           "currentStation": { "type": "string", "minLength": 1, "description": "Station name (any valid station)" },
           "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
@@ -791,15 +799,30 @@
         "properties": {
           "station": { "type": "string", "minLength": 1, "description": "The station where the scan is happening (must match the pane's current station)", "example": "cutting" },
           "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out"], "description": "`scan_in` — acknowledge arrival, `start` — begin work, `complete` — mark work done (pane stays at station with `awaiting_scan_out` status), `scan_out` — handoff pane to next station (or mark completed if last station)" },
-          "operator": { "type": "string", "minLength": 1, "description": "Worker ID of the operator performing the scan. Defaults to the authenticated user if omitted." }
+          "operator": { "type": "string", "minLength": 1, "description": "Worker ID. Accepted by validation but currently unused — the authenticated user (`req.user._id`) is always recorded as the worker in the PaneLog." }
         }
       },
       "ScanResult": {
         "type": "object",
         "properties": {
           "pane": { "$ref": "#/components/schemas/Pane" },
-          "log": { "$ref": "#/components/schemas/ProductionLog" },
-          "nextStation": { "type": "string", "description": "The station the pane moved to (only present on `complete` action)", "example": "edging" }
+          "log": {
+            "type": "object",
+            "description": "PaneLog entry created by the scan",
+            "properties": {
+              "_id": { "type": "string" },
+              "pane": { "type": "string" },
+              "order": { "type": "string", "nullable": true },
+              "material": { "type": "string", "nullable": true },
+              "worker": { "type": "string", "nullable": true },
+              "station": { "type": "string" },
+              "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out"] },
+              "completedAt": { "type": "string", "format": "date-time", "nullable": true },
+              "createdAt": { "type": "string", "format": "date-time" },
+              "updatedAt": { "type": "string", "format": "date-time" }
+            }
+          },
+          "nextStation": { "type": "string", "description": "The station the pane moved to (only present on `scan_out` action)", "example": "edging" }
         }
       },
       "PaneUpdateBody": {
@@ -834,7 +857,7 @@
           "pane": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Pane" }] },
           "order": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Order" }] },
           "station": { "type": "string" },
-          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
           "operator": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Worker" }] },
           "defectCode": { "type": "string", "nullable": true },
           "reworkReason": { "type": "string", "nullable": true },
@@ -854,7 +877,7 @@
           "pane": { "type": "string", "minLength": 1 },
           "order": { "type": "string", "minLength": 1 },
           "station": { "type": "string", "minLength": 1 },
-          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
           "operator": { "type": "string", "minLength": 1 },
           "defectCode": { "type": "string" },
           "reworkReason": { "type": "string" },
@@ -871,7 +894,7 @@
           "pane": { "type": "string", "minLength": 1 },
           "order": { "type": "string", "minLength": 1 },
           "station": { "type": "string", "minLength": 1 },
-          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "fail", "rework", "qc_pass", "qc_fail", "batch_start", "batch_complete"] },
           "operator": { "type": "string", "minLength": 1 },
           "defectCode": { "type": "string" },
           "reworkReason": { "type": "string" },
@@ -1649,6 +1672,8 @@
         "summary": "List all material logs",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
+          { "name": "materialId", "in": "query", "schema": { "type": "string" }, "description": "Filter by material ID" },
+          { "name": "actionType", "in": "query", "schema": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] }, "description": "Filter by action type" },
           { "$ref": "#/components/parameters/PageParam" },
           { "$ref": "#/components/parameters/LimitParam" },
           { "$ref": "#/components/parameters/SortParam" }
@@ -1730,7 +1755,7 @@
       "get": {
         "tags": ["Requests"],
         "summary": "List all requests",
-        "description": "Any authenticated user can list requests (read-only).",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           { "$ref": "#/components/parameters/PageParam" },
@@ -1774,7 +1799,7 @@
       "get": {
         "tags": ["Requests"],
         "summary": "Get request by ID",
-        "description": "Any authenticated user can view a request (read-only).",
+        "description": "Requires **admin** or **manager** role.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -1897,8 +1922,10 @@
       "get": {
         "tags": ["Orders"],
         "summary": "List all orders",
+        "description": "Workers see only orders assigned to them. Admins and managers see all orders.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
+          { "name": "stationId", "in": "query", "schema": { "type": "string" }, "description": "Filter orders that include this station in their route" },
           { "$ref": "#/components/parameters/PageParam" },
           { "$ref": "#/components/parameters/LimitParam" },
           { "$ref": "#/components/parameters/SortParam" }
@@ -2339,14 +2366,19 @@
       "get": {
         "tags": ["Panes"],
         "summary": "List all panes",
+        "description": "Returns panes matching optional filters. Does **not** use cursor/offset pagination — returns up to `limit` results (default 200, max 1000) sorted by `sort` (default `-createdAt`).",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
-          { "$ref": "#/components/parameters/PageParam" },
-          { "$ref": "#/components/parameters/LimitParam" },
-          { "$ref": "#/components/parameters/SortParam" }
+          { "name": "order", "in": "query", "schema": { "type": "string" }, "description": "Filter by order ID" },
+          { "name": "request", "in": "query", "schema": { "type": "string" }, "description": "Filter by request ID" },
+          { "name": "material", "in": "query", "schema": { "type": "string" }, "description": "Filter by material ID" },
+          { "name": "station", "in": "query", "schema": { "type": "string" }, "description": "Filter by current station name" },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed"] }, "description": "Filter by current status" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 200, "maximum": 1000, "minimum": 1 }, "description": "Max results to return (default 200, max 1000)" },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "default": "-createdAt" }, "description": "Sort field (prefix with `-` for descending)" }
         ],
         "responses": {
-          "200": { "description": "List of panes", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Pane" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }] } } } },
+          "200": { "description": "List of panes", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Pane" } } } }] } } } },
           "401": { "$ref": "#/components/responses/401" }
         }
       },
@@ -2380,9 +2412,10 @@
     "/api/panes/{id}": {
       "get": {
         "tags": ["Panes"],
-        "summary": "Get pane by ID",
+        "summary": "Get pane by ID or pane number",
+        "description": "Accepts either a MongoDB ObjectId or a pane number (e.g. `PNE-0001`). The endpoint auto-detects the format and queries accordingly.",
         "security": [{ "BearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Pane ObjectId or pane number (e.g. `PNE-0001`)", "example": "PNE-0001" }],
         "responses": {
           "200": { "description": "Pane found", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Pane" } } }] } } } },
           "401": { "$ref": "#/components/responses/401" },
@@ -2502,7 +2535,7 @@
       "post": {
         "tags": ["QR Scanning"],
         "summary": "Scan a pane (QR scan endpoint)",
-        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Two-step completion flow:**\n1. `complete` — Marks work as done at the current station. Pane stays at the same station with status `awaiting_scan_out`.\n2. `scan_out` — Hands off the pane to the next station (sets status to `pending`). If it's the last station, pane is marked `completed`.\n\n**Actions:**\n- `scan_in` — Acknowledge the pane at the station. Sets `startedAt` but does not move the pane.\n- `start` — Mark work as in-progress at the station.\n- `complete` — Finish work at the station. Pane stays at the station with status `awaiting_scan_out`, ready for handoff.\n- `scan_out` — Handoff: advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set.\n\n**Side effects:**\n- Creates a `PaneLog` entry for every scan action.\n- On `scan_out`: updates associated `Order` progress (`panesCompleted`, `progressPercent`) and order `status`.\n- On `scan_out`: emits WebSocket events `pane:updated`, `station:pane_arrived`, `order:updated`, `notification`.\n- On `scan_out`: creates a `Notification` for the order's assigned worker (if any).\n\n**Validations:**\n- `complete` and `scan_out` must be performed at the pane's `currentStation`.\n- `scan_out` requires pane status to be `awaiting_scan_out` (i.e. `complete` must be called first).\n- Scanning a pane that is already `completed` returns 400.\n\nRequires authentication. Any role can scan.",
+        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Actions:**\n- `scan_in` — Sets `currentStation` to the station, `currentStatus` to `in_progress`, and `startedAt` (if not already set).\n- `start` — Sets `currentStation` to the station and `currentStatus` to `in_progress`.\n- `complete` — Sets `currentStation` to the station and `currentStatus` to `awaiting_scan_out`.\n- `scan_out` — Requires status `awaiting_scan_out`. Advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set.\n\n**Side effects (every action):**\n- Creates a `PaneLog` entry.\n- Emits `pane:updated` with `action: \"scanned\"` to `dashboard`, `pane`, `production`, `station:<name>`.\n- Emits `log:updated` with `action: \"pane_scanned\"` to `log`.\n- If the pane has no `material` but has an `order`, the order's material is backfilled onto the pane.\n\n**Additional side effects (scan_out only):**\n- Updates associated `Order` progress (`panesCompleted`, `progressPercent`, `stationBreakdown`) and order `status`.\n- Emits `order:updated`, `station:pane_arrived`, and `notification` WebSocket events.\n- Creates a `Notification` for the order's assigned worker (if any).\n- Emits a station-room `notification` event to `station:<nextStation>` for the pane arrival.\n\n**Validations:**\n- `complete` and `scan_out` must be performed at the pane's `currentStation`.\n- `scan_out` requires pane status to be `awaiting_scan_out` (i.e. `complete` must be called first).\n- Scanning a pane that is already `completed` returns 400.\n\nRequires authentication. Any role can scan.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
