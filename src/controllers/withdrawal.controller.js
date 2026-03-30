@@ -10,6 +10,7 @@ const { verifyReferences } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
 const Pane = require('../models/Pane');
+const MaterialLog = require('../models/MaterialLog');
 
 const POPULATE_FIELDS = ['order', 'pane', 'withdrawnBy', 'material', 'approvedBy', 'inventory'];
 
@@ -102,6 +103,27 @@ exports.create = async (req, res, next) => {
 
     const withdrawal = await Withdrawal.create(req.validated.body);
     const populated = await withdrawal.populate(POPULATE_FIELDS);
+
+    // Create MaterialLog for traceability
+    console.log('[withdrawal.create] Creating MaterialLog with:', { material, order, pane, withdrawnBy, quantity, stockType });
+    try {
+      const matLog = await MaterialLog.create({
+        material,
+        actionType:      'withdraw',
+        referenceId:     req.validated.body.inventory ?? null,
+        quantityChanged: -quantity,
+        stockType:       stockType ?? null,
+        order:           order ?? null,
+        pane:            pane ?? null,
+        worker:          withdrawnBy ?? null,
+      });
+      console.log('[withdrawal.create] MaterialLog created:', matLog._id);
+      const populatedLog = await matLog.populate(['material', 'order', 'pane', 'worker']);
+      emit(req, 'log:updated', { action: 'created', data: populatedLog }, ['dashboard', 'log']);
+    } catch (err) {
+      console.error('[withdrawal.create] MaterialLog failed:', err);
+    }
+
     emit(req, 'withdrawal:updated', { action: 'created', data: populated }, ['dashboard', 'withdrawal']);
     emit(req, 'inventory:updated', { action: 'adjusted' }, ['dashboard', 'inventory']);
     success(res, populated, 'Withdrawal created', 201);

@@ -7,7 +7,7 @@ const emit = require('../utils/emitEvent');
 const { verifyReferences, cascadeDeleteReferenced, cascadeDeleteManyReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['material', 'pane', 'order', 'parentLog'];
+const POPULATE_FIELDS = ['material', 'pane', 'order', 'parentLog', 'worker'];
 
 const LOG_DEPENDENTS = [
   { model: MaterialLog, field: 'parentLog' },

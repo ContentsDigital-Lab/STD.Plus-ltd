@@ -19,6 +19,7 @@ const createSchema = z.object({
     stockType: z.enum(['Raw', 'Reuse']).optional(),
     order: z.string().min(1).optional(),
     parentLog: z.string().min(1).optional(),
+    worker: z.string().min(1).optional(),
   }),
 });
 
@@ -34,6 +35,7 @@ const updateSchema = z.object({
     stockType: z.enum(['Raw', 'Reuse']).optional(),
     order: z.string().min(1).optional(),
     parentLog: z.string().min(1).optional(),
+    worker: z.string().min(1).optional(),
   }),
 });
 

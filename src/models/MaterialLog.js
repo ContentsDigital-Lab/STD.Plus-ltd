@@ -48,6 +48,11 @@ const materialLogSchema = new mongoose.Schema({
     ref: 'MaterialLog',
     default: null,
   },
+  worker: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Worker',
+    default: null,
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('MaterialLog', materialLogSchema);
