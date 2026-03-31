@@ -52,6 +52,27 @@ async function setupUsers(adminToken) {
   }
 }
 
+async function setupStations(adminToken) {
+  const tmpl = await api('POST', '/api/station-templates', adminToken, {
+    name: 'RBAC Template',
+    uiSchema: {},
+  });
+  const tmplId = tmpl.data.data._id;
+  const cutRes = await api('POST', '/api/stations', adminToken, {
+    name: 'cutting',
+    templateId: tmplId,
+  });
+  const polRes = await api('POST', '/api/stations', adminToken, {
+    name: 'polishing',
+    templateId: tmplId,
+  });
+  return {
+    tmplId,
+    cutting: cutRes.data.data._id,
+    polishing: polRes.data.data._id,
+  };
+}
+
 async function testWorkers(tokens) {
   console.log('\n=== Workers (admin only for CUD) ===\n');
 
@@ -127,14 +148,14 @@ async function testResource(tokens, name, path, createBody) {
   return { id: r5.data.data?._id };
 }
 
-async function testOrders(tokens, customerId, materialId, workerId) {
+async function testOrders(tokens, customerId, materialId, workerId, stns) {
   console.log('\n=== Orders (admin+manager CD, all update, worker sees own) ===\n');
   const path = '/api/orders';
   const body = {
     customer: customerId,
     material: materialId,
     quantity: 5,
-    stations: ['cutting', 'polishing'],
+    stations: [stns.cutting, stns.polishing],
     currentStationIndex: 0,
     notes: 'RBAC test order',
   };
@@ -160,7 +181,7 @@ async function testOrders(tokens, customerId, materialId, workerId) {
     const r6 = await api('PATCH', `${path}/${ordId}`, tokens.worker, {
       status: 'in_progress',
       currentStationIndex: 1,
-      stationHistory: [{ station: 'cutting', enteredAt: new Date().toISOString(), completedBy: workerId }],
+      stationHistory: [{ station: stns.cutting, enteredAt: new Date().toISOString(), completedBy: workerId }],
       stationData: { cutting: { result: 'pass' } },
       notes: 'Started production',
     });
@@ -377,7 +398,7 @@ async function testNotifications(tokens, workerId) {
   if (notifId2) await api('DELETE', `${path}/${notifId2}`, tokens.admin);
 }
 
-async function testPanes(tokens, customerId, materialId) {
+async function testPanes(tokens, customerId, materialId, stns) {
   console.log('\n=== Panes (admin+manager CU, admin-only D) ===\n');
   const path = '/api/panes';
 
@@ -406,9 +427,9 @@ async function testPanes(tokens, customerId, materialId) {
   check('POST   /panes               (worker)', r6.status, 403);
 
   if (paneId) {
-    const r7 = await api('PATCH', `${path}/${paneId}`, tokens.manager, { currentStation: 'cutting' });
+    const r7 = await api('PATCH', `${path}/${paneId}`, tokens.manager, { currentStation: stns.cutting });
     check('PATCH  /panes/:id           (manager)', r7.status, 200);
-    const r8 = await api('PATCH', `${path}/${paneId}`, tokens.worker, { currentStation: 'edging' });
+    const r8 = await api('PATCH', `${path}/${paneId}`, tokens.worker, { currentStation: stns.polishing });
     check('PATCH  /panes/:id           (worker)', r8.status, 403);
 
     const r9 = await api('DELETE', `${path}/${paneId}`, tokens.worker);
@@ -423,7 +444,7 @@ async function testPanes(tokens, customerId, materialId) {
   await api('DELETE', `/api/orders/${ordId}`, tokens.admin);
 }
 
-async function testProductionLogs(tokens, customerId, materialId) {
+async function testProductionLogs(tokens, customerId, materialId, stns) {
   console.log('\n=== Production Logs (all create, admin+manager update, admin-only delete) ===\n');
   const path = '/api/production-logs';
 
@@ -435,7 +456,7 @@ async function testProductionLogs(tokens, customerId, materialId) {
   const pane = await api('POST', '/api/panes', tokens.admin, { order: ordId });
   const paneId = pane.data.data._id;
 
-  const body = { pane: paneId, order: ordId, station: 'cutting', action: 'scan_in', operator: workerId };
+  const body = { pane: paneId, order: ordId, station: stns.cutting, action: 'scan_in', operator: workerId };
 
   const r1 = await api('GET', path, tokens.admin);
   check('GET    /production-logs     (admin)', r1.status, 200);
@@ -703,6 +724,7 @@ async function main() {
 
   const adminToken = await login('admin', 'admin123');
   await setupUsers(adminToken);
+  const stns = await setupStations(adminToken);
 
   const managerToken = await login('manager1', 'manager123');
   const workerToken = await login('worker1', 'worker123');
@@ -744,12 +766,12 @@ async function main() {
 
   // Test resources with ownership
   await testMaterialLogs(tokens, matId);
-  await testOrders(tokens, custId, matId, workerId);
+  await testOrders(tokens, custId, matId, workerId, stns);
   await testRequests(tokens, custId);
   await testWithdrawals(tokens, matId, workerId);
   await testClaims(tokens, custId, matId, workerId, adminId);
-  await testPanes(tokens, custId, matId);
-  await testProductionLogs(tokens, custId, matId);
+  await testPanes(tokens, custId, matId, stns);
+  await testProductionLogs(tokens, custId, matId, stns);
   await testNotifications(tokens, workerId);
   await testNotificationPreferences(tokens);
   await testStickerTemplates(tokens);
@@ -759,6 +781,7 @@ async function main() {
   await testAuthEdgeCases(tokens);
 
   // Cleanup shared test data
+  await api('DELETE', `/api/station-templates/${stns.tmplId}`, adminToken);
   await api('DELETE', `/api/materials/${matId}`, adminToken);
   await api('DELETE', `/api/customers/${custId}`, adminToken);
   await api('DELETE', `/api/station-templates/${tmplId}`, adminToken);

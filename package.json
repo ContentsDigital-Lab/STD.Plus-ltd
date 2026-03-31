@@ -16,6 +16,7 @@
     "seed": "node scripts/seed.js",
     "reset": "node scripts/reset.js",
     "backfill": "node scripts/backfill-auto-numbers.js",
+    "migrate:stations": "node scripts/migrate-station-ids.js",
     "docs": "cd docs && npx mintlify dev"
   },
   "repository": {

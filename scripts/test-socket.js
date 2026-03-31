@@ -304,7 +304,7 @@ async function testDataEvents() {
   // 14. production-log:updated
   const prodLogPromise = waitForEvent(socket, 'production-log:updated');
   const prodLogData = await apiCall('POST', '/api/production-logs', token, {
-    pane: paneId, order: paneOrdId, station: 'cutting', action: 'scan_in', operator: workerId,
+    pane: paneId, order: paneOrdId, station: stationId, action: 'scan_in', operator: workerId,
   });
   const prodLogEvent = await prodLogPromise;
   console.log(`${n++}. PASS production-log:updated — action: ${prodLogEvent.action}`);
@@ -509,7 +509,14 @@ async function testOrderFirstStationNotification() {
   const token = await getToken();
   const socket = await connect(API, '/api/socket-entry', { token });
 
-  await emitWithAckData(socket, 'join_station_room', { stationId: 'ws_notif_test_stn' });
+  const tmpl = await apiCall('POST', '/api/station-templates', token, { name: 'WS Notif Template' });
+  const tmplId = tmpl.data._id;
+  const stn1 = await apiCall('POST', '/api/stations', token, { name: 'WS Notif Station', templateId: tmplId });
+  const stn1Id = stn1.data._id;
+  const stn2 = await apiCall('POST', '/api/stations', token, { name: 'WS QC Station', templateId: tmplId });
+  const stn2Id = stn2.data._id;
+
+  await emitWithAckData(socket, 'join_station_room', { stationId: stn1Id });
 
   const mat = await apiCall('POST', '/api/materials', token, { name: 'NotifTest Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data._id;
@@ -518,7 +525,7 @@ async function testOrderFirstStationNotification() {
 
   const notifPromise = waitForEvent(socket, 'notification');
   const ord = await apiCall('POST', '/api/orders', token, {
-    customer: custId, material: matId, quantity: 1, stations: ['ws_notif_test_stn', 'qc'],
+    customer: custId, material: matId, quantity: 1, stations: [stn1Id, stn2Id],
   });
   const ordId = ord.data._id;
 
@@ -529,6 +536,7 @@ async function testOrderFirstStationNotification() {
   await apiCall('DELETE', `/api/orders/${ordId}`, token);
   await apiCall('DELETE', `/api/materials/${matId}`, token);
   await apiCall('DELETE', `/api/customers/${custId}`, token);
+  await apiCall('DELETE', `/api/station-templates/${tmplId}`, token);
   socket.disconnect();
   console.log('\n=== Order first-station notification test passed ===\n');
 }

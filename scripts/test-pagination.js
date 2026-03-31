@@ -39,6 +39,13 @@ async function main() {
   const token = await login('admin', 'admin123');
   console.log(`   Token: ...${token.slice(-10)}\n`);
 
+  const tmpl = await api('POST', '/api/station-templates', token, { name: 'Pagination Template' });
+  const tmplId = tmpl.data.data._id;
+  const stnCutting = await api('POST', '/api/stations', token, { name: 'cutting', templateId: tmplId });
+  const stnQc = await api('POST', '/api/stations', token, { name: 'qc', templateId: tmplId });
+  const cuttingId = stnCutting.data.data._id;
+  const qcId = stnQc.data.data._id;
+
   // Create 25 materials for testing
   console.log('--- Setup: creating 25 materials ---\n');
   const materialIds = [];
@@ -189,7 +196,7 @@ async function main() {
   for (let i = 0; i < 5; i++) {
     const p = await api('POST', '/api/panes', token, {
       order: ordId,
-      routing: ['cutting', 'qc'],
+      routing: [cuttingId, qcId],
       dimensions: { width: 100 * (i + 1), height: 200, thickness: 5 },
       glassType: 'tempered',
     });
@@ -209,9 +216,11 @@ async function main() {
   check('GET /panes?order= filter', rPanesOrd.data.data.length, 5);
 
   // Filter by station
-  const rPanesSt = await api('GET', '/api/panes?station=cutting', token);
-  check('GET /panes?station=cutting filter', rPanesSt.status, 200);
-  const allCutting = rPanesSt.data.data.every((p) => p.currentStation === 'cutting');
+  const rPanesSt = await api('GET', `/api/panes?station=${cuttingId}`, token);
+  check('GET /panes?station= filter', rPanesSt.status, 200);
+  const allCutting = rPanesSt.data.data.every(
+    (p) => (p.currentStation?._id || p.currentStation) === cuttingId
+  );
   check('  all results at cutting', allCutting, true);
 
   // Filter by status
@@ -243,6 +252,7 @@ async function main() {
   await api('DELETE', `/api/orders/${ordId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
   await api('DELETE', `/api/materials/${mat1Id}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
 
   console.log('--- Cleanup: deleting 25 materials ---\n');
   await api('DELETE', '/api/materials', token, { ids: materialIds });

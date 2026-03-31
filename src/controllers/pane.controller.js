@@ -16,11 +16,13 @@ const MaterialLog = require('../models/MaterialLog');
 const Inventory = require('../models/Inventory');
 
 const POPULATE_FIELDS = [
-  { path: 'order',    select: 'orderNumber code customer material' },
-  { path: 'request',  select: 'code' },
+  { path: 'order',          select: 'orderNumber code customer material' },
+  { path: 'request',        select: 'code' },
   { path: 'withdrawal' },
   { path: 'remakeOf' },
-  { path: 'material', select: 'name' },
+  { path: 'material',       select: 'name' },
+  { path: 'currentStation', select: 'name' },
+  { path: 'routing',        select: 'name' },
 ];
 
 const restoreInventory = async (materialId, stockType, quantity) => {
@@ -48,7 +50,9 @@ exports.getAll = async (req, res, next) => {
     if (req.query.order)    filter.order    = req.query.order;
     if (req.query.request)  filter.request  = req.query.request;
     if (req.query.material) filter.material = req.query.material;
-    if (req.query.station)  filter.currentStation = req.query.station;
+    if (req.query.station) {
+      filter.currentStation = req.query.station === 'null' ? null : req.query.station;
+    }
     if (req.query.status)   filter.currentStatus  = req.query.status;
 
     const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit) || 200));
@@ -180,8 +184,10 @@ exports.scan = async (req, res, next) => {
       return fail(res, `กระจก ${pane.paneNumber} already completed`, 400);
     }
 
-    if (['complete', 'scan_out'].includes(action) && pane.currentStation !== station) {
-      return fail(res, `กระจกอยู่ที่สถานี ${pane.currentStation} ไม่ใช่ ${station}`, 400);
+    const currentStationStr = pane.currentStation ? pane.currentStation.toString() : null;
+
+    if (['complete', 'scan_out'].includes(action) && currentStationStr !== station) {
+      return fail(res, `กระจกอยู่ที่สถานี ${currentStationStr} ไม่ใช่ ${station}`, 400);
     }
 
     const now = new Date();
@@ -208,15 +214,16 @@ exports.scan = async (req, res, next) => {
         return fail(res, 'กระจกยังไม่เสร็จสิ้น ต้องกด "เสร็จสิ้น" ก่อน scan out', 400);
       }
 
-      const route = Array.isArray(pane.routing) ? pane.routing : [];
+      const route = Array.isArray(pane.routing) ? pane.routing.map(r => r.toString()) : [];
       const idx   = route.indexOf(station);
-      nextStation = (idx >= 0 && idx < route.length - 1) ? route[idx + 1] : null;
+      const nextRouteId = (idx >= 0 && idx < route.length - 1) ? route[idx + 1] : null;
+      nextStation = nextRouteId;
 
       if (nextStation) {
         pane.currentStation = nextStation;
         pane.currentStatus  = 'pending';
       } else {
-        pane.currentStation = station;
+        pane.currentStation = null;
         pane.currentStatus  = 'completed';
         pane.completedAt    = now;
       }
@@ -282,7 +289,7 @@ exports.scan = async (req, res, next) => {
             const title = isLastStation ? 'กระจกเสร็จสมบูรณ์' : 'มีกระจกเข้าสถานี';
             const message = isLastStation
               ? `กระจก ${pane.paneNumber} completed all stations`
-              : `กระจก ${pane.paneNumber} เข้าสถานี ${nextStation} แล้ว`;
+              : `กระจก ${pane.paneNumber} arrived at next station`;
             const notification = await Notification.create({
               recipient: recipientId,
               type: 'pane_arrived',

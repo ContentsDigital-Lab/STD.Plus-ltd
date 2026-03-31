@@ -7,7 +7,7 @@ const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['pane', 'order', 'operator'];
+const POPULATE_FIELDS = ['pane', 'order', 'operator', { path: 'station', select: 'name' }];
 
 exports.getAll = async (req, res, next) => {
   try {

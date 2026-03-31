@@ -23,6 +23,37 @@ async function login(username, password) {
   return res.data.data.token;
 }
 
+async function createStations(token) {
+  const tmplRes = await api('POST', '/api/station-templates', token, {
+    name: `Claim Remake Template ${Date.now()}`,
+  });
+  const tmplId = tmplRes.data.data?._id;
+  if (!tmplId) {
+    throw new Error(`createStations: template failed (${tmplRes.status}): ${JSON.stringify(tmplRes.data)}`);
+  }
+
+  async function createStation(name) {
+    const r = await api('POST', '/api/stations', token, { name, templateId: tmplId });
+    const id = r.data.data?._id;
+    if (!id) {
+      throw new Error(`createStations: station "${name}" failed (${r.status}): ${JSON.stringify(r.data)}`);
+    }
+    return id;
+  }
+
+  const cutting = await createStation('cutting');
+  const edging = await createStation('edging');
+  const qc = await createStation('qc');
+  const orderRelease = await createStation('order_release');
+
+  return { tmplId, cutting, edging, qc, orderRelease };
+}
+
+async function cleanupStations(token, stns) {
+  if (!stns?.tmplId) return;
+  await api('DELETE', `/api/station-templates/${stns.tmplId}`, token);
+}
+
 function check(label, actual, expected) {
   if (actual === expected) {
     console.log(`   PASS  ${label} — ${actual}`);
@@ -47,7 +78,7 @@ function checkTruthy(label, value) {
 // 1. CLAIM CREATION PULLS PANE FROM STATION
 // ──────────────────────────────────────────────
 
-async function testClaimPullsPaneFromStation(token) {
+async function testClaimPullsPaneFromStation(token, stns) {
   console.log('\n=== Claim Creation — Pane Pulled from Station ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -58,7 +89,7 @@ async function testClaimPullsPaneFromStation(token) {
   const mat = await api('POST', '/api/materials', token, { name: 'Claim Pull Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data.data._id;
 
-  const routing = ['cutting', 'edging', 'qc'];
+  const routing = [stns.cutting, stns.edging, stns.qc];
 
   const reqRes = await api('POST', '/api/requests', token, {
     customer: custId,
@@ -79,11 +110,11 @@ async function testClaimPullsPaneFromStation(token) {
   const ordId = ordRes.data.data._id;
 
   // Move pane1 to edging first
-  await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
-  await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: 'cutting', action: 'scan_out' });
+  await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
+  await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_out' });
 
   const pane1AtEdging = await api('GET', `/api/panes/${pane1._id}`, token);
-  check('pane1 is at edging before claim', pane1AtEdging.data.data.currentStation, 'edging');
+  check('pane1 is at edging before claim', pane1AtEdging.data.data.currentStation?._id, stns.edging);
 
   // Create claim via POST /api/claims/from-pane
   const claimRes = await api('POST', '/api/claims/from-pane', token, {
@@ -91,7 +122,7 @@ async function testClaimPullsPaneFromStation(token) {
     source: 'worker',
     description: 'Scratch found on pane 1',
     defectCode: 'scratch',
-    defectStation: 'edging',
+    defectStation: stns.edging,
     reportedBy: workerId,
   });
   check('CREATE claim from pane', claimRes.status, 201);
@@ -99,13 +130,13 @@ async function testClaimPullsPaneFromStation(token) {
 
   // Verify pane is pulled from station
   const pane1After = await api('GET', `/api/panes/${pane1._id}`, token);
-  check('pane1 currentStation is "claimed"', pane1After.data.data.currentStation, 'claimed');
-  check('pane1 currentStatus is "completed"', pane1After.data.data.currentStatus, 'completed');
+  check('pane1 currentStation is null (claimed)', pane1After.data.data.currentStation, null);
+  check('pane1 currentStatus is "claimed"', pane1After.data.data.currentStatus, 'claimed');
 
   // Verify order station breakdown updated
   const ordAfter = await api('GET', `/api/orders/${ordId}`, token);
   const breakdown = ordAfter.data.data.stationBreakdown || {};
-  check('order breakdown edging decremented', (breakdown.edging || 0) === 0, true);
+  check('order breakdown edging decremented', (breakdown[stns.edging] || 0) === 0, true);
 
   // Test claim via POST /api/orders/:orderId/claims (pane2 at cutting)
   const claimRes2 = await api('POST', `/api/orders/${ordId}/claims`, token, {
@@ -120,8 +151,8 @@ async function testClaimPullsPaneFromStation(token) {
   const claimId2 = claimRes2.data.data._id;
 
   const pane2After = await api('GET', `/api/panes/${pane2._id}`, token);
-  check('pane2 currentStation is "claimed"', pane2After.data.data.currentStation, 'claimed');
-  check('pane2 currentStatus is "completed"', pane2After.data.data.currentStatus, 'completed');
+  check('pane2 currentStation is null (claimed)', pane2After.data.data.currentStation, null);
+  check('pane2 currentStatus is "claimed"', pane2After.data.data.currentStatus, 'claimed');
 
   // Cleanup
   await api('DELETE', `/api/claims/${claimId}`, token);
@@ -155,7 +186,7 @@ async function testClaimPullsPaneFromStation(token) {
 // 2. CLAIM APPROVAL — REMAKE PANE CREATED
 // ──────────────────────────────────────────────
 
-async function testClaimApprovalCreateRemake(token) {
+async function testClaimApprovalCreateRemake(token, stns) {
   console.log('\n=== Claim Approval — Remake Pane Created ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -166,7 +197,7 @@ async function testClaimApprovalCreateRemake(token) {
   const mat = await api('POST', '/api/materials', token, { name: 'Claim Approve Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data.data._id;
 
-  const routing = ['cutting', 'edging', 'qc'];
+  const routing = [stns.cutting, stns.edging, stns.qc];
 
   const reqRes = await api('POST', '/api/requests', token, {
     customer: custId,
@@ -193,8 +224,8 @@ async function testClaimApprovalCreateRemake(token) {
   const ordId = ordRes.data.data._id;
 
   // Move pane to edging
-  await api('POST', `/api/panes/${originalPane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
-  await api('POST', `/api/panes/${originalPane.paneNumber}/scan`, token, { station: 'cutting', action: 'scan_out' });
+  await api('POST', `/api/panes/${originalPane.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
+  await api('POST', `/api/panes/${originalPane.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_out' });
 
   // Create claim (pane pulled from station)
   const claimRes = await api('POST', '/api/claims/from-pane', token, {
@@ -202,7 +233,7 @@ async function testClaimApprovalCreateRemake(token) {
     source: 'worker',
     description: 'Wrong dimension',
     defectCode: 'dimension_wrong',
-    defectStation: 'edging',
+    defectStation: stns.edging,
     reportedBy: workerId,
   });
   check('CREATE claim', claimRes.status, 201);
@@ -215,6 +246,7 @@ async function testClaimApprovalCreateRemake(token) {
     status: 'approved',
     decision: 'destroy',
     approvedBy: workerId,
+    remakeStation: stns.orderRelease,
   });
   check('APPROVE claim (destroy)', approveRes.status, 200);
   check('claim status is approved', approveRes.data.data.status, 'approved');
@@ -230,7 +262,7 @@ async function testClaimApprovalCreateRemake(token) {
   check('remade pane has new paneNumber', remade.paneNumber !== originalPane.paneNumber, true);
   check('remade pane order is null (no order yet)', remade.order, null);
   check('remade pane same request', String(remade.request?._id || remade.request), String(reqId));
-  check('remade pane currentStation is order_release', remade.currentStation, 'order_release');
+  check('remade pane at order_release station', remade.currentStation?._id, stns.orderRelease);
   check('remade pane currentStatus is pending', remade.currentStatus, 'pending');
   check('remade pane remakeOf points to original', String(remade.remakeOf?._id || remade.remakeOf), String(originalPane._id));
 
@@ -244,7 +276,12 @@ async function testClaimApprovalCreateRemake(token) {
   check('remade pane rawGlass.color', remade.rawGlass?.color, 'ใส');
   check('remade pane rawGlass.thickness', remade.rawGlass?.thickness, 5);
   check('remade pane rawGlass.sheetsPerPane', remade.rawGlass?.sheetsPerPane, 1);
-  check('remade pane routing matches', JSON.stringify(remade.routing), JSON.stringify(routing));
+  const expectedRoutingIds = JSON.stringify([stns.cutting, stns.edging, stns.qc]);
+  check(
+    'remade pane routing matches',
+    JSON.stringify((remade.routing || []).map((r) => r._id || r)),
+    expectedRoutingIds
+  );
 
   // Verify original order is unchanged
   const ordAfter = await api('GET', `/api/orders/${ordId}`, token);
@@ -291,7 +328,7 @@ async function testClaimApprovalCreateRemake(token) {
 // 3. DECISION KEEP ALSO CREATES REMAKE
 // ──────────────────────────────────────────────
 
-async function testKeepDecisionAlsoCreatesRemake(token) {
+async function testKeepDecisionAlsoCreatesRemake(token, stns) {
   console.log('\n=== Decision "keep" Also Creates Remake ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -302,7 +339,7 @@ async function testKeepDecisionAlsoCreatesRemake(token) {
   const mat = await api('POST', '/api/materials', token, { name: 'Claim Keep Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data.data._id;
 
-  const routing = ['cutting', 'qc'];
+  const routing = [stns.cutting, stns.qc];
 
   const reqRes = await api('POST', '/api/requests', token, {
     customer: custId,
@@ -333,6 +370,7 @@ async function testKeepDecisionAlsoCreatesRemake(token) {
     status: 'approved',
     decision: 'keep',
     approvedBy: workerId,
+    remakeStation: stns.orderRelease,
   });
   check('APPROVE claim (keep)', approveRes.status, 200);
   check('claim decision is keep', approveRes.data.data.decision, 'keep');
@@ -340,7 +378,7 @@ async function testKeepDecisionAlsoCreatesRemake(token) {
 
   const remadePaneId = approveRes.data.data.remadePane._id || approveRes.data.data.remadePane;
   const remadeRes = await api('GET', `/api/panes/${remadePaneId}`, token);
-  check('remake pane at order_release', remadeRes.data.data.currentStation, 'order_release');
+  check('remake pane at order_release', remadeRes.data.data.currentStation?._id, stns.orderRelease);
   check('remake pane order is null', remadeRes.data.data.order, null);
   check('remake pane width matches', remadeRes.data.data.dimensions?.width, 500);
   check('remake pane height matches', remadeRes.data.data.dimensions?.height, 400);
@@ -373,7 +411,7 @@ async function testKeepDecisionAlsoCreatesRemake(token) {
 // 4. NO DUPLICATE REMAKE ON RE-APPROVAL
 // ──────────────────────────────────────────────
 
-async function testNoDuplicateRemake(token) {
+async function testNoDuplicateRemake(token, stns) {
   console.log('\n=== No Duplicate Remake on Re-Approval ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -384,16 +422,18 @@ async function testNoDuplicateRemake(token) {
   const mat = await api('POST', '/api/materials', token, { name: 'Claim Dup Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data.data._id;
 
+  const routing = [stns.cutting];
+
   const reqRes = await api('POST', '/api/requests', token, {
     customer: custId,
     details: { type: 'clear', quantity: 1 },
-    panes: [{ routing: ['cutting'], dimensions: { width: 300, height: 200, thickness: 3 }, glassType: 'clear' }],
+    panes: [{ routing, dimensions: { width: 300, height: 200, thickness: 3 }, glassType: 'clear' }],
   });
   const reqId = reqRes.data.data._id;
   const pane = reqRes.data.data.panes[0];
 
   const ordRes = await api('POST', '/api/orders', token, {
-    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1, stations: ['cutting'],
+    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1, stations: routing,
   });
   const ordId = ordRes.data.data._id;
 
@@ -411,6 +451,7 @@ async function testNoDuplicateRemake(token) {
     status: 'approved',
     decision: 'destroy',
     approvedBy: workerId,
+    remakeStation: stns.orderRelease,
   });
   const remadePaneId = approveRes.data.data.remadePane._id || approveRes.data.data.remadePane;
   checkTruthy('first approval creates remake', remadePaneId);
@@ -419,6 +460,7 @@ async function testNoDuplicateRemake(token) {
   const reApproveRes = await api('PATCH', `/api/claims/${claimId}`, token, {
     status: 'approved',
     description: 'Updated description',
+    remakeStation: stns.orderRelease,
   });
   check('re-approval returns 200', reApproveRes.status, 200);
 
@@ -426,9 +468,10 @@ async function testNoDuplicateRemake(token) {
   const sameRemade = reApproveRes.data.data.remadePane._id || reApproveRes.data.data.remadePane;
   check('remadePane unchanged after re-approval', String(sameRemade), String(remadePaneId));
 
-  // Count remake panes — should be exactly 1
-  const allPanes = await api('GET', '/api/panes?limit=100', token);
-  const remakePanes = allPanes.data.data.filter((p) =>
+  // Count remake panes for this request — should be exactly 1 (scoped query avoids flaky full-list loads)
+  const byRequest = await api('GET', `/api/panes?request=${reqId}`, token);
+  const paneList = Array.isArray(byRequest.data?.data) ? byRequest.data.data : [];
+  const remakePanes = paneList.filter((p) =>
     String(p.remakeOf?._id || p.remakeOf) === String(pane._id)
   );
   check('only 1 remake pane created (no duplicates)', remakePanes.length, 1);
@@ -461,7 +504,7 @@ async function testNoDuplicateRemake(token) {
 // 5. REJECTION DOES NOT CREATE REMAKE
 // ──────────────────────────────────────────────
 
-async function testRejectionNoRemake(token) {
+async function testRejectionNoRemake(token, stns) {
   console.log('\n=== Rejection Does Not Create Remake ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -472,16 +515,18 @@ async function testRejectionNoRemake(token) {
   const mat = await api('POST', '/api/materials', token, { name: 'Claim Reject Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data.data._id;
 
+  const routing = [stns.cutting];
+
   const reqRes = await api('POST', '/api/requests', token, {
     customer: custId,
     details: { type: 'clear', quantity: 1 },
-    panes: [{ routing: ['cutting'], dimensions: { width: 300, height: 200, thickness: 3 }, glassType: 'clear' }],
+    panes: [{ routing, dimensions: { width: 300, height: 200, thickness: 3 }, glassType: 'clear' }],
   });
   const reqId = reqRes.data.data._id;
   const pane = reqRes.data.data.panes[0];
 
   const ordRes = await api('POST', '/api/orders', token, {
-    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1, stations: ['cutting'],
+    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1, stations: routing,
   });
   const ordId = ordRes.data.data._id;
 
@@ -517,7 +562,7 @@ async function testRejectionNoRemake(token) {
 // 6. ALREADY-COMPLETED PANE NOT PULLED AGAIN
 // ──────────────────────────────────────────────
 
-async function testCompletedPaneNotPulledAgain(token) {
+async function testCompletedPaneNotPulledAgain(token, stns) {
   console.log('\n=== Already-Completed Pane Not Re-Pulled ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -528,26 +573,28 @@ async function testCompletedPaneNotPulledAgain(token) {
   const mat = await api('POST', '/api/materials', token, { name: 'Claim Complete Mat', unit: 'sheet', reorderPoint: 5 });
   const matId = mat.data.data._id;
 
+  const routing = [stns.cutting];
+
   const reqRes = await api('POST', '/api/requests', token, {
     customer: custId,
     details: { type: 'clear', quantity: 1 },
-    panes: [{ routing: ['cutting'], glassType: 'clear' }],
+    panes: [{ routing, glassType: 'clear' }],
   });
   const reqId = reqRes.data.data._id;
   const pane = reqRes.data.data.panes[0];
 
   const ordRes = await api('POST', '/api/orders', token, {
-    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1, stations: ['cutting'],
+    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1, stations: routing,
   });
   const ordId = ordRes.data.data._id;
 
   // Complete pane through all stations
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'scan_out' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_out' });
 
   const paneBefore = await api('GET', `/api/panes/${pane._id}`, token);
   check('pane is completed', paneBefore.data.data.currentStatus, 'completed');
-  check('pane at cutting (last station)', paneBefore.data.data.currentStation, 'cutting');
+  check('pane at null (completed)', paneBefore.data.data.currentStation, null);
 
   // Create claim on already-completed pane (e.g. customer reports defect after delivery)
   const claimRes = await api('POST', `/api/orders/${ordId}/claims`, token, {
@@ -561,10 +608,9 @@ async function testCompletedPaneNotPulledAgain(token) {
   check('CREATE claim on completed pane', claimRes.status, 201);
   const claimId = claimRes.data.data._id;
 
-  // Pane should still be at its original station (not changed to 'claimed')
-  // because pullPaneFromStation skips already-completed panes
+  // Pane should still be completed with null currentStation (pull skipped for completed panes)
   const paneAfter = await api('GET', `/api/panes/${pane._id}`, token);
-  check('completed pane station unchanged', paneAfter.data.data.currentStation, 'cutting');
+  check('completed pane station unchanged', paneAfter.data.data.currentStation, null);
   check('completed pane status unchanged', paneAfter.data.data.currentStatus, 'completed');
 
   // Cleanup
@@ -602,12 +648,17 @@ async function main() {
   const token = await login('admin', 'admin123');
   console.log(`   Token: ...${token.slice(-10)}`);
 
-  await testClaimPullsPaneFromStation(token);
-  await testClaimApprovalCreateRemake(token);
-  await testKeepDecisionAlsoCreatesRemake(token);
-  await testNoDuplicateRemake(token);
-  await testRejectionNoRemake(token);
-  await testCompletedPaneNotPulledAgain(token);
+  const stns = await createStations(token);
+  try {
+    await testClaimPullsPaneFromStation(token, stns);
+    await testClaimApprovalCreateRemake(token, stns);
+    await testKeepDecisionAlsoCreatesRemake(token, stns);
+    await testNoDuplicateRemake(token, stns);
+    await testRejectionNoRemake(token, stns);
+    await testCompletedPaneNotPulledAgain(token, stns);
+  } finally {
+    await cleanupStations(token, stns);
+  }
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

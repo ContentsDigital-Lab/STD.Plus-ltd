@@ -43,6 +43,41 @@ function checkIncludes(label, str, substring) {
   }
 }
 
+function stationRefId(station) {
+  if (station == null) return null;
+  return String(station._id != null ? station._id : station);
+}
+
+async function createStations(token) {
+  const tmpl = await api('POST', '/api/station-templates', token, {
+    name: 'Integrity Test Template',
+  });
+  if (tmpl.status !== 201 || !tmpl.data.data?._id) {
+    throw new Error(`Station template create failed (${tmpl.status}): ${JSON.stringify(tmpl.data)}`);
+  }
+  const tmplId = tmpl.data.data._id;
+
+  async function mkStation(name) {
+    const r = await api('POST', '/api/stations', token, { name, templateId: tmplId });
+    if (r.status !== 201 || !r.data.data?._id) {
+      throw new Error(`Station "${name}" create failed (${r.status}): ${JSON.stringify(r.data)}`);
+    }
+    return r.data.data._id;
+  }
+
+  const cutting = await mkStation('cutting');
+  const polishing = await mkStation('polishing');
+  const inspection = await mkStation('inspection');
+  const qc = await mkStation('qc');
+  const tempering = await mkStation('tempering');
+  return { tmplId, cutting, polishing, inspection, qc, tempering };
+}
+
+async function cleanupStations(token, stns) {
+  if (!stns?.tmplId) return;
+  await api('DELETE', `/api/station-templates/${stns.tmplId}`, token);
+}
+
 // ──────────────────────────────────────────────
 // 1. CASCADE DELETE PROTECTION
 // ──────────────────────────────────────────────
@@ -525,7 +560,7 @@ async function testNotificationPreferences(token) {
 // 8. ORDER NEW FIELDS (currentStationIndex, stationHistory, stationData, notes)
 // ──────────────────────────────────────────────
 
-async function testOrderNewFields(token) {
+async function testOrderNewFields(token, stns) {
   console.log('\n=== Order New Fields (currentStationIndex, stationHistory, stationData, notes) ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -536,17 +571,18 @@ async function testOrderNewFields(token) {
   const cust = await api('POST', '/api/customers', token, { name: 'Station Flow Customer' });
   const custId = cust.data.data._id;
 
+  const enteredAt0 = new Date().toISOString();
   // Create order with new fields
   const r1 = await api('POST', '/api/orders', token, {
     customer: custId,
     material: matId,
     quantity: 10,
-    stations: ['cutting', 'polishing', 'inspection'],
+    stations: [stns.cutting, stns.polishing, stns.inspection],
     currentStationIndex: 0,
     stationHistory: [
-      { station: 'cutting', enteredAt: new Date().toISOString(), completedBy: workerId },
+      { station: stns.cutting, enteredAt: enteredAt0, completedBy: workerId },
     ],
-    stationData: { cutting: { temperature: 350, blade: 'diamond' } },
+    stationData: { [stns.cutting]: { temperature: 350, blade: 'diamond' } },
     notes: 'Rush order — customer VIP',
   });
   check('CREATE order with new fields', r1.status, 201);
@@ -556,21 +592,21 @@ async function testOrderNewFields(token) {
   const r2 = await api('GET', `/api/orders/${ordId}`, token);
   check('  currentStationIndex persisted', r2.data.data.currentStationIndex, 0);
   check('  stationHistory length', r2.data.data.stationHistory.length, 1);
-  check('  stationHistory[0].station', r2.data.data.stationHistory[0].station, 'cutting');
-  check('  stationData.cutting exists', r2.data.data.stationData.cutting !== undefined, true);
-  check('  stationData.cutting.temperature', r2.data.data.stationData.cutting.temperature, 350);
+  check('  stationHistory[0].station id', stationRefId(r2.data.data.stationHistory[0].station), String(stns.cutting));
+  check('  stationData cutting exists', r2.data.data.stationData[stns.cutting] !== undefined, true);
+  check('  stationData cutting temperature', r2.data.data.stationData[stns.cutting].temperature, 350);
   check('  notes persisted', r2.data.data.notes, 'Rush order — customer VIP');
 
-  // Update: advance station, add history entry, add stationData
+  // Update: advance station, add history entry, add stationData (send plain ObjectIds, not populated refs)
   const r3 = await api('PATCH', `/api/orders/${ordId}`, token, {
     currentStationIndex: 1,
     stationHistory: [
-      ...r2.data.data.stationHistory,
-      { station: 'polishing', enteredAt: new Date().toISOString() },
+      { station: stns.cutting, enteredAt: enteredAt0, completedBy: workerId },
+      { station: stns.polishing, enteredAt: new Date().toISOString() },
     ],
     stationData: {
       ...r2.data.data.stationData,
-      polishing: { grit: 400, passes: 3 },
+      [stns.polishing]: { grit: 400, passes: 3 },
     },
     notes: 'Rush order — customer VIP. Polishing started.',
   });
@@ -579,9 +615,9 @@ async function testOrderNewFields(token) {
   const r4 = await api('GET', `/api/orders/${ordId}`, token);
   check('  currentStationIndex updated', r4.data.data.currentStationIndex, 1);
   check('  stationHistory length after update', r4.data.data.stationHistory.length, 2);
-  check('  stationHistory[1].station', r4.data.data.stationHistory[1].station, 'polishing');
-  check('  stationData.polishing.grit', r4.data.data.stationData.polishing.grit, 400);
-  check('  stationData.cutting preserved', r4.data.data.stationData.cutting.temperature, 350);
+  check('  stationHistory[1].station id', stationRefId(r4.data.data.stationHistory[1].station), String(stns.polishing));
+  check('  stationData polishing grit', r4.data.data.stationData[stns.polishing].grit, 400);
+  check('  stationData cutting preserved', r4.data.data.stationData[stns.cutting].temperature, 350);
   checkIncludes('  notes updated', r4.data.data.notes, 'Polishing started');
 
   // Create order with defaults — new fields should have sensible defaults
@@ -889,7 +925,7 @@ async function testClaimFromPane(token) {
 // 13. PANE AUTO-NUMBERING + QR CODE
 // ──────────────────────────────────────────────
 
-async function testPaneNumbering(token) {
+async function testPaneNumbering(token, stns) {
   console.log('\n=== Pane Auto-Numbering + QR Code ===\n');
 
   const cust = await api('POST', '/api/customers', token, { name: 'PaneNum Cust' });
@@ -926,9 +962,10 @@ async function testPaneNumbering(token) {
   check('GET pane includes paneNumber', r3.data.data.paneNumber, num1);
   check('GET pane includes qrCode', r3.data.data.qrCode, qr1);
 
-  const r4 = await api('PATCH', `/api/panes/${r1.data.data._id}`, token, { currentStation: 'cutting' });
+  const r4 = await api('PATCH', `/api/panes/${r1.data.data._id}`, token, { currentStation: stns.cutting });
   check('UPDATE does not change paneNumber', r4.data.data.paneNumber, num1);
   check('UPDATE does not change qrCode', r4.data.data.qrCode, qr1);
+  check('  currentStation id set', stationRefId(r4.data.data.currentStation), String(stns.cutting));
 
   await api('DELETE', `/api/panes/${r1.data.data._id}`, token);
   await api('DELETE', `/api/panes/${r2.data.data._id}`, token);
@@ -940,7 +977,7 @@ async function testPaneNumbering(token) {
 // 14. PANE CASCADE DELETE
 // ──────────────────────────────────────────────
 
-async function testPaneCascade(token) {
+async function testPaneCascade(token, stns) {
   console.log('\n=== Pane Cascade Delete ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -959,7 +996,7 @@ async function testPaneCascade(token) {
   const paneId = pane.data.data._id;
 
   const log = await api('POST', '/api/production-logs', token, {
-    pane: paneId, order: ordId, station: 'cutting', action: 'scan_in', operator: workerId,
+    pane: paneId, order: ordId, station: stns.cutting, action: 'scan_in', operator: workerId,
   });
   const logId = log.data.data._id;
 
@@ -988,7 +1025,7 @@ async function testPaneCascade(token) {
 // 15. PANE + PRODUCTION LOG REFERENTIAL CHECKS
 // ──────────────────────────────────────────────
 
-async function testPaneReferentialChecks(token) {
+async function testPaneReferentialChecks(token, stns) {
   console.log('\n=== Pane + ProductionLog Referential Checks ===\n');
 
   const fakeId = '000000000000000000000000';
@@ -1024,21 +1061,21 @@ async function testPaneReferentialChecks(token) {
 
   // Create production log with fake pane
   const r2 = await api('POST', '/api/production-logs', token, {
-    pane: fakeId, order: ordId, station: 'cutting', action: 'scan_in',
+    pane: fakeId, order: ordId, station: stns.cutting, action: 'scan_in',
   });
   check('CREATE production-log with fake pane', r2.status, 400);
   checkIncludes('  message says Pane', r2.data.message, 'Pane not found');
 
   // Create production log with fake order
   const r3 = await api('POST', '/api/production-logs', token, {
-    pane: paneId, order: fakeId, station: 'cutting', action: 'scan_in',
+    pane: paneId, order: fakeId, station: stns.cutting, action: 'scan_in',
   });
   check('CREATE production-log with fake order', r3.status, 400);
   checkIncludes('  message says Order', r3.data.message, 'Order not found');
 
   // Create valid production log
   const r4 = await api('POST', '/api/production-logs', token, {
-    pane: paneId, order: ordId, station: 'cutting', action: 'scan_in',
+    pane: paneId, order: ordId, station: stns.cutting, action: 'scan_in',
   });
   check('CREATE production-log with valid refs', r4.status, 201);
 
@@ -1370,7 +1407,7 @@ async function testPricingSettings(token) {
 // 19. PANE LOGS
 // ──────────────────────────────────────────────
 
-async function testPaneLogs(token) {
+async function testPaneLogs(token, stns) {
   console.log('\n=== Pane Logs (GET + Timeline) ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -1385,7 +1422,7 @@ async function testPaneLogs(token) {
   const reqRes = await api('POST', '/api/requests', token, {
     customer: custId,
     details: { type: 'tempered', quantity: 1 },
-    panes: [{ routing: ['cutting', 'qc'], material: matId }],
+    panes: [{ routing: [stns.cutting, stns.qc], material: matId }],
   });
   const reqId = reqRes.data.data._id;
   const pane = reqRes.data.data.panes[0];
@@ -1396,8 +1433,8 @@ async function testPaneLogs(token) {
   const ordId = ordRes.data.data._id;
 
   // Scan pane to create pane logs via the scan endpoint
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'scan_in' });
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: 'cutting', action: 'complete' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_in' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
 
   // GET /pane-logs — should have logs
   const r1 = await api('GET', '/api/pane-logs', token);
@@ -1406,9 +1443,9 @@ async function testPaneLogs(token) {
   check('  has logs', r1.data.data.length > 0, true);
 
   // GET /pane-logs with filters
-  const r2 = await api('GET', '/api/pane-logs?station=cutting', token);
-  check('GET /pane-logs?station=cutting', r2.status, 200);
-  const cuttingLogs = r2.data.data.filter((l) => l.station === 'cutting');
+  const r2 = await api('GET', `/api/pane-logs?station=${stns.cutting}`, token);
+  check('GET /pane-logs?station=<cuttingId>', r2.status, 200);
+  const cuttingLogs = r2.data.data.filter((l) => stationRefId(l.station) === String(stns.cutting));
   check('  all logs are for cutting station', cuttingLogs.length, r2.data.data.length);
 
   const r3 = await api('GET', '/api/pane-logs?action=scan_in', token);
@@ -1587,7 +1624,7 @@ async function testMaterialLogFilters(token) {
   await api('DELETE', `/api/materials/${matId2}`, token);
 }
 
-async function testOrderStationFilter(token) {
+async function testOrderStationFilter(token, stns) {
   console.log('\n=== Order stationId Query Filter ===\n');
 
   const mat = await api('POST', '/api/materials', token, { name: 'StationFilter Mat', unit: 'sheet', reorderPoint: 5 });
@@ -1595,28 +1632,40 @@ async function testOrderStationFilter(token) {
   const cust = await api('POST', '/api/customers', token, { name: 'StationFilter Cust' });
   const custId = cust.data.data._id;
 
+  async function mkSf(name) {
+    const r = await api('POST', '/api/stations', token, { name, templateId: stns.tmplId });
+    if (r.status !== 201 || !r.data.data?._id) {
+      throw new Error(`SF station "${name}" create failed (${r.status}): ${JSON.stringify(r.data)}`);
+    }
+    return r.data.data._id;
+  }
+  const sfCuttingId = await mkSf('sf_cutting');
+  const sfPolishingId = await mkSf('sf_polishing');
+  const sfQcId = await mkSf('sf_qc');
+  const sfEdgingId = await mkSf('sf_edging');
+
   const ord1 = await api('POST', '/api/orders', token, {
-    customer: custId, material: matId, quantity: 1, stations: ['sf_cutting', 'sf_polishing'],
+    customer: custId, material: matId, quantity: 1, stations: [sfCuttingId, sfPolishingId],
   });
   const ord2 = await api('POST', '/api/orders', token, {
-    customer: custId, material: matId, quantity: 1, stations: ['sf_cutting', 'sf_qc'],
+    customer: custId, material: matId, quantity: 1, stations: [sfCuttingId, sfQcId],
   });
   const ord3 = await api('POST', '/api/orders', token, {
-    customer: custId, material: matId, quantity: 1, stations: ['sf_edging'],
+    customer: custId, material: matId, quantity: 1, stations: [sfEdgingId],
   });
   const ordId1 = ord1.data.data._id;
   const ordId2 = ord2.data.data._id;
   const ordId3 = ord3.data.data._id;
 
-  const r1 = await api('GET', '/api/orders?stationId=sf_cutting', token);
-  check('GET orders ?stationId=sf_cutting', r1.status, 200);
+  const r1 = await api('GET', `/api/orders?stationId=${sfCuttingId}`, token);
+  check('GET orders ?stationId=<sf_cutting>', r1.status, 200);
   const cuttingIds = r1.data.data.map(o => o._id);
   check('  includes ord1', cuttingIds.includes(ordId1), true);
   check('  includes ord2', cuttingIds.includes(ordId2), true);
   check('  excludes ord3', cuttingIds.includes(ordId3), false);
 
-  const r2 = await api('GET', '/api/orders?stationId=sf_edging', token);
-  check('GET orders ?stationId=sf_edging', r2.status, 200);
+  const r2 = await api('GET', `/api/orders?stationId=${sfEdgingId}`, token);
+  check('GET orders ?stationId=<sf_edging>', r2.status, 200);
   const edgingIds = r2.data.data.map(o => o._id);
   check('  includes ord3', edgingIds.includes(ordId3), true);
   check('  excludes ord1', edgingIds.includes(ordId1), false);
@@ -1756,7 +1805,7 @@ async function testPaneDeliveredAt(token) {
   await api('DELETE', `/api/customers/${custId}`, token);
 }
 
-async function testProductionLogAdvancedFields(token) {
+async function testProductionLogAdvancedFields(token, stns) {
   console.log('\n=== ProductionLog Advanced Fields ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -1771,7 +1820,7 @@ async function testProductionLogAdvancedFields(token) {
   const paneId = pane.data.data._id;
 
   const r1 = await api('POST', '/api/production-logs', token, {
-    pane: paneId, order: ordId, station: 'qc', action: 'qc_pass',
+    pane: paneId, order: ordId, station: stns.qc, action: 'qc_pass',
     operator: workerId,
     qcResults: [
       { label: 'Surface quality', passed: true, note: 'No scratches' },
@@ -1795,7 +1844,7 @@ async function testProductionLogAdvancedFields(token) {
   check('  completedAt is set', !!r1.data.data.completedAt, true);
 
   const r2 = await api('POST', '/api/production-logs', token, {
-    pane: paneId, order: ordId, station: 'cutting', action: 'fail',
+    pane: paneId, order: ordId, station: stns.cutting, action: 'fail',
     operator: workerId,
     defectCode: 'edge_chip',
     status: 'fail',
@@ -1806,7 +1855,7 @@ async function testProductionLogAdvancedFields(token) {
   check('  status is fail', r2.data.data.status, 'fail');
 
   const r3 = await api('POST', '/api/production-logs', token, {
-    pane: paneId, order: ordId, station: 'cutting', action: 'rework',
+    pane: paneId, order: ordId, station: stns.cutting, action: 'rework',
     operator: workerId,
     reworkReason: 'Edge chip needs re-grinding',
     status: 'rework',
@@ -1817,7 +1866,7 @@ async function testProductionLogAdvancedFields(token) {
   check('  status is rework', r3.data.data.status, 'rework');
 
   const r4 = await api('POST', '/api/production-logs', token, {
-    pane: paneId, order: ordId, station: 'tempering', action: 'batch_start',
+    pane: paneId, order: ordId, station: stns.tempering, action: 'batch_start',
     operator: workerId,
     startedAt: new Date().toISOString(),
   });
@@ -1826,7 +1875,7 @@ async function testProductionLogAdvancedFields(token) {
   check('  action is batch_start', r4.data.data.action, 'batch_start');
 
   const r5 = await api('POST', '/api/production-logs', token, {
-    pane: paneId, order: ordId, station: 'tempering', action: 'batch_complete',
+    pane: paneId, order: ordId, station: stns.tempering, action: 'batch_complete',
     operator: workerId,
     completedAt: new Date().toISOString(),
   });
@@ -1902,40 +1951,46 @@ async function main() {
   const token = await login('admin', 'admin123');
   console.log(`   Token: ...${token.slice(-10)}`);
 
-  await testCascadeDeletes(token);
-  await testReferentialChecks(token);
-  await testInventoryDeduction(token);
-  await testMaterialLogCascade(token);
-  await testRequestCascade(token);
-  await testStationTemplateCascade(token);
-  await testStationColorId(token);
-  await testNotificationPreferences(token);
-  await testOrderNewFields(token);
-  await testWithdrawalNotes(token);
-  await testRequestNumbering(token);
-  await testOrderNumbering(token);
-  await testClaimNumbering(token);
-  await testClaimFromPane(token);
-  await testPaneNumbering(token);
-  await testPaneCascade(token);
-  await testPaneReferentialChecks(token);
-  await testRequestWithPanes(token);
-  await testPaneNewFields(token);
-  await testJobTypeCrud(token);
-  await testStickerTemplateCrud(token);
-  await testPricingSettings(token);
-  await testPaneLogs(token);
-  await testInventoryMove(token);
-  await testHealthEndpoint();
-  await testWorkerPasswordUpdate(token);
-  await testMaterialLogFilters(token);
-  await testOrderStationFilter(token);
-  await testPaneWithInventoryCut(token);
-  await testPaneGetByNumber(token);
-  await testWithdrawalMaterialLog(token);
-  await testPaneDeliveredAt(token);
-  await testProductionLogAdvancedFields(token);
-  await testNotificationReferences(token);
+  const stns = await createStations(token);
+
+  try {
+    await testCascadeDeletes(token);
+    await testReferentialChecks(token);
+    await testInventoryDeduction(token);
+    await testMaterialLogCascade(token);
+    await testRequestCascade(token);
+    await testStationTemplateCascade(token);
+    await testStationColorId(token);
+    await testNotificationPreferences(token);
+    await testOrderNewFields(token, stns);
+    await testWithdrawalNotes(token);
+    await testRequestNumbering(token);
+    await testOrderNumbering(token);
+    await testClaimNumbering(token);
+    await testClaimFromPane(token);
+    await testPaneNumbering(token, stns);
+    await testPaneCascade(token, stns);
+    await testPaneReferentialChecks(token, stns);
+    await testRequestWithPanes(token);
+    await testPaneNewFields(token);
+    await testJobTypeCrud(token);
+    await testStickerTemplateCrud(token);
+    await testPricingSettings(token);
+    await testPaneLogs(token, stns);
+    await testInventoryMove(token);
+    await testHealthEndpoint();
+    await testWorkerPasswordUpdate(token);
+    await testMaterialLogFilters(token);
+    await testOrderStationFilter(token, stns);
+    await testPaneWithInventoryCut(token);
+    await testPaneGetByNumber(token);
+    await testWithdrawalMaterialLog(token);
+    await testPaneDeliveredAt(token);
+    await testProductionLogAdvancedFields(token, stns);
+    await testNotificationReferences(token);
+  } finally {
+    await cleanupStations(token, stns);
+  }
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

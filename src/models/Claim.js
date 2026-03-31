@@ -37,7 +37,8 @@ const claimSchema = new mongoose.Schema({
     default: null,
   },
   defectStation: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Station',
     default: null,
   },
   status: {

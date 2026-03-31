@@ -14,7 +14,11 @@ const Inventory = require('../models/Inventory');
 const PaneLog = require('../models/PaneLog');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo'];
+const POPULATE_FIELDS = [
+  'request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo',
+  { path: 'stations', select: 'name' },
+  { path: 'stationHistory.station', select: 'name' },
+];
 
 const Pane = require('../models/Pane');
 const ProductionLog = require('../models/ProductionLog');

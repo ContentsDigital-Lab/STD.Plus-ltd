@@ -23,10 +23,10 @@ const paneSchema = new mongoose.Schema({
   material:   { type: mongoose.Schema.Types.ObjectId, ref: 'Material',   default: null },
   inventory:  { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory',  default: null },
 
-  currentStation: { type: String, default: 'queue' },
+  currentStation: { type: mongoose.Schema.Types.ObjectId, ref: 'Station', default: null },
   currentStatus:  { type: String, enum: ['pending', 'in_progress', 'awaiting_scan_out', 'completed', 'claimed'], default: 'pending' },
 
-  routing:      { type: [String], default: [] },
+  routing:      { type: [mongoose.Schema.Types.ObjectId], ref: 'Station', default: [] },
   customRouting:{ type: Boolean, default: false },
 
   dimensions: {

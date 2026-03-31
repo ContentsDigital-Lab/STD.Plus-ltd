@@ -31,7 +31,8 @@ const orderSchema = new mongoose.Schema({
     min: 1,
   },
   stations: {
-    type: [String],
+    type: [mongoose.Schema.Types.ObjectId],
+    ref: 'Station',
     default: [],
   },
   currentStationIndex: {
@@ -40,7 +41,7 @@ const orderSchema = new mongoose.Schema({
   },
   stationHistory: {
     type: [{
-      station: { type: String, required: true },
+      station: { type: mongoose.Schema.Types.ObjectId, ref: 'Station', required: true },
       enteredAt: { type: Date, default: Date.now },
       exitedAt: { type: Date, default: null },
       completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker', default: null },

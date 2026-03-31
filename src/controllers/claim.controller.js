@@ -11,26 +11,29 @@ const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['order', 'material', 'pane', 'reportedBy', 'approvedBy', 'remadePane'];
+const POPULATE_FIELDS = [
+  'order', 'material', 'pane', 'reportedBy', 'approvedBy', 'remadePane',
+  { path: 'defectStation', select: 'name' },
+];
 
 const pullPaneFromStation = async (paneId, req) => {
   if (!paneId) return;
   const pane = await Pane.findById(paneId);
   if (!pane || pane.currentStatus === 'completed') return;
 
-  const previousStation = pane.currentStation;
-  pane.currentStation = 'claimed';
+  const previousStationId = pane.currentStation ? pane.currentStation.toString() : null;
+  pane.currentStation = null;
   pane.currentStatus = 'claimed';
   await pane.save();
 
-  if (pane.order) {
+  if (pane.order && previousStationId) {
     const order = await Order.findById(pane.order);
     if (order) {
       const breakdown = order.stationBreakdown instanceof Map
         ? order.stationBreakdown
         : new Map(Object.entries(order.stationBreakdown || {}));
-      const count = breakdown.get(previousStation) || 0;
-      if (count > 0) breakdown.set(previousStation, count - 1);
+      const count = breakdown.get(previousStationId) || 0;
+      if (count > 0) breakdown.set(previousStationId, count - 1);
       order.stationBreakdown = breakdown;
       await order.save();
 
@@ -38,12 +41,12 @@ const pullPaneFromStation = async (paneId, req) => {
     }
   }
 
-  emit(req, 'pane:updated', { action: 'claimed', data: pane }, ['dashboard', 'pane', 'production', `station:${previousStation}`]);
+  const rooms = ['dashboard', 'pane', 'production'];
+  if (previousStationId) rooms.push(`station:${previousStationId}`);
+  emit(req, 'pane:updated', { action: 'claimed', data: pane }, rooms);
 };
 
-const REMAKE_STATION = 'order_release';
-
-const createRemakePane = async (claim, req) => {
+const createRemakePane = async (claim, remakeStationId, req) => {
   const originalPane = await Pane.findById(claim.pane);
   if (!originalPane) return null;
 
@@ -64,7 +67,7 @@ const createRemakePane = async (claim, req) => {
     request: originalOrder.request,
     material: claim.material._id || claim.material,
     remakeOf: originalPane._id,
-    currentStation: REMAKE_STATION,
+    currentStation: remakeStationId || null,
     currentStatus: 'pending',
     routing,
     customRouting: originalPane.customRouting,
@@ -104,25 +107,28 @@ const createRemakePane = async (claim, req) => {
   emit(req, 'pane:updated', { action: 'created', data: remadePane }, ['dashboard', 'pane', 'production']);
   emit(req, 'log:updated', { action: 'created' }, ['log']);
 
-  emit(req, 'station:pane_arrived', {
-    paneNumber: remadePane.paneNumber,
-    paneId: remadePane._id,
-    fromStation: null,
-    toStation: REMAKE_STATION,
-    isRemake: true,
-  }, [`station:${REMAKE_STATION}`, 'station']);
+  if (remakeStationId) {
+    const stationIdStr = remakeStationId.toString();
+    emit(req, 'station:pane_arrived', {
+      paneNumber: remadePane.paneNumber,
+      paneId: remadePane._id,
+      fromStation: null,
+      toStation: stationIdStr,
+      isRemake: true,
+    }, [`station:${stationIdStr}`, 'station']);
 
-  const io = req.app.get('io');
-  if (io) {
-    io.to(`station:${REMAKE_STATION}`).emit('notification', {
-      type: 'pane_arrived',
-      title: 'มีกระจกรีเมคเข้าสถานี',
-      message: `กระจกรีเมค ${remadePane.paneNumber} (แทน ${originalPane.paneNumber}) เข้าสถานี Order Release แล้ว`,
-      referenceId: remadePane._id,
-      referenceType: 'Pane',
-      priority: 'high',
-      readStatus: false,
-    });
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`station:${stationIdStr}`).emit('notification', {
+        type: 'pane_arrived',
+        title: 'มีกระจกรีเมคเข้าสถานี',
+        message: `กระจกรีเมค ${remadePane.paneNumber} (แทน ${originalPane.paneNumber}) arrived`,
+        referenceId: remadePane._id,
+        referenceType: 'Pane',
+        priority: 'high',
+        readStatus: false,
+      });
+    }
   }
 
   const recipientId = originalOrder.assignedTo?._id || originalOrder.assignedTo;
@@ -131,7 +137,7 @@ const createRemakePane = async (claim, req) => {
       recipient: recipientId,
       type: 'claim_approved',
       title: 'เคลมอนุมัติ — สร้างกระจกรีเมคแล้ว',
-      message: `เคลม ${claim.claimNumber}: กระจก ${originalPane.paneNumber} → รีเมค ${remadePane.paneNumber} (สถานี Order Release)`,
+      message: `เคลม ${claim.claimNumber}: กระจก ${originalPane.paneNumber} → รีเมค ${remadePane.paneNumber}`,
       referenceId: claim._id,
       referenceType: 'Claim',
       priority: 'high',
@@ -266,7 +272,8 @@ exports.update = async (req, res, next) => {
     if (!claim) return fail(res, 'Claim not found', 404);
 
     if (isBeingApproved) {
-      const newPane = await createRemakePane(claim, req);
+      const { remakeStation } = req.validated.body;
+      const newPane = await createRemakePane(claim, remakeStation || null, req);
       if (newPane) {
         claim.remadePane = newPane._id;
         await claim.populate('remadePane');

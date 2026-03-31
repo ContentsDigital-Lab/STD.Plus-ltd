@@ -18,6 +18,7 @@ exports.getAll = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate({ path: 'pane', select: 'paneNumber glassTypeLabel' })
+      .populate({ path: 'station', select: 'name' })
       .lean();
 
     // Map pane → paneId for frontend compatibility
@@ -50,9 +51,10 @@ exports.getTimeline = async (req, res, next) => {
         .lean(),
       PaneLog.find({ material: materialId })
         .sort({ createdAt: 1 })
-        .populate({ path: 'pane',   select: 'paneNumber glassTypeLabel dimensions' })
-        .populate({ path: 'order',  select: 'orderNumber code' })
-        .populate({ path: 'worker', select: 'name username role' })
+        .populate({ path: 'pane',    select: 'paneNumber glassTypeLabel dimensions' })
+        .populate({ path: 'order',   select: 'orderNumber code' })
+        .populate({ path: 'worker',  select: 'name username role' })
+        .populate({ path: 'station', select: 'name' })
         .lean(),
     ]);
 

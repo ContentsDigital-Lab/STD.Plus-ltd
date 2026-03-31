@@ -88,7 +88,7 @@ exports.create = async (req, res, next) => {
         const paneNumber = await Counter.getNext('pane', 'PNE');
         const qrCode = `STDPLUS:${paneNumber}`;
         const hasRouting = paneData.routing?.length > 0;
-        const currentStation = hasRouting ? paneData.routing[0] : 'ready';
+        const currentStation = hasRouting ? paneData.routing[0] : null;
         const extras = hasRouting ? {} : { currentStatus: 'completed', completedAt: new Date() };
         return Pane.create({ ...paneData, request: request._id, paneNumber, qrCode, currentStation, ...extras });
       });

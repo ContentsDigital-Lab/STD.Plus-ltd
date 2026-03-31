@@ -18,7 +18,8 @@ const productionLogSchema = new mongoose.Schema({
     required: true,
   },
   station: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Station',
     required: true,
   },
   action: {
