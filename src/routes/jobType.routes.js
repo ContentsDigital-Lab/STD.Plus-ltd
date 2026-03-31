@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const requirePermission = require('../middleware/requirePermission');
 const jobTypeController = require('../controllers/jobType.controller');
 
 const router = Router();
@@ -35,11 +35,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/',       auth, jobTypeController.getAll);
-router.get('/:id',    auth, jobTypeController.getById);
-router.post('/',      auth, authorize('admin', 'manager'), validate(createSchema), jobTypeController.create);
-router.patch('/:id',  auth, authorize('admin', 'manager'), validate(updateSchema), jobTypeController.update);
-router.delete('/',    auth, authorize('admin'), validate(deleteManySchema), jobTypeController.deleteMany);
-router.delete('/:id', auth, authorize('admin'), jobTypeController.deleteOne);
+router.get('/',       auth, requirePermission('job_types:view'), jobTypeController.getAll);
+router.get('/:id',    auth, requirePermission('job_types:view'), jobTypeController.getById);
+router.post('/',      auth, requirePermission('job_types:manage'), validate(createSchema), jobTypeController.create);
+router.patch('/:id',  auth, requirePermission('job_types:manage'), validate(updateSchema), jobTypeController.update);
+router.delete('/',    auth, requirePermission('job_types:manage'), validate(deleteManySchema), jobTypeController.deleteMany);
+router.delete('/:id', auth, requirePermission('job_types:manage'), jobTypeController.deleteOne);
 
 module.exports = router;

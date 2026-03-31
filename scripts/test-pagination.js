@@ -203,12 +203,12 @@ async function main() {
     paneIds.push(p.data.data._id);
   }
 
-  const rPanes = await api('GET', '/api/panes', token);
+  const rPanes = await api('GET', `/api/panes?order=${ordId}`, token);
   check('GET /panes returns array', Array.isArray(rPanes.data.data), true);
   check('GET /panes returns data', rPanes.data.data.length >= 5, true);
 
   // Limit works
-  const rPanesLim = await api('GET', '/api/panes?limit=2', token);
+  const rPanesLim = await api('GET', `/api/panes?order=${ordId}&limit=2`, token);
   check('GET /panes?limit=2', rPanesLim.data.data.length <= 2, true);
 
   // Filter by order
@@ -224,7 +224,7 @@ async function main() {
   check('  all results at cutting', allCutting, true);
 
   // Filter by status
-  const rPanesStat = await api('GET', '/api/panes?status=pending', token);
+  const rPanesStat = await api('GET', `/api/panes?order=${ordId}&status=pending`, token);
   check('GET /panes?status=pending filter', rPanesStat.status, 200);
 
   // Filter by material

@@ -13,8 +13,9 @@ const auth = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET);
-    const worker = await Worker.findById(decoded.id);
+    const worker = await Worker.findById(decoded.id).populate('role');
     if (!worker) return next(new AppError('User no longer exists', 401));
+    if (!worker.role) return next(new AppError('Worker has no assigned role', 403));
     req.user = worker;
     next();
   } catch (err) {

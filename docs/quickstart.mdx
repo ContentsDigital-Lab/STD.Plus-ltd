@@ -79,11 +79,26 @@ curl http://localhost:3000/api/health
 # Reset the database (drops all collections)
 npm run reset
 
-# Seed the admin user
+# Seed the admin user and system roles
 npm run seed
+
+# Backfill auto-generated numbers for existing documents
+npm run backfill
+
+# Migrate station references (string names → ObjectIds)
+npm run migrate:stations
+
+# Migrate worker roles (string → ObjectId) and seed system roles
+npm run migrate:roles
 
 # Test RBAC on all endpoints
 npm run test:rbac
+
+# Test pane scanning workflow
+npm run test:scan
+
+# Test claim and remake pane flow
+npm run test:claim
 
 # Test WebSocket events
 npm run test:socket
@@ -94,4 +109,6 @@ npm run test:integrity
 # Test pagination
 npm run test:pagination
 
+# Run Mintlify docs locally
+npm run docs
 ```

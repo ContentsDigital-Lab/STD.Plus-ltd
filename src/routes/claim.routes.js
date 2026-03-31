@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const requirePermission = require('../middleware/requirePermission');
 const claimController = require('../controllers/claim.controller');
 
 const router = Router();
@@ -49,11 +49,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, claimController.getAll);
-router.get('/:id', auth, claimController.getById);
-router.post('/from-pane', auth, validate(createFromPaneSchema), claimController.createFromPane);
-router.patch('/:id', auth, validate(updateSchema), claimController.update);
-router.delete('/', auth, authorize('admin', 'manager'), validate(deleteManySchema), claimController.deleteMany);
-router.delete('/:id', auth, authorize('admin', 'manager'), claimController.deleteOne);
+router.get('/', auth, requirePermission('claims:view'), claimController.getAll);
+router.get('/:id', auth, requirePermission('claims:view'), claimController.getById);
+router.post('/from-pane', auth, requirePermission('claims:create'), validate(createFromPaneSchema), claimController.createFromPane);
+router.patch('/:id', auth, requirePermission('claims:view'), validate(updateSchema), claimController.update);
+router.delete('/', auth, requirePermission('claims:manage'), validate(deleteManySchema), claimController.deleteMany);
+router.delete('/:id', auth, requirePermission('claims:manage'), claimController.deleteOne);
 
 module.exports = router;

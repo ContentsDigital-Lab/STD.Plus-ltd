@@ -19,6 +19,7 @@ const stickerTemplateRoutes = require('./stickerTemplate.routes');
 const pricingSettingsRoutes = require('./pricingSettings.routes');
 const paneLogRoutes = require('./paneLog.routes');
 const jobTypeRoutes = require('./jobType.routes');
+const roleRoutes = require('./role.routes');
 
 const router = Router();
 
@@ -42,5 +43,6 @@ router.use('/sticker-templates', stickerTemplateRoutes);
 router.use('/pricing-settings', pricingSettingsRoutes);
 router.use('/pane-logs', paneLogRoutes);
 router.use('/job-types', jobTypeRoutes);
+router.use('/roles', roleRoutes);
 
 module.exports = router;

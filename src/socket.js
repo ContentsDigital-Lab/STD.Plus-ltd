@@ -20,7 +20,7 @@ const setupSocket = (httpServer) => {
 
     try {
       const decoded = jwt.verify(token, env.JWT_SECRET);
-      const worker = await Worker.findById(decoded.id);
+      const worker = await Worker.findById(decoded.id).populate('role');
       if (!worker) return next(new Error('User no longer exists'));
       socket.user = worker;
       next();
@@ -119,7 +119,7 @@ const setupSocket = (httpServer) => {
     });
 
     socket.on('system_alert', (data) => {
-      if (socket.user.role !== 'admin') {
+      if (!socket.user.role?.permissions?.includes('*')) {
         return socket.emit('error', { message: 'Not authorized to send system alerts' });
       }
       console.log(`[socket] system_alert from ${socket.user.name}:`, data);

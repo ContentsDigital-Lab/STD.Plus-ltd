@@ -20,12 +20,13 @@ exports.scan = async (req, res, next) => {
     });
     if (!pane) return fail(res, 'Pane not found', 404);
 
-    if (pane.currentStation === 'ready' && pane.currentStatus === 'completed') {
+    if (!pane.currentStation && pane.currentStatus === 'completed') {
       return fail(res, 'Pane is already completed', 400);
     }
 
-    if (pane.currentStation !== station) {
-      return fail(res, `Pane is at "${pane.currentStation}", not "${station}"`, 400);
+    const currentStationStr = pane.currentStation ? pane.currentStation.toString() : null;
+    if (currentStationStr !== station) {
+      return fail(res, `Pane is at "${currentStationStr}", not "${station}"`, 400);
     }
 
     const orderId = pane.order;

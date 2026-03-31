@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const requirePermission = require('../middleware/requirePermission');
 const requestController = require('../controllers/request.controller');
 
 const router = Router();
@@ -70,11 +70,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, authorize('admin', 'manager'), requestController.getAll);
-router.get('/:id', auth, authorize('admin', 'manager'), requestController.getById);
-router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), requestController.create);
-router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), requestController.update);
-router.delete('/', auth, authorize('admin', 'manager'), validate(deleteManySchema), requestController.deleteMany);
-router.delete('/:id', auth, authorize('admin', 'manager'), requestController.deleteOne);
+router.get('/', auth, requirePermission('requests:view'), requestController.getAll);
+router.get('/:id', auth, requirePermission('requests:view'), requestController.getById);
+router.post('/', auth, requirePermission('requests:manage'), validate(createSchema), requestController.create);
+router.patch('/:id', auth, requirePermission('requests:manage'), validate(updateSchema), requestController.update);
+router.delete('/', auth, requirePermission('requests:manage'), validate(deleteManySchema), requestController.deleteMany);
+router.delete('/:id', auth, requirePermission('requests:manage'), requestController.deleteOne);
 
 module.exports = router;

@@ -25,9 +25,9 @@ const workerSchema = new mongoose.Schema({
     trim: true,
   },
   role: {
-    type: String,
-    enum: ['admin', 'manager', 'worker'],
-    default: 'worker',
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Role',
+    required: true,
   },
   notificationPreferences: {
     enabled: { type: Boolean, default: true },

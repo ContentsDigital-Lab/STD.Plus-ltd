@@ -4,12 +4,13 @@ const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
 const paginate = require('../utils/paginate');
+const { hasPermission } = require('../config/permissions');
 
 const POPULATE_FIELDS = ['recipient'];
 
 exports.getAll = async (req, res, next) => {
   try {
-    const filter = req.user.role === 'worker' ? { recipient: req.user._id } : {};
+    const filter = hasPermission(req.user, 'notifications:manage') ? {} : { recipient: req.user._id };
     const { data, pagination } = await paginate(Notification, {
       filter,
       populate: POPULATE_FIELDS,
@@ -27,7 +28,7 @@ exports.getById = async (req, res, next) => {
   try {
     const notification = await Notification.findById(req.params.id).populate(POPULATE_FIELDS);
     if (!notification) return fail(res, 'Notification not found', 404);
-    if (req.user.role === 'worker' && notification.recipient._id.toString() !== req.user._id.toString()) {
+    if (!hasPermission(req.user, 'notifications:manage') && notification.recipient._id.toString() !== req.user._id.toString()) {
       return fail(res, 'Not authorized', 403);
     }
     success(res, notification);
@@ -56,7 +57,7 @@ exports.update = async (req, res, next) => {
   try {
     const notification = await Notification.findById(req.params.id);
     if (!notification) return fail(res, 'Notification not found', 404);
-    if (req.user.role === 'worker' && notification.recipient.toString() !== req.user._id.toString()) {
+    if (!hasPermission(req.user, 'notifications:manage') && notification.recipient.toString() !== req.user._id.toString()) {
       return fail(res, 'Not authorized', 403);
     }
 

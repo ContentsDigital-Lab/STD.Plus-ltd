@@ -13,6 +13,7 @@ const { verifyReferences, cascadeDeleteReferenced, cascadeDeleteManyReferenced }
 const Inventory = require('../models/Inventory');
 const PaneLog = require('../models/PaneLog');
 const paginate = require('../utils/paginate');
+const { hasPermission } = require('../config/permissions');
 
 const POPULATE_FIELDS = [
   'request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo',
@@ -59,7 +60,7 @@ const buildRefs = (body) => [
 
 exports.getAll = async (req, res, next) => {
   try {
-    const filter = req.user.role === 'worker' ? { assignedTo: req.user._id } : {};
+    const filter = hasPermission(req.user, 'orders:manage') ? {} : { assignedTo: req.user._id };
     // Filter orders that include a specific station in their route
     if (req.query.stationId) filter.stations = req.query.stationId;
     const { data, pagination } = await paginate(Order, {
@@ -103,8 +104,9 @@ exports.create = async (req, res, next) => {
     emit(req, 'order:updated', { action: 'created', data: populated }, ['dashboard', 'order']);
 
     // Notify the first station when a new order is created
-    const firstStationId = Array.isArray(order.stations) && order.stations[0]
-      ? order.stations[0].toString()
+    const firstStationRef = Array.isArray(order.stations) && order.stations[0];
+    const firstStationId = firstStationRef
+      ? (firstStationRef._id?.toString() || firstStationRef.toString())
       : null;
     if (firstStationId) {
       const io = req.app.get('io');
@@ -133,7 +135,7 @@ exports.update = async (req, res, next) => {
     const existing = await Order.findById(req.params.id);
     if (!existing) return fail(res, 'Order not found', 404);
 
-    if (req.user.role === 'worker') {
+    if (!hasPermission(req.user, 'orders:manage')) {
       if (existing.assignedTo?.toString() !== req.user._id.toString()) {
         return fail(res, 'Not authorized', 403);
       }
@@ -151,18 +153,20 @@ exports.update = async (req, res, next) => {
 
     const body = req.validated.body;
     if (body.stationHistory || body.currentStationIndex !== undefined) {
-      const stationId = order.stations?.[order.currentStationIndex];
-      if (stationId) {
+      const stationRef = order.stations?.[order.currentStationIndex];
+      const stationIdStr = stationRef?._id?.toString() || stationRef?.toString();
+      if (stationIdStr) {
         const lastEntry = order.stationHistory?.[order.stationHistory.length - 1];
         const action = lastEntry?.exitedAt ? 'exited' : 'entered';
-        emit(req, 'station:check_in', { orderId: order._id, stationId, action }, [`station:${stationId}`]);
+        emit(req, 'station:check_in', { orderId: order._id, stationId: stationIdStr, action }, [`station:${stationIdStr}`]);
       }
     }
 
     const prevIdx = existing.currentStationIndex ?? 0;
     const newIdx = order.currentStationIndex ?? 0;
     if (newIdx !== prevIdx && Array.isArray(order.stations) && order.stations[newIdx]) {
-      const nextStationId = order.stations[newIdx].toString();
+      const nextStationRef = order.stations[newIdx];
+      const nextStationId = nextStationRef?._id?.toString() || nextStationRef?.toString();
       const io = req.app.get('io');
       if (io) {
         io.to(`station:${nextStationId}`).emit('notification', {

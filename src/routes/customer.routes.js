@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const requirePermission = require('../middleware/requirePermission');
 const customerController = require('../controllers/customer.controller');
 
 const router = Router();
@@ -33,11 +33,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, customerController.getAll);
-router.get('/:id', auth, customerController.getById);
-router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), customerController.create);
-router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), customerController.update);
-router.delete('/', auth, authorize('admin'), validate(deleteManySchema), customerController.deleteMany);
-router.delete('/:id', auth, authorize('admin'), customerController.deleteOne);
+router.get('/', auth, requirePermission('customers:view'), customerController.getAll);
+router.get('/:id', auth, requirePermission('customers:view'), customerController.getById);
+router.post('/', auth, requirePermission('customers:manage'), validate(createSchema), customerController.create);
+router.patch('/:id', auth, requirePermission('customers:manage'), validate(updateSchema), customerController.update);
+router.delete('/', auth, requirePermission('customers:manage'), validate(deleteManySchema), customerController.deleteMany);
+router.delete('/:id', auth, requirePermission('customers:manage'), customerController.deleteOne);
 
 module.exports = router;

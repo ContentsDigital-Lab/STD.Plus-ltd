@@ -202,6 +202,18 @@
             ]
           },
           {
+            "group": "Roles",
+            "pages": [
+              "api-reference/roles/list-available-permissions",
+              "api-reference/roles/list-all-roles",
+              "api-reference/roles/create-a-role",
+              "api-reference/roles/delete-multiple-roles",
+              "api-reference/roles/get-role-by-id",
+              "api-reference/roles/update-a-role",
+              "api-reference/roles/delete-a-role"
+            ]
+          },
+          {
             "group": "Notifications",
             "pages": [
               "api-reference/notifications/list-all-notifications",

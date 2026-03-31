@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const requirePermission = require('../middleware/requirePermission');
 const paneController = require('../controllers/pane.controller');
 
 const router = Router();
@@ -98,12 +98,12 @@ const scanSchema = z.object({
   }),
 });
 
-router.get('/',                    auth, paneController.getAll);
-router.get('/:id',                 auth, paneController.getById);
-router.post('/',                   auth, authorize('admin', 'manager'), validate(createSchema), paneController.create);
-router.patch('/:id',               auth, authorize('admin', 'manager'), validate(updateSchema), paneController.update);
-router.delete('/',                 auth, authorize('admin'), validate(deleteManySchema), paneController.deleteMany);
-router.delete('/:id',              auth, authorize('admin'), paneController.deleteOne);
-router.post('/:paneNumber/scan',   auth, validate(scanSchema), paneController.scan);
+router.get('/',                    auth, requirePermission('panes:view'), paneController.getAll);
+router.get('/:id',                 auth, requirePermission('panes:view'), paneController.getById);
+router.post('/',                   auth, requirePermission('panes:create'), validate(createSchema), paneController.create);
+router.patch('/:id',               auth, requirePermission('panes:manage'), validate(updateSchema), paneController.update);
+router.delete('/',                 auth, requirePermission('panes:manage'), validate(deleteManySchema), paneController.deleteMany);
+router.delete('/:id',              auth, requirePermission('panes:manage'), paneController.deleteOne);
+router.post('/:paneNumber/scan',   auth, requirePermission('panes:scan'), validate(scanSchema), paneController.scan);
 
 module.exports = router;

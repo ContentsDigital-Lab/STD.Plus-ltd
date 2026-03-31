@@ -78,11 +78,19 @@ async function cleanupStations(token, stns) {
   await api('DELETE', `/api/station-templates/${stns.tmplId}`, token);
 }
 
+async function getRoleIds(token) {
+  const res = await api('GET', '/api/roles', token);
+  const roles = res.data.data;
+  const map = {};
+  for (const r of roles) map[r.slug] = r._id;
+  return map;
+}
+
 // ──────────────────────────────────────────────
 // 1. CASCADE DELETE PROTECTION
 // ──────────────────────────────────────────────
 
-async function testCascadeDeletes(token) {
+async function testCascadeDeletes(token, roleIds) {
   console.log('\n=== Cascade Delete ===\n');
 
   const me = await api('GET', '/api/auth/me', token);
@@ -142,7 +150,7 @@ async function testCascadeDeletes(token) {
   check('DELETE MANY materials cascades inventory', r4.status, 200);
 
   // Worker → cascades orders, notifications
-  const w = await api('POST', '/api/workers', token, { name: 'Temp Worker', username: 'temp_cascade', password: 'temp123456', position: 'temp' });
+  const w = await api('POST', '/api/workers', token, { name: 'Temp Worker', username: 'temp_cascade', password: 'temp123456', position: 'temp', role: roleIds.worker });
   const wId = w.data.data._id;
   const mat5 = await api('POST', '/api/materials', token, { name: 'Worker Mat', unit: 'pc', reorderPoint: 1 });
   const matId5 = mat5.data.data._id;
@@ -489,12 +497,12 @@ async function testStationColorId(token) {
 // 7. NOTIFICATION PREFERENCES VALIDATION
 // ──────────────────────────────────────────────
 
-async function testNotificationPreferences(token) {
+async function testNotificationPreferences(token, roleIds) {
   console.log('\n=== Notification Preferences Validation ===\n');
 
   // Defaults are applied on worker creation
   const w = await api('POST', '/api/workers', token, {
-    name: 'Prefs Test', username: 'prefs_test', password: 'prefs123456', position: 'tester',
+    name: 'Prefs Test', username: 'prefs_test', password: 'prefs123456', position: 'tester', role: roleIds.worker,
   });
   check('CREATE worker has default notifPrefs', w.status, 201);
   const wId = w.data.data._id;
@@ -531,7 +539,7 @@ async function testNotificationPreferences(token) {
 
   // Admin can create worker with custom notifPrefs
   const w2 = await api('POST', '/api/workers', token, {
-    name: 'Custom Prefs', username: 'custom_prefs', password: 'custom123456', position: 'tester',
+    name: 'Custom Prefs', username: 'custom_prefs', password: 'custom123456', position: 'tester', role: roleIds.worker,
     notificationPreferences: { enabled: false, volume: 0.1, sounds: { low: 'chime' } },
   });
   check('CREATE worker with custom notifPrefs', w2.status, 201);
@@ -1568,11 +1576,11 @@ async function testHealthEndpoint() {
 // NEW COVERAGE TESTS
 // ──────────────────────────────────────────────
 
-async function testWorkerPasswordUpdate(token) {
+async function testWorkerPasswordUpdate(token, roleIds) {
   console.log('\n=== Worker Password Update ===\n');
 
   const w = await api('POST', '/api/workers', token, {
-    name: 'PwdTest', username: 'pwd_test', password: 'original123', position: 'tester',
+    name: 'PwdTest', username: 'pwd_test', password: 'original123', position: 'tester', role: roleIds.worker,
   });
   check('CREATE worker for password test', w.status, 201);
   const wId = w.data.data._id;
@@ -1951,17 +1959,19 @@ async function main() {
   const token = await login('admin', 'admin123');
   console.log(`   Token: ...${token.slice(-10)}`);
 
+  const roleIds = await getRoleIds(token);
+
   const stns = await createStations(token);
 
   try {
-    await testCascadeDeletes(token);
+    await testCascadeDeletes(token, roleIds);
     await testReferentialChecks(token);
     await testInventoryDeduction(token);
     await testMaterialLogCascade(token);
     await testRequestCascade(token);
     await testStationTemplateCascade(token);
     await testStationColorId(token);
-    await testNotificationPreferences(token);
+    await testNotificationPreferences(token, roleIds);
     await testOrderNewFields(token, stns);
     await testWithdrawalNotes(token);
     await testRequestNumbering(token);
@@ -1979,7 +1989,7 @@ async function main() {
     await testPaneLogs(token, stns);
     await testInventoryMove(token);
     await testHealthEndpoint();
-    await testWorkerPasswordUpdate(token);
+    await testWorkerPasswordUpdate(token, roleIds);
     await testMaterialLogFilters(token);
     await testOrderStationFilter(token, stns);
     await testPaneWithInventoryCut(token);

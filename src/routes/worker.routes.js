@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const requirePermission = require('../middleware/requirePermission');
 const workerController = require('../controllers/worker.controller');
 
 const router = Router();
@@ -24,7 +24,7 @@ const createSchema = z.object({
     username: z.string().min(1),
     password: z.string().min(6),
     position: z.string().min(1),
-    role: z.enum(['admin', 'manager', 'worker']).optional(),
+    role: z.string().min(1),
     notificationPreferences: notificationPreferencesSchema,
   }),
 });
@@ -35,7 +35,7 @@ const updateSchema = z.object({
     username: z.string().min(1).optional(),
     password: z.string().min(6).optional(),
     position: z.string().min(1).optional(),
-    role: z.enum(['admin', 'manager', 'worker']).optional(),
+    role: z.string().min(1).optional(),
     notificationPreferences: notificationPreferencesSchema,
   }),
 });
@@ -46,11 +46,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, workerController.getAll);
-router.get('/:id', auth, workerController.getById);
-router.post('/', auth, authorize('admin'), validate(createSchema), workerController.create);
-router.patch('/:id', auth, authorize('admin'), validate(updateSchema), workerController.update);
-router.delete('/', auth, authorize('admin'), validate(deleteManySchema), workerController.deleteMany);
-router.delete('/:id', auth, authorize('admin'), workerController.deleteOne);
+router.get('/', auth, requirePermission('workers:view'), workerController.getAll);
+router.get('/:id', auth, requirePermission('workers:view'), workerController.getById);
+router.post('/', auth, requirePermission('workers:manage'), validate(createSchema), workerController.create);
+router.patch('/:id', auth, requirePermission('workers:manage'), validate(updateSchema), workerController.update);
+router.delete('/', auth, requirePermission('workers:manage'), validate(deleteManySchema), workerController.deleteMany);
+router.delete('/:id', auth, requirePermission('workers:manage'), workerController.deleteOne);
 
 module.exports = router;

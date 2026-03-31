@@ -17,6 +17,7 @@
     "reset": "node scripts/reset.js",
     "backfill": "node scripts/backfill-auto-numbers.js",
     "migrate:stations": "node scripts/migrate-station-ids.js",
+    "migrate:roles": "node scripts/migrate-roles.js",
     "docs": "cd docs && npx mintlify dev"
   },
   "repository": {

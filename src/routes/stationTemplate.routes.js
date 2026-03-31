@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const requirePermission = require('../middleware/requirePermission');
 const stationTemplateController = require('../controllers/stationTemplate.controller');
 
 const router = Router();
@@ -27,11 +27,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, stationTemplateController.getAll);
-router.get('/:id', auth, stationTemplateController.getById);
-router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), stationTemplateController.create);
-router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), stationTemplateController.update);
-router.delete('/', auth, authorize('admin'), validate(deleteManySchema), stationTemplateController.deleteMany);
-router.delete('/:id', auth, authorize('admin'), stationTemplateController.deleteOne);
+router.get('/', auth, requirePermission('station_templates:view'), stationTemplateController.getAll);
+router.get('/:id', auth, requirePermission('station_templates:view'), stationTemplateController.getById);
+router.post('/', auth, requirePermission('station_templates:manage'), validate(createSchema), stationTemplateController.create);
+router.patch('/:id', auth, requirePermission('station_templates:manage'), validate(updateSchema), stationTemplateController.update);
+router.delete('/', auth, requirePermission('station_templates:manage'), validate(deleteManySchema), stationTemplateController.deleteMany);
+router.delete('/:id', auth, requirePermission('station_templates:manage'), stationTemplateController.deleteOne);
 
 module.exports = router;

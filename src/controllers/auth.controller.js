@@ -11,7 +11,7 @@ exports.login = async (req, res, next) => {
   try {
     const { username, password } = req.validated.body;
 
-    const worker = await Worker.findOne({ username }).select('+password');
+    const worker = await Worker.findOne({ username }).select('+password').populate('role');
     if (!worker || !(await worker.comparePassword(password))) {
       return fail(res, 'Invalid username or password', 401);
     }
@@ -48,7 +48,7 @@ exports.updateMe = async (req, res, next) => {
     const worker = await Worker.findByIdAndUpdate(req.user._id, updates, {
       new: true,
       runValidators: true,
-    });
+    }).populate('role');
 
     success(res, worker, 'Profile updated');
   } catch (err) {

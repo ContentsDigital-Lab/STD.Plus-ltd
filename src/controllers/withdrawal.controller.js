@@ -8,6 +8,7 @@ const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
 const paginate = require('../utils/paginate');
+const { hasPermission } = require('../config/permissions');
 
 const Pane = require('../models/Pane');
 const MaterialLog = require('../models/MaterialLog');
@@ -61,7 +62,7 @@ const restoreInventory = async (materialId, stockType, quantity, inventoryId = n
 
 exports.getAll = async (req, res, next) => {
   try {
-    const filter = req.user.role === 'worker' ? { withdrawnBy: req.user._id } : {};
+    const filter = hasPermission(req.user, 'withdrawals:manage') ? {} : { withdrawnBy: req.user._id };
     const { data, pagination } = await paginate(Withdrawal, {
       filter,
       populate: POPULATE_FIELDS,
@@ -79,7 +80,7 @@ exports.getById = async (req, res, next) => {
   try {
     const withdrawal = await Withdrawal.findById(req.params.id).populate(POPULATE_FIELDS);
     if (!withdrawal) return fail(res, 'Withdrawal not found', 404);
-    if (req.user.role === 'worker' && withdrawal.withdrawnBy._id.toString() !== req.user._id.toString()) {
+    if (!hasPermission(req.user, 'withdrawals:manage') && withdrawal.withdrawnBy._id.toString() !== req.user._id.toString()) {
       return fail(res, 'Not authorized', 403);
     }
     success(res, withdrawal);

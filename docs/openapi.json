@@ -101,7 +101,7 @@
           "name": { "type": "string" },
           "username": { "type": "string" },
           "position": { "type": "string" },
-          "role": { "type": "string", "enum": ["admin", "manager", "worker"] },
+          "role": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Role" }], "description": "Role ObjectId (populated with full role object including permissions)" },
           "notificationPreferences": { "$ref": "#/components/schemas/NotificationPreferences" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
@@ -109,13 +109,13 @@
       },
       "WorkerCreateBody": {
         "type": "object",
-        "required": ["name", "username", "password", "position"],
+        "required": ["name", "username", "password", "position", "role"],
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "username": { "type": "string", "minLength": 1 },
           "password": { "type": "string", "minLength": 6 },
           "position": { "type": "string", "minLength": 1 },
-          "role": { "type": "string", "enum": ["admin", "manager", "worker"], "default": "worker" },
+          "role": { "type": "string", "minLength": 1, "description": "Role ObjectId" },
           "notificationPreferences": { "$ref": "#/components/schemas/NotificationPreferences" }
         }
       },
@@ -126,7 +126,7 @@
           "username": { "type": "string", "minLength": 1 },
           "password": { "type": "string", "minLength": 6 },
           "position": { "type": "string", "minLength": 1 },
-          "role": { "type": "string", "enum": ["admin", "manager", "worker"] },
+          "role": { "type": "string", "minLength": 1, "description": "Role ObjectId" },
           "notificationPreferences": { "$ref": "#/components/schemas/NotificationPreferences" }
         }
       },
@@ -618,6 +618,35 @@
           "notes": { "type": "string" }
         }
       },
+      "Role": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string", "description": "Display name (e.g. หัวหน้าช่าง)" },
+          "slug": { "type": "string", "description": "Unique machine-readable identifier (e.g. lead_technician)" },
+          "permissions": { "type": "array", "items": { "type": "string" }, "description": "Permission keys (e.g. orders:view, panes:scan). Use '*' for full access." },
+          "isSystem": { "type": "boolean", "description": "System roles (admin, manager, worker) cannot be deleted" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RoleCreateBody": {
+        "type": "object",
+        "required": ["name", "slug"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "slug": { "type": "string", "minLength": 1 },
+          "permissions": { "type": "array", "items": { "type": "string" }, "default": [] }
+        }
+      },
+      "RoleUpdateBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "slug": { "type": "string", "minLength": 1 },
+          "permissions": { "type": "array", "items": { "type": "string" } }
+        }
+      },
       "MaterialLog": {
         "type": "object",
         "properties": {
@@ -1100,7 +1129,7 @@
         },
         "responses": {
           "200": {
-            "description": "Login successful",
+            "description": "Login successful. The `worker` object includes a populated `role` (full role document with `permissions`, not only an id).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1241,7 +1270,7 @@
       "post": {
         "tags": ["Workers"],
         "summary": "Create a worker",
-        "description": "Requires **admin** role.",
+        "description": "Requires `workers:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -1270,7 +1299,7 @@
       "delete": {
         "tags": ["Workers"],
         "summary": "Delete multiple workers",
-        "description": "Requires **admin** role.",
+        "description": "Requires `workers:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -1323,7 +1352,7 @@
       "patch": {
         "tags": ["Workers"],
         "summary": "Update a worker",
-        "description": "Requires **admin** role.",
+        "description": "Requires `workers:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": {
@@ -1353,7 +1382,7 @@
       "delete": {
         "tags": ["Workers"],
         "summary": "Delete a worker",
-        "description": "Requires **admin** role.",
+        "description": "Requires `workers:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -1362,6 +1391,185 @@
           "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" },
           "409": { "$ref": "#/components/responses/409" }
+        }
+      }
+    },
+    "/api/roles/permissions": {
+      "get": {
+        "tags": ["Roles"],
+        "summary": "List all available permissions",
+        "description": "Returns the full list of permission keys that can be assigned to roles. Requires authentication.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Permission keys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "type": "array", "items": { "type": "string" } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+    "/api/roles": {
+      "get": {
+        "tags": ["Roles"],
+        "summary": "List all roles",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SortParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of roles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Role" } }, "pagination": { "$ref": "#/components/schemas/Pagination" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "tags": ["Roles"],
+        "summary": "Create a role",
+        "description": "Requires `roles:manage` permission.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RoleCreateBody" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Role created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Role" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "409": { "description": "Slug already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["Roles"],
+        "summary": "Delete multiple roles",
+        "description": "Requires `roles:manage` permission. System roles cannot be deleted. Roles with assigned workers cannot be deleted.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Roles deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/DeleteManyResult" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "System role or workers assigned", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" }
+        }
+      }
+    },
+    "/api/roles/{id}": {
+      "get": {
+        "tags": ["Roles"],
+        "summary": "Get role by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "Role found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Role" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "tags": ["Roles"],
+        "summary": "Update a role",
+        "description": "Requires `roles:manage` permission. System role slugs cannot be changed.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RoleUpdateBody" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Role updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Role" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/400" },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" },
+          "409": { "description": "Slug already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["Roles"],
+        "summary": "Delete a role",
+        "description": "Requires `roles:manage` permission. System roles cannot be deleted. Roles with assigned workers cannot be deleted.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": { "description": "Role deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "400": { "description": "System role or workers assigned", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "403": { "$ref": "#/components/responses/403" },
+          "404": { "$ref": "#/components/responses/404" }
         }
       }
     },
@@ -1383,7 +1591,7 @@
       "post": {
         "tags": ["Customers"],
         "summary": "Create a customer",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `customers:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CustomerCreateBody" } } } },
         "responses": {
@@ -1396,7 +1604,7 @@
       "delete": {
         "tags": ["Customers"],
         "summary": "Delete multiple customers",
-        "description": "Requires **admin** role.",
+        "description": "Requires `customers:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -1422,7 +1630,7 @@
       "patch": {
         "tags": ["Customers"],
         "summary": "Update a customer",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `customers:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CustomerUpdateBody" } } } },
@@ -1436,7 +1644,7 @@
       "delete": {
         "tags": ["Customers"],
         "summary": "Delete a customer",
-        "description": "Requires **admin** role.",
+        "description": "Requires `customers:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -1466,7 +1674,7 @@
       "post": {
         "tags": ["Materials"],
         "summary": "Create a material",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `materials:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialCreateBody" } } } },
         "responses": {
@@ -1479,7 +1687,7 @@
       "delete": {
         "tags": ["Materials"],
         "summary": "Delete multiple materials",
-        "description": "Requires **admin** role.",
+        "description": "Requires `materials:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -1505,7 +1713,7 @@
       "patch": {
         "tags": ["Materials"],
         "summary": "Update a material",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `materials:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialUpdateBody" } } } },
@@ -1519,7 +1727,7 @@
       "delete": {
         "tags": ["Materials"],
         "summary": "Delete a material",
-        "description": "Requires **admin** role.",
+        "description": "Requires `materials:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -1549,7 +1757,7 @@
       "post": {
         "tags": ["Inventories"],
         "summary": "Create an inventory",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `inventory:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InventoryCreateBody" } } } },
         "responses": {
@@ -1562,7 +1770,7 @@
       "delete": {
         "tags": ["Inventories"],
         "summary": "Delete multiple inventories",
-        "description": "Requires **admin** role.",
+        "description": "Requires `inventory:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -1587,7 +1795,7 @@
       "patch": {
         "tags": ["Inventories"],
         "summary": "Update an inventory",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `inventory:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InventoryUpdateBody" } } } },
@@ -1601,7 +1809,7 @@
       "delete": {
         "tags": ["Inventories"],
         "summary": "Delete an inventory",
-        "description": "Requires **admin** role.",
+        "description": "Requires `inventory:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -1616,7 +1824,7 @@
       "post": {
         "tags": ["Inventories"],
         "summary": "Move inventory to another location",
-        "description": "Moves a specified quantity from the source inventory record to a target location. If an inventory record already exists at the target location (same material and stock type), the quantity is added to it; otherwise a new record is created. Any authenticated user can perform this action.",
+        "description": "Moves a specified quantity from the source inventory record to a target location. If an inventory record already exists at the target location (same material and stock type), the quantity is added to it; otherwise a new record is created. Requires `inventory:move` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": {
@@ -1687,7 +1895,7 @@
       "post": {
         "tags": ["Material Logs"],
         "summary": "Create a material log",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `material_logs:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialLogCreateBody" } } } },
         "responses": {
@@ -1700,7 +1908,7 @@
       "delete": {
         "tags": ["Material Logs"],
         "summary": "Delete multiple material logs",
-        "description": "Requires **admin** role.",
+        "description": "Requires `material_logs:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -1726,7 +1934,7 @@
       "patch": {
         "tags": ["Material Logs"],
         "summary": "Update a material log",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `material_logs:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MaterialLogUpdateBody" } } } },
@@ -1740,7 +1948,7 @@
       "delete": {
         "tags": ["Material Logs"],
         "summary": "Delete a material log",
-        "description": "Requires **admin** role.",
+        "description": "Requires `material_logs:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -1756,7 +1964,7 @@
       "get": {
         "tags": ["Requests"],
         "summary": "List all requests",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `requests:view` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           { "$ref": "#/components/parameters/PageParam" },
@@ -1772,7 +1980,7 @@
       "post": {
         "tags": ["Requests"],
         "summary": "Create a request",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `requests:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RequestCreateBody" } } } },
         "responses": {
@@ -1785,7 +1993,7 @@
       "delete": {
         "tags": ["Requests"],
         "summary": "Delete multiple requests",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `requests:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -1800,7 +2008,7 @@
       "get": {
         "tags": ["Requests"],
         "summary": "Get request by ID",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `requests:view` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -1813,7 +2021,7 @@
       "patch": {
         "tags": ["Requests"],
         "summary": "Update a request",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `requests:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RequestUpdateBody" } } } },
@@ -1827,7 +2035,7 @@
       "delete": {
         "tags": ["Requests"],
         "summary": "Delete a request",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `requests:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -1869,7 +2077,7 @@
       "delete": {
         "tags": ["Withdrawals"],
         "summary": "Delete multiple withdrawals",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `withdrawals:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -1894,7 +2102,7 @@
       "patch": {
         "tags": ["Withdrawals"],
         "summary": "Update a withdrawal",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `withdrawals:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WithdrawalUpdateBody" } } } },
@@ -1908,7 +2116,7 @@
       "delete": {
         "tags": ["Withdrawals"],
         "summary": "Delete a withdrawal",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `withdrawals:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -1923,7 +2131,7 @@
       "get": {
         "tags": ["Orders"],
         "summary": "List all orders",
-        "description": "Workers see only orders assigned to them. Admins and managers see all orders.",
+        "description": "Requires `orders:view` permission. Users without `orders:manage` permission see only orders assigned to them.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           { "name": "stationId", "in": "query", "schema": { "type": "string" }, "description": "Filter orders that include this station in their route" },
@@ -1939,7 +2147,7 @@
       "post": {
         "tags": ["Orders"],
         "summary": "Create an order",
-        "description": "Requires **admin** or **manager** role.\n\nWhen a `request` ID is provided, all panes linked to that request (that don't already have an order) are automatically updated with the new order's `_id` and `material`.",
+        "description": "Requires `orders:create` permission.\n\nWhen a `request` ID is provided, all panes linked to that request (that don't already have an order) are automatically updated with the new order's `_id` and `material`.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderCreateBody" } } } },
         "responses": {
@@ -1952,7 +2160,7 @@
       "delete": {
         "tags": ["Orders"],
         "summary": "Delete multiple orders",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `orders:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -1978,7 +2186,7 @@
       "patch": {
         "tags": ["Orders"],
         "summary": "Update an order",
-        "description": "Workers can only update their own assigned resources.",
+        "description": "Requires `orders:view` permission. Users without `orders:manage` permission can only update their own assigned orders.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderUpdateBody" } } } },
@@ -1992,7 +2200,7 @@
       "delete": {
         "tags": ["Orders"],
         "summary": "Delete an order",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `orders:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -2008,7 +2216,7 @@
       "post": {
         "tags": ["Claims"],
         "summary": "Create a claim for an order",
-        "description": "Creates a new claim linked to the specified order.\n\n**Side effect:** If a `pane` ID is provided and that pane is currently in a station (not yet completed), the pane is **pulled from the station system** — its `currentStation` is set to `null` and `currentStatus` to `claimed`, and the order's `stationBreakdown` is decremented accordingly. Real-time events are emitted so the frontend removes the pane from station views.",
+        "description": "Requires `claims:create` permission. Creates a new claim linked to the specified order.\n\n**Side effect:** If a `pane` ID is provided and that pane is currently in a station (not yet completed), the pane is **pulled from the station system** — its `currentStation` is set to `null` and `currentStatus` to `claimed`, and the order's `stationBreakdown` is decremented accordingly. Real-time events are emitted so the frontend removes the pane from station views.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -2045,7 +2253,7 @@
       "delete": {
         "tags": ["Claims"],
         "summary": "Delete multiple claims",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `claims:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -2059,7 +2267,7 @@
       "post": {
         "tags": ["Claims"],
         "summary": "Create claim from pane number",
-        "description": "Convenience endpoint that accepts a `paneNumber` (e.g. `PNE-0001`) and automatically resolves the pane's `order` and `material`. No need to provide order ID in the URL or material ID in the body.\n\nRequires authentication. Any role can create.\n\n**Side effect:** The claimed pane is **pulled from the station system** — its `currentStation` is set to `null` and `currentStatus` to `claimed`, and the order's `stationBreakdown` is decremented accordingly. Real-time events are emitted so the frontend removes the pane from station views. Already-completed panes are not affected.",
+        "description": "Convenience endpoint that accepts a `paneNumber` (e.g. `PNE-0001`) and automatically resolves the pane's `order` and `material`. No need to provide order ID in the URL or material ID in the body.\n\nRequires `claims:create` permission.\n\n**Side effect:** The claimed pane is **pulled from the station system** — its `currentStation` is set to `null` and `currentStatus` to `claimed`, and the order's `stationBreakdown` is decremented accordingly. Real-time events are emitted so the frontend removes the pane from station views. Already-completed panes are not affected.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -2092,7 +2300,7 @@
       "patch": {
         "tags": ["Claims"],
         "summary": "Update a claim",
-        "description": "Workers can only update their own claims.\n\n**Approval orchestration:** When `status` is changed to `approved` (from any other status) and no `remadePane` exists yet, the system automatically:\n\n1. Creates a **new remake pane** with the same specs as the original (dimensions, rawGlass, jobType, glassType, processes, edgeTasks, routing) cloned from the original pane.\n2. If `remakeStation` (Station ObjectId) is provided, the remake pane is placed at that station (`currentStation: <remakeStation>`, `currentStatus: pending`). If omitted, `currentStation` is `null` (queued). The pane is created with `order: null`.\n3. The remake pane belongs to the **same request** as the original order (`request` is copied).\n4. The remake pane's `remakeOf` field points to the original defective pane.\n5. The claim's `remadePane` field is set to the new pane's ID.\n6. A `MaterialLog` entry with `actionType: remake` is created.\n7. Real-time events are emitted: `pane:updated`, `station:pane_arrived` (to the target station room if `remakeStation` was provided), and a `notification` to the original order's `assignedTo` worker.\n\nThe frontend should send `remakeStation` with the ObjectId of the order release station (identified by its `OrderReleasePanel` UI block).\n\nThis fires regardless of the `decision` field (both `keep` and `destroy`). Setting `status` to `rejected` does **not** create a remake pane. Re-approving an already-approved claim (or one that already has a `remadePane`) does **not** create a duplicate.",
+        "description": "Requires `claims:view` permission. Users without `claims:manage` permission can only update their own claims.\n\n**Approval orchestration:** When `status` is changed to `approved` (from any other status) and no `remadePane` exists yet, the system automatically:\n\n1. Creates a **new remake pane** with the same specs as the original (dimensions, rawGlass, jobType, glassType, processes, edgeTasks, routing) cloned from the original pane.\n2. If `remakeStation` (Station ObjectId) is provided, the remake pane is placed at that station (`currentStation: <remakeStation>`, `currentStatus: pending`). If omitted, `currentStation` is `null` (queued). The pane is created with `order: null`.\n3. The remake pane belongs to the **same request** as the original order (`request` is copied).\n4. The remake pane's `remakeOf` field points to the original defective pane.\n5. The claim's `remadePane` field is set to the new pane's ID.\n6. A `MaterialLog` entry with `actionType: remake` is created.\n7. Real-time events are emitted: `pane:updated`, `station:pane_arrived` (to the target station room if `remakeStation` was provided), and a `notification` to the original order's `assignedTo` worker.\n\nThe frontend should send `remakeStation` with the ObjectId of the order release station (identified by its `OrderReleasePanel` UI block).\n\nThis fires regardless of the `decision` field (both `keep` and `destroy`). Setting `status` to `rejected` does **not** create a remake pane. Re-approving an already-approved claim (or one that already has a `remadePane`) does **not** create a duplicate.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClaimUpdateBody" } } } },
@@ -2106,7 +2314,7 @@
       "delete": {
         "tags": ["Claims"],
         "summary": "Delete a claim",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `claims:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -2135,7 +2343,7 @@
       "post": {
         "tags": ["Station Templates"],
         "summary": "Create a station template",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `station_templates:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationTemplateCreateBody" } } } },
         "responses": {
@@ -2148,7 +2356,7 @@
       "delete": {
         "tags": ["Station Templates"],
         "summary": "Delete multiple station templates",
-        "description": "Requires **admin** role.",
+        "description": "Requires `station_templates:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -2174,7 +2382,7 @@
       "patch": {
         "tags": ["Station Templates"],
         "summary": "Update a station template",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `station_templates:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationTemplateUpdateBody" } } } },
@@ -2188,7 +2396,7 @@
       "delete": {
         "tags": ["Station Templates"],
         "summary": "Delete a station template",
-        "description": "Requires **admin** role.",
+        "description": "Requires `station_templates:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -2218,7 +2426,7 @@
       "post": {
         "tags": ["Stations"],
         "summary": "Create a station",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `stations:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationCreateBody" } } } },
         "responses": {
@@ -2231,7 +2439,7 @@
       "delete": {
         "tags": ["Stations"],
         "summary": "Delete multiple stations",
-        "description": "Requires **admin** role.",
+        "description": "Requires `stations:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -2257,7 +2465,7 @@
       "patch": {
         "tags": ["Stations"],
         "summary": "Update a station",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `stations:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StationUpdateBody" } } } },
@@ -2271,7 +2479,7 @@
       "delete": {
         "tags": ["Stations"],
         "summary": "Delete a station",
-        "description": "Requires **admin** role.",
+        "description": "Requires `stations:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -2301,7 +2509,7 @@
       "post": {
         "tags": ["Notifications"],
         "summary": "Create a notification",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `notifications:create` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationCreateBody" } } } },
         "responses": {
@@ -2314,7 +2522,7 @@
       "delete": {
         "tags": ["Notifications"],
         "summary": "Delete multiple notifications",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `notifications:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -2339,7 +2547,7 @@
       "patch": {
         "tags": ["Notifications"],
         "summary": "Update a notification",
-        "description": "Workers can only update their own assigned resources.",
+        "description": "Requires `notifications:view` permission. Users without `notifications:manage` permission can only update their own notifications.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationUpdateBody" } } } },
@@ -2353,7 +2561,7 @@
       "delete": {
         "tags": ["Notifications"],
         "summary": "Delete a notification",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `notifications:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -2387,7 +2595,7 @@
       "post": {
         "tags": ["Panes"],
         "summary": "Create a pane",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `panes:create` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaneCreateBody" } } } },
         "responses": {
@@ -2400,7 +2608,7 @@
       "delete": {
         "tags": ["Panes"],
         "summary": "Delete multiple panes",
-        "description": "Requires **admin** role.",
+        "description": "Requires `panes:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -2427,7 +2635,7 @@
       "patch": {
         "tags": ["Panes"],
         "summary": "Update a pane",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `panes:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaneUpdateBody" } } } },
@@ -2441,7 +2649,7 @@
       "delete": {
         "tags": ["Panes"],
         "summary": "Delete a pane",
-        "description": "Requires **admin** role.",
+        "description": "Requires `panes:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -2483,7 +2691,7 @@
       "delete": {
         "tags": ["Production Logs"],
         "summary": "Delete multiple production logs",
-        "description": "Requires **admin** role.",
+        "description": "Requires `production_logs:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -2508,7 +2716,7 @@
       "patch": {
         "tags": ["Production Logs"],
         "summary": "Update a production log",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `production_logs:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductionLogUpdateBody" } } } },
@@ -2522,7 +2730,7 @@
       "delete": {
         "tags": ["Production Logs"],
         "summary": "Delete a production log",
-        "description": "Requires **admin** role.",
+        "description": "Requires `production_logs:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -2537,7 +2745,7 @@
       "post": {
         "tags": ["QR Scanning"],
         "summary": "Scan a pane (QR scan endpoint)",
-        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Actions:**\n- `scan_in` — Sets `currentStation` to the station, `currentStatus` to `in_progress`, and `startedAt` (if not already set).\n- `start` — Sets `currentStation` to the station and `currentStatus` to `in_progress`.\n- `complete` — Sets `currentStation` to the station and `currentStatus` to `awaiting_scan_out`.\n- `scan_out` — Requires status `awaiting_scan_out`. Advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set.\n\n**Side effects (every action):**\n- Creates a `PaneLog` entry.\n- Emits `pane:updated` with `action: \"scanned\"` to `dashboard`, `pane`, `production`, `station:<name>`.\n- Emits `log:updated` with `action: \"pane_scanned\"` to `log`.\n- If the pane has no `material` but has an `order`, the order's material is backfilled onto the pane.\n\n**Additional side effects (scan_out only):**\n- Updates associated `Order` progress (`panesCompleted`, `progressPercent`, `stationBreakdown`) and order `status`.\n- Emits `order:updated`, `station:pane_arrived`, and `notification` WebSocket events.\n- Creates a `Notification` for the order's assigned worker (if any).\n- Emits a station-room `notification` event to `station:<nextStation>` for the pane arrival.\n\n**Validations:**\n- `complete` and `scan_out` must be performed at the pane's `currentStation`.\n- `scan_out` requires pane status to be `awaiting_scan_out` (i.e. `complete` must be called first).\n- Scanning a pane that is already `completed` returns 400.\n\nRequires authentication. Any role can scan.",
+        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Actions:**\n- `scan_in` — Sets `currentStation` to the station, `currentStatus` to `in_progress`, and `startedAt` (if not already set).\n- `start` — Sets `currentStation` to the station and `currentStatus` to `in_progress`.\n- `complete` — Sets `currentStation` to the station and `currentStatus` to `awaiting_scan_out`.\n- `scan_out` — Requires status `awaiting_scan_out`. Advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set.\n\n**Side effects (every action):**\n- Creates a `PaneLog` entry.\n- Emits `pane:updated` with `action: \"scanned\"` to `dashboard`, `pane`, `production`, `station:<name>`.\n- Emits `log:updated` with `action: \"pane_scanned\"` to `log`.\n- If the pane has no `material` but has an `order`, the order's material is backfilled onto the pane.\n\n**Additional side effects (scan_out only):**\n- Updates associated `Order` progress (`panesCompleted`, `progressPercent`, `stationBreakdown`) and order `status`.\n- Emits `order:updated`, `station:pane_arrived`, and `notification` WebSocket events.\n- Creates a `Notification` for the order's assigned worker (if any).\n- Emits a station-room `notification` event to `station:<nextStation>` for the pane arrival.\n\n**Validations:**\n- `complete` and `scan_out` must be performed at the pane's `currentStation`.\n- `scan_out` requires pane status to be `awaiting_scan_out` (i.e. `complete` must be called first).\n- Scanning a pane that is already `completed` returns 400.\n\nRequires `panes:scan` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -2706,7 +2914,7 @@
       "post": {
         "tags": ["Job Types"],
         "summary": "Create a job type",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `job_types:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobTypeCreateBody" } } } },
         "responses": {
@@ -2717,7 +2925,7 @@
       "delete": {
         "tags": ["Job Types"],
         "summary": "Delete multiple job types",
-        "description": "Requires **admin** role.",
+        "description": "Requires `job_types:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["ids"], "properties": { "ids": { "type": "array", "items": { "type": "string" }, "minItems": 1 } } } } } },
         "responses": {
@@ -2739,7 +2947,7 @@
       "patch": {
         "tags": ["Job Types"],
         "summary": "Update a job type",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `job_types:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobTypeUpdateBody" } } } },
@@ -2752,7 +2960,7 @@
       "delete": {
         "tags": ["Job Types"],
         "summary": "Delete a job type",
-        "description": "Requires **admin** role.",
+        "description": "Requires `job_types:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }],
         "responses": {
@@ -2775,7 +2983,7 @@
       "post": {
         "tags": ["Sticker Templates"],
         "summary": "Create a sticker template",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `sticker_templates:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StickerTemplateCreateBody" } } } },
         "responses": {
@@ -2787,7 +2995,7 @@
       "delete": {
         "tags": ["Sticker Templates"],
         "summary": "Bulk delete sticker templates",
-        "description": "Requires **admin** role.",
+        "description": "Requires `sticker_templates:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteManyBody" } } } },
         "responses": {
@@ -2812,7 +3020,7 @@
       "patch": {
         "tags": ["Sticker Templates"],
         "summary": "Update a sticker template",
-        "description": "Requires **admin** or **manager** role.",
+        "description": "Requires `sticker_templates:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StickerTemplateUpdateBody" } } } },
@@ -2826,7 +3034,7 @@
       "delete": {
         "tags": ["Sticker Templates"],
         "summary": "Delete a sticker template",
-        "description": "Requires **admin** role.",
+        "description": "Requires `sticker_templates:manage` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "responses": {
@@ -2841,7 +3049,7 @@
       "get": {
         "tags": ["Pricing Settings"],
         "summary": "Get pricing settings",
-        "description": "Returns the singleton pricing settings document. Auto-creates with defaults if none exists. Any authenticated user can read.",
+        "description": "Returns the singleton pricing settings document. Auto-creates with defaults if none exists. Requires `pricing:view` permission.",
         "security": [{ "BearerAuth": [] }],
         "responses": {
           "200": {
@@ -2880,7 +3088,7 @@
       "put": {
         "tags": ["Pricing Settings"],
         "summary": "Update pricing settings",
-        "description": "Updates the singleton pricing settings. Requires **admin** or **manager** role. Emits `pricing:updated` WebSocket event to the `pricing` room.",
+        "description": "Updates the singleton pricing settings. Requires `pricing:manage` permission. Emits `pricing:updated` WebSocket event to the `pricing` room.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -2909,6 +3117,7 @@
     { "name": "Health" },
     { "name": "Auth" },
     { "name": "Workers" },
+    { "name": "Roles" },
     { "name": "Customers" },
     { "name": "Materials" },
     { "name": "Inventories" },

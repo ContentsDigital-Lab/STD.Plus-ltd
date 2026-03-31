@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const requirePermission = require('../middleware/requirePermission');
 const productionLogController = require('../controllers/productionLog.controller');
 
 const router = Router();
@@ -56,11 +56,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, productionLogController.getAll);
-router.get('/:id', auth, productionLogController.getById);
-router.post('/', auth, validate(createSchema), productionLogController.create);
-router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), productionLogController.update);
-router.delete('/', auth, authorize('admin'), validate(deleteManySchema), productionLogController.deleteMany);
-router.delete('/:id', auth, authorize('admin'), productionLogController.deleteOne);
+router.get('/', auth, requirePermission('production_logs:view'), productionLogController.getAll);
+router.get('/:id', auth, requirePermission('production_logs:view'), productionLogController.getById);
+router.post('/', auth, requirePermission('production_logs:create'), validate(createSchema), productionLogController.create);
+router.patch('/:id', auth, requirePermission('production_logs:manage'), validate(updateSchema), productionLogController.update);
+router.delete('/', auth, requirePermission('production_logs:manage'), validate(deleteManySchema), productionLogController.deleteMany);
+router.delete('/:id', auth, requirePermission('production_logs:manage'), productionLogController.deleteOne);
 
 module.exports = router;

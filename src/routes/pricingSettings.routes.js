@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const requirePermission = require('../middleware/requirePermission');
 const pricingSettingsController = require('../controllers/pricingSettings.controller');
 
 const router = Router();
@@ -22,7 +22,7 @@ const updateSchema = z.object({
   }),
 });
 
-router.get('/',  auth, pricingSettingsController.get);
-router.put('/',  auth, authorize('admin', 'manager'), validate(updateSchema), pricingSettingsController.update);
+router.get('/',  auth, requirePermission('pricing:view'), pricingSettingsController.get);
+router.put('/',  auth, requirePermission('pricing:manage'), validate(updateSchema), pricingSettingsController.update);
 
 module.exports = router;

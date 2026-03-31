@@ -33,20 +33,28 @@ function check(label, actual, expected) {
   }
 }
 
-async function setupUsers(adminToken) {
+async function getRoleIds(token) {
+  const res = await api('GET', '/api/roles', token);
+  const roles = res.data.data;
+  const map = {};
+  for (const r of roles) map[r.slug] = r._id;
+  return map;
+}
+
+async function setupUsers(adminToken, roleIds) {
   const workers = await api('GET', '/api/workers', adminToken);
   const existing = workers.data.data.map((w) => w.username);
 
   if (!existing.includes('manager1')) {
     await api('POST', '/api/workers', adminToken, {
-      name: 'Manager', username: 'manager1', password: 'manager123', position: 'manager', role: 'manager',
+      name: 'Manager', username: 'manager1', password: 'manager123', position: 'manager', role: roleIds.manager,
     });
     console.log('   Created manager1');
   }
 
   if (!existing.includes('worker1')) {
     await api('POST', '/api/workers', adminToken, {
-      name: 'Worker', username: 'worker1', password: 'worker123', position: 'operator', role: 'worker',
+      name: 'Worker', username: 'worker1', password: 'worker123', position: 'operator', role: roleIds.worker,
     });
     console.log('   Created worker1');
   }
@@ -73,7 +81,7 @@ async function setupStations(adminToken) {
   };
 }
 
-async function testWorkers(tokens) {
+async function testWorkers(tokens, roleIds) {
   console.log('\n=== Workers (admin only for CUD) ===\n');
 
   const r1 = await api('GET', '/api/workers', tokens.admin);
@@ -83,7 +91,7 @@ async function testWorkers(tokens) {
   const r3 = await api('GET', '/api/workers', tokens.worker);
   check('GET    /workers         (worker)', r3.status, 200);
 
-  const body = { name: 'Temp', username: 'temp_rbac', password: 'temp123456', position: 'temp' };
+  const body = { name: 'Temp', username: 'temp_rbac', password: 'temp123456', position: 'temp', role: roleIds.worker };
 
   const r4 = await api('POST', '/api/workers', tokens.admin, body);
   check('POST   /workers         (admin)', r4.status, 201);
@@ -112,7 +120,7 @@ async function testWorkers(tokens) {
 }
 
 async function testResource(tokens, name, path, createBody) {
-  console.log(`\n=== ${name} (admin+manager CU, admin-only D) ===\n`);
+  console.log(`\n=== ${name} (admin+manager CUD) ===\n`);
 
   const r1 = await api('GET', path, tokens.admin);
   check(`GET    ${path.padEnd(20)} (admin)`, r1.status, 200);
@@ -127,6 +135,7 @@ async function testResource(tokens, name, path, createBody) {
 
   const r5 = await api('POST', path, tokens.manager, createBody);
   check(`POST   ${path.padEnd(20)} (manager)`, r5.status, 201);
+  const id2 = r5.data.data?._id;
 
   const r6 = await api('POST', path, tokens.worker, createBody);
   check(`POST   ${path.padEnd(20)} (worker)`, r6.status, 403);
@@ -140,12 +149,15 @@ async function testResource(tokens, name, path, createBody) {
     const r9 = await api('DELETE', `${path}/${id1}`, tokens.worker);
     check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (worker)`, r9.status, 403);
     const r10 = await api('DELETE', `${path}/${id1}`, tokens.manager);
-    check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (manager)`, r10.status, 403);
-    const r11 = await api('DELETE', `${path}/${id1}`, tokens.admin);
+    check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (manager)`, r10.status, 200);
+  }
+
+  if (id2) {
+    const r11 = await api('DELETE', `${path}/${id2}`, tokens.admin);
     check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (admin)`, r11.status, 200);
   }
 
-  return { id: r5.data.data?._id };
+  return {};
 }
 
 async function testOrders(tokens, customerId, materialId, workerId, stns) {
@@ -182,7 +194,7 @@ async function testOrders(tokens, customerId, materialId, workerId, stns) {
       status: 'in_progress',
       currentStationIndex: 1,
       stationHistory: [{ station: stns.cutting, enteredAt: new Date().toISOString(), completedBy: workerId }],
-      stationData: { cutting: { result: 'pass' } },
+      stationData: { [stns.cutting]: { result: 'pass' } },
       notes: 'Started production',
     });
     check('PATCH  /orders/:id          (worker — assigned, new fields)', r6.status, 200);
@@ -206,7 +218,7 @@ async function testOrders(tokens, customerId, materialId, workerId, stns) {
 }
 
 async function testRequests(tokens, customerId) {
-  console.log('\n=== Requests (admin+manager only for all CRUD) ===\n');
+  console.log('\n=== Requests (all view, admin+manager CUD) ===\n');
   const path = '/api/requests';
   const body = { details: { type: 'cut', quantity: 5 }, customer: customerId };
 
@@ -215,7 +227,7 @@ async function testRequests(tokens, customerId) {
   const r2 = await api('GET', path, tokens.manager);
   check('GET    /requests            (manager)', r2.status, 200);
   const r3 = await api('GET', path, tokens.worker);
-  check('GET    /requests            (worker)', r3.status, 403);
+  check('GET    /requests            (worker)', r3.status, 200);
 
   const r4 = await api('POST', path, tokens.admin, body);
   check('POST   /requests            (admin)', r4.status, 201);
@@ -246,6 +258,12 @@ async function testRequests(tokens, customerId) {
 async function testWithdrawals(tokens, materialId, workerId) {
   console.log('\n=== Withdrawals (all create, admin+manager update/delete, worker sees own) ===\n');
   const path = '/api/withdrawals';
+
+  const inv = await api('POST', '/api/inventories', tokens.admin, {
+    material: materialId, stockType: 'Raw', quantity: 100, location: 'RBAC Test Warehouse',
+  });
+  const invId = inv.data.data?._id;
+
   const body = { withdrawnBy: workerId, material: materialId, quantity: 2, stockType: 'Raw', notes: 'RBAC test withdrawal' };
 
   const r1 = await api('POST', path, tokens.admin, body);
@@ -282,6 +300,7 @@ async function testWithdrawals(tokens, materialId, workerId) {
   if (all.data.data?.length) {
     await api('DELETE', path, tokens.admin, { ids: all.data.data.map((w) => w._id) });
   }
+  if (invId) await api('DELETE', `/api/inventories/${invId}`, tokens.admin);
 }
 
 async function testClaims(tokens, customerId, materialId, workerId, adminId) {
@@ -330,7 +349,7 @@ async function testClaims(tokens, customerId, materialId, workerId, adminId) {
 }
 
 async function testMaterialLogs(tokens, materialId) {
-  console.log('\n=== Material Logs (admin+manager CUD, admin-only delete) ===\n');
+  console.log('\n=== Material Logs (admin+manager CUD) ===\n');
   const path = '/api/material-logs';
   const body = { material: materialId, actionType: 'import', quantityChanged: 50 };
 
@@ -354,13 +373,16 @@ async function testMaterialLogs(tokens, materialId) {
     const r6 = await api('PATCH', `${path}/${logId}`, tokens.manager, { quantityChanged: 75 });
     check('PATCH  /material-logs/:id   (manager)', r6.status, 200);
 
-    const r7 = await api('DELETE', `${path}/${logId}`, tokens.manager);
-    check('DELETE /material-logs/:id   (manager)', r7.status, 403);
-    const r8 = await api('DELETE', `${path}/${logId}`, tokens.admin);
-    check('DELETE /material-logs/:id   (admin)', r8.status, 200);
+    const r7 = await api('DELETE', `${path}/${logId}`, tokens.worker);
+    check('DELETE /material-logs/:id   (worker)', r7.status, 403);
+    const r8 = await api('DELETE', `${path}/${logId}`, tokens.manager);
+    check('DELETE /material-logs/:id   (manager)', r8.status, 200);
   }
 
-  if (logId2) await api('DELETE', `${path}/${logId2}`, tokens.admin);
+  if (logId2) {
+    const r9 = await api('DELETE', `${path}/${logId2}`, tokens.admin);
+    check('DELETE /material-logs/:id   (admin)', r9.status, 200);
+  }
 }
 
 async function testNotifications(tokens, workerId) {
@@ -399,18 +421,18 @@ async function testNotifications(tokens, workerId) {
 }
 
 async function testPanes(tokens, customerId, materialId, stns) {
-  console.log('\n=== Panes (admin+manager CU, admin-only D) ===\n');
+  console.log('\n=== Panes (admin+manager CUD) ===\n');
   const path = '/api/panes';
 
   const ord = await api('POST', '/api/orders', tokens.admin, { customer: customerId, material: materialId, quantity: 5 });
   const ordId = ord.data.data._id;
   const body = { order: ordId, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' };
 
-  const r1 = await api('GET', path, tokens.admin);
+  const r1 = await api('GET', `${path}?order=${ordId}`, tokens.admin);
   check('GET    /panes               (admin)', r1.status, 200);
-  const r2 = await api('GET', path, tokens.manager);
+  const r2 = await api('GET', `${path}?order=${ordId}`, tokens.manager);
   check('GET    /panes               (manager)', r2.status, 200);
-  const r3 = await api('GET', path, tokens.worker);
+  const r3 = await api('GET', `${path}?order=${ordId}`, tokens.worker);
   check('GET    /panes               (worker)', r3.status, 200);
 
   const r4 = await api('POST', path, tokens.admin, body);
@@ -435,17 +457,19 @@ async function testPanes(tokens, customerId, materialId, stns) {
     const r9 = await api('DELETE', `${path}/${paneId}`, tokens.worker);
     check('DELETE /panes/:id           (worker)', r9.status, 403);
     const r10 = await api('DELETE', `${path}/${paneId}`, tokens.manager);
-    check('DELETE /panes/:id           (manager)', r10.status, 403);
-    const r11 = await api('DELETE', `${path}/${paneId}`, tokens.admin);
+    check('DELETE /panes/:id           (manager)', r10.status, 200);
+  }
+
+  if (paneId2) {
+    const r11 = await api('DELETE', `${path}/${paneId2}`, tokens.admin);
     check('DELETE /panes/:id           (admin)', r11.status, 200);
   }
 
-  if (paneId2) await api('DELETE', `${path}/${paneId2}`, tokens.admin);
   await api('DELETE', `/api/orders/${ordId}`, tokens.admin);
 }
 
 async function testProductionLogs(tokens, customerId, materialId, stns) {
-  console.log('\n=== Production Logs (all create, admin+manager update, admin-only delete) ===\n');
+  console.log('\n=== Production Logs (all create, admin+manager update/delete) ===\n');
   const path = '/api/production-logs';
 
   const me = await api('GET', '/api/auth/me', tokens.worker);
@@ -484,12 +508,13 @@ async function testProductionLogs(tokens, customerId, materialId, stns) {
     const r8 = await api('DELETE', `${path}/${logId}`, tokens.worker);
     check('DELETE /production-logs/:id (worker)', r8.status, 403);
     const r9 = await api('DELETE', `${path}/${logId}`, tokens.manager);
-    check('DELETE /production-logs/:id (manager)', r9.status, 403);
-    const r10 = await api('DELETE', `${path}/${logId}`, tokens.admin);
-    check('DELETE /production-logs/:id (admin)', r10.status, 200);
+    check('DELETE /production-logs/:id (manager)', r9.status, 200);
   }
 
-  if (logId2) await api('DELETE', `${path}/${logId2}`, tokens.admin);
+  if (logId2) {
+    const r10 = await api('DELETE', `${path}/${logId2}`, tokens.admin);
+    check('DELETE /production-logs/:id (admin)', r10.status, 200);
+  }
   if (logId3) await api('DELETE', `${path}/${logId3}`, tokens.admin);
   await api('DELETE', `/api/panes/${paneId}`, tokens.admin);
   await api('DELETE', `/api/orders/${ordId}`, tokens.admin);
@@ -556,7 +581,7 @@ async function testNotificationPreferences(tokens) {
 }
 
 async function testStickerTemplates(tokens) {
-  console.log('\n=== Sticker Templates (admin+manager CU, admin-only D) ===\n');
+  console.log('\n=== Sticker Templates (admin+manager CUD) ===\n');
   const path = '/api/sticker-templates';
   const body = { width: 100, height: 50, elements: [{ type: 'text', value: 'test' }] };
 
@@ -587,12 +612,13 @@ async function testStickerTemplates(tokens) {
     const r9 = await api('DELETE', `${path}/${id1}`, tokens.worker);
     check('DELETE /sticker-templates/:id (worker)', r9.status, 403);
     const r10 = await api('DELETE', `${path}/${id1}`, tokens.manager);
-    check('DELETE /sticker-templates/:id (manager)', r10.status, 403);
-    const r11 = await api('DELETE', `${path}/${id1}`, tokens.admin);
-    check('DELETE /sticker-templates/:id (admin)', r11.status, 200);
+    check('DELETE /sticker-templates/:id (manager)', r10.status, 200);
   }
 
-  if (id2) await api('DELETE', `${path}/${id2}`, tokens.admin);
+  if (id2) {
+    const r11 = await api('DELETE', `${path}/${id2}`, tokens.admin);
+    check('DELETE /sticker-templates/:id (admin)', r11.status, 200);
+  }
 }
 
 async function testPricingSettings(tokens) {
@@ -678,7 +704,7 @@ async function testAuthUpdateMe(tokens) {
 }
 
 async function testJobTypeRbac(tokens) {
-  console.log('\n=== Job Types (admin+manager CU, admin-only D) ===\n');
+  console.log('\n=== Job Types (admin+manager CUD) ===\n');
   const path = '/api/job-types';
 
   const r1 = await api('GET', path, tokens.admin);
@@ -710,12 +736,13 @@ async function testJobTypeRbac(tokens) {
     const r9 = await api('DELETE', `${path}/${id1}`, tokens.worker);
     check('DELETE /job-types/:id       (worker)', r9.status, 403);
     const r10 = await api('DELETE', `${path}/${id1}`, tokens.manager);
-    check('DELETE /job-types/:id       (manager)', r10.status, 403);
-    const r11 = await api('DELETE', `${path}/${id1}`, tokens.admin);
-    check('DELETE /job-types/:id       (admin)', r11.status, 200);
+    check('DELETE /job-types/:id       (manager)', r10.status, 200);
   }
 
-  if (id2) await api('DELETE', `${path}/${id2}`, tokens.admin);
+  if (id2) {
+    const r11 = await api('DELETE', `${path}/${id2}`, tokens.admin);
+    check('DELETE /job-types/:id       (admin)', r11.status, 200);
+  }
 }
 
 async function main() {
@@ -723,7 +750,8 @@ async function main() {
   console.log('Setting up users...');
 
   const adminToken = await login('admin', 'admin123');
-  await setupUsers(adminToken);
+  const roleIds = await getRoleIds(adminToken);
+  await setupUsers(adminToken, roleIds);
   const stns = await setupStations(adminToken);
 
   const managerToken = await login('manager1', 'manager123');
@@ -740,7 +768,7 @@ async function main() {
   const adminId = adminMe.data.data._id;
 
   // Test Workers
-  await testWorkers(tokens);
+  await testWorkers(tokens, roleIds);
 
   // Test Customers, Materials, Station Templates (same pattern)
   const custResult = await testResource(tokens, 'Customers', '/api/customers',

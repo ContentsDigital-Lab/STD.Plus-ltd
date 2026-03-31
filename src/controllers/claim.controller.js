@@ -10,6 +10,7 @@ const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
 const paginate = require('../utils/paginate');
+const { hasPermission } = require('../config/permissions');
 
 const POPULATE_FIELDS = [
   'order', 'material', 'pane', 'reportedBy', 'approvedBy', 'remadePane',
@@ -150,7 +151,7 @@ const createRemakePane = async (claim, remakeStationId, req) => {
 
 exports.getAll = async (req, res, next) => {
   try {
-    const filter = req.user.role === 'worker' ? { reportedBy: req.user._id } : {};
+    const filter = hasPermission(req.user, 'claims:manage') ? {} : { reportedBy: req.user._id };
     const { data, pagination } = await paginate(Claim, {
       filter,
       populate: POPULATE_FIELDS,
@@ -168,7 +169,7 @@ exports.getById = async (req, res, next) => {
   try {
     const claim = await Claim.findById(req.params.id).populate(POPULATE_FIELDS);
     if (!claim) return fail(res, 'Claim not found', 404);
-    if (req.user.role === 'worker' && claim.reportedBy._id.toString() !== req.user._id.toString()) {
+    if (!hasPermission(req.user, 'claims:manage') && claim.reportedBy._id.toString() !== req.user._id.toString()) {
       return fail(res, 'Not authorized', 403);
     }
     success(res, claim);
@@ -245,7 +246,7 @@ exports.update = async (req, res, next) => {
     const existing = await Claim.findById(req.params.id);
     if (!existing) return fail(res, 'Claim not found', 404);
 
-    if (req.user.role === 'worker') {
+    if (!hasPermission(req.user, 'claims:manage')) {
       if (existing.reportedBy.toString() !== req.user._id.toString()) {
         return fail(res, 'Not authorized', 403);
       }

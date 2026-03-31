@@ -59,6 +59,7 @@ exports.getAll = async (req, res, next) => {
       page: req.query.page,
       limit: req.query.limit,
       sort: req.query.sort,
+      populate: 'role',
     });
     success(res, data, 'Success', 200, pagination);
   } catch (err) {
@@ -68,7 +69,7 @@ exports.getAll = async (req, res, next) => {
 
 exports.getById = async (req, res, next) => {
   try {
-    const worker = await Worker.findById(req.params.id);
+    const worker = await Worker.findById(req.params.id).populate('role');
     if (!worker) return fail(res, 'Worker not found', 404);
     success(res, worker);
   } catch (err) {
@@ -79,7 +80,8 @@ exports.getById = async (req, res, next) => {
 exports.create = async (req, res, next) => {
   try {
     const { name, username, password, position, role, notificationPreferences } = req.validated.body;
-    const worker = await Worker.create({ name, username, password, position, role, notificationPreferences });
+    const created = await Worker.create({ name, username, password, position, role, notificationPreferences });
+    const worker = await Worker.findById(created._id).populate('role');
     success(res, worker, 'Worker created', 201);
   } catch (err) {
     if (err.code === 11000) {
@@ -108,7 +110,7 @@ exports.update = async (req, res, next) => {
     const worker = await Worker.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: true,
-    });
+    }).populate('role');
     if (!worker) return fail(res, 'Worker not found', 404);
     success(res, worker, 'Worker updated');
   } catch (err) {
