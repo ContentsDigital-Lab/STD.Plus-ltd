@@ -20,7 +20,7 @@ const updateSchema = z.object({
     reportedBy: z.string().min(1).optional(),
     approvedBy: z.string().min(1).optional(),
     remadePane: z.string().min(1).optional(),
-    photos: z.array(z.string().url()).optional(),
+    photos: z.array(z.string().min(1)).optional(),
     claimDate: z.string().datetime().optional(),
   }),
 });
@@ -37,7 +37,7 @@ const createFromPaneSchema = z.object({
     reportedBy: z.string().min(1),
     approvedBy: z.string().min(1).optional(),
     remadePane: z.string().min(1).optional(),
-    photos: z.array(z.string().url()).optional(),
+    photos: z.array(z.string().min(1)).optional(),
     claimDate: z.string().datetime().optional(),
   }),
 });

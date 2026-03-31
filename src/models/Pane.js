@@ -24,7 +24,7 @@ const paneSchema = new mongoose.Schema({
   inventory:  { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory',  default: null },
 
   currentStation: { type: String, default: 'queue' },
-  currentStatus:  { type: String, enum: ['pending', 'in_progress', 'awaiting_scan_out', 'completed'], default: 'pending' },
+  currentStatus:  { type: String, enum: ['pending', 'in_progress', 'awaiting_scan_out', 'completed', 'claimed'], default: 'pending' },
 
   routing:      { type: [String], default: [] },
   customRouting:{ type: Boolean, default: false },

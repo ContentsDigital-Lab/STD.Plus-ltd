@@ -90,6 +90,8 @@ exports.createFromPane = async (req, res, next) => {
       reportedBy, approvedBy, remadePane, photos, claimDate,
       claimNumber,
     });
+    // Hold the pane from its current station until manager decides
+    await Pane.findByIdAndUpdate(pane._id, { currentStatus: 'claimed' });
     const populated = await claim.populate(POPULATE_FIELDS);
     emit(req, 'claim:updated', { action: 'created', data: populated }, ['dashboard', 'claim']);
     success(res, populated, 'Claim created from pane', 201);
