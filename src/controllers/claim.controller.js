@@ -4,6 +4,7 @@ const Order = require('../models/Order');
 const Material = require('../models/Material');
 const Worker = require('../models/Worker');
 const Pane = require('../models/Pane');
+const Station = require('../models/Station');
 const MaterialLog = require('../models/MaterialLog');
 const Notification = require('../models/Notification');
 const { success, fail } = require('../utils/response');
@@ -58,6 +59,18 @@ const createRemakePane = async (claim, remakeStationId, req) => {
     ? [...originalPane.routing]
     : (originalOrder.stations?.length > 0 ? [...originalOrder.stations] : []);
 
+  let finalRemakeStationId = remakeStationId;
+  if (!finalRemakeStationId) {
+    const orderRelessStation = await Station.findOne({ 
+      name: { $regex: /order\s*rele[a]?[s]?[s]?/i } 
+    });
+    if (orderRelessStation) {
+      finalRemakeStationId = orderRelessStation._id;
+    } else if (routing.length > 0) {
+      finalRemakeStationId = routing[0];
+    }
+  }
+
   const paneNumber = await Counter.getNext('pane', 'PNE');
   const qrCode = `STDPLUS:${paneNumber}`;
 
@@ -68,7 +81,7 @@ const createRemakePane = async (claim, remakeStationId, req) => {
     request: originalOrder.request,
     material: claim.material._id || claim.material,
     remakeOf: originalPane._id,
-    currentStation: remakeStationId || null,
+    currentStation: finalRemakeStationId || null,
     currentStatus: 'pending',
     routing,
     customRouting: originalPane.customRouting,
@@ -108,8 +121,8 @@ const createRemakePane = async (claim, remakeStationId, req) => {
   emit(req, 'pane:updated', { action: 'created', data: remadePane }, ['dashboard', 'pane', 'production']);
   emit(req, 'log:updated', { action: 'created' }, ['log']);
 
-  if (remakeStationId) {
-    const stationIdStr = remakeStationId.toString();
+  if (finalRemakeStationId) {
+    const stationIdStr = finalRemakeStationId.toString();
     emit(req, 'station:pane_arrived', {
       paneNumber: remadePane.paneNumber,
       paneId: remadePane._id,
