@@ -2007,6 +2007,7 @@
       "post": {
         "tags": ["Claims"],
         "summary": "Create a claim for an order",
+        "description": "Creates a new claim linked to the specified order.\n\n**Side effect:** If a `pane` ID is provided and that pane is currently in a station (not yet completed), the pane is **pulled from the station system** — its `currentStation` is set to `claimed` and `currentStatus` to `completed`, and the order's `stationBreakdown` is decremented accordingly. Real-time events are emitted so the frontend removes the pane from station views.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -2057,7 +2058,7 @@
       "post": {
         "tags": ["Claims"],
         "summary": "Create claim from pane number",
-        "description": "Convenience endpoint that accepts a `paneNumber` (e.g. `PNE-0001`) and automatically resolves the pane's `order` and `material`. No need to provide order ID in the URL or material ID in the body.\n\nRequires authentication. Any role can create.",
+        "description": "Convenience endpoint that accepts a `paneNumber` (e.g. `PNE-0001`) and automatically resolves the pane's `order` and `material`. No need to provide order ID in the URL or material ID in the body.\n\nRequires authentication. Any role can create.\n\n**Side effect:** The claimed pane is **pulled from the station system** — its `currentStation` is set to `claimed` and `currentStatus` to `completed`, and the order's `stationBreakdown` is decremented accordingly. Real-time events are emitted so the frontend removes the pane from station views. Already-completed panes are not affected.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -2090,7 +2091,7 @@
       "patch": {
         "tags": ["Claims"],
         "summary": "Update a claim",
-        "description": "Workers can only update their own assigned resources.",
+        "description": "Workers can only update their own claims.\n\n**Approval orchestration:** When `status` is changed to `approved` (from any other status) and no `remadePane` exists yet, the system automatically:\n\n1. Creates a **new remake pane** with the same specs as the original (dimensions, rawGlass, jobType, glassType, processes, edgeTasks, routing) cloned from the original pane.\n2. The remake pane is placed at the **order release station** (`currentStation: order_release`, `currentStatus: pending`) with `order: null` — it has not entered an order yet.\n3. The remake pane belongs to the **same request** as the original order (`request` is copied).\n4. The remake pane's `remakeOf` field points to the original defective pane.\n5. The claim's `remadePane` field is set to the new pane's ID.\n6. A `MaterialLog` entry with `actionType: remake` is created.\n7. Real-time events are emitted: `pane:updated`, `station:pane_arrived` (to the order release station room), and a `notification` to the original order's `assignedTo` worker.\n\nThis fires regardless of the `decision` field (both `keep` and `destroy`). Setting `status` to `rejected` does **not** create a remake pane. Re-approving an already-approved claim (or one that already has a `remadePane`) does **not** create a duplicate.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClaimUpdateBody" } } } },

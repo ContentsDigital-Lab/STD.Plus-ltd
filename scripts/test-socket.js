@@ -3,6 +3,17 @@ const { io } = require('socket.io-client');
 require('dotenv').config();
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
+let passed = 0;
+let failed = 0;
+
+const _log = console.log;
+console.log = (...args) => {
+  const msg = args.map(String).join(' ');
+  if (/\bPASS\b/.test(msg)) passed++;
+  if (/\bFAIL\b/.test(msg)) failed++;
+  _log.apply(console, args);
+};
+
 async function getToken(username = 'admin', password = 'admin123') {
   const res = await fetch(`${API}/api/auth/login`, {
     method: 'POST',
@@ -533,7 +544,14 @@ async function main() {
   await testStickerTemplateAllEvents();
   await testJobTypeEvent();
   await testOrderFirstStationNotification();
-  process.exit(0);
+
+  _log('\n========================================');
+  _log(`   PASSED: ${passed}`);
+  _log(`   FAILED: ${failed}`);
+  _log(`   TOTAL:  ${passed + failed}`);
+  _log('========================================\n');
+
+  process.exit(failed > 0 ? 1 : 0);
 }
 
 main().catch((err) => {
