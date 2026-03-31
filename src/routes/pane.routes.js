@@ -4,7 +4,6 @@ const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const authorize = require('../middleware/authorize');
 const paneController = require('../controllers/pane.controller');
-const scanController = require('../controllers/scan.controller');
 
 const router = Router();
 

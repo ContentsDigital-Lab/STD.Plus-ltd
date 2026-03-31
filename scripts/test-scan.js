@@ -732,6 +732,52 @@ async function testScanOutEdgeCases(token) {
 }
 
 // ──────────────────────────────────────────────
+// MATERIAL BACKFILL ON SCAN
+// ──────────────────────────────────────────────
+
+async function testMaterialBackfill(token) {
+  console.log('\n=== Scan Material Backfill ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'Backfill Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'Backfill Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const ord = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 1,
+  });
+  const ordId = ord.data.data._id;
+
+  const pane = await api('POST', '/api/panes', token, {
+    order: ordId, routing: ['cutting', 'qc'],
+  });
+  check('CREATE pane without explicit material', pane.status, 201);
+  const paneId = pane.data.data._id;
+  const paneNumber = pane.data.data.paneNumber;
+
+  const paneGet1 = await api('GET', `/api/panes/${paneId}`, token);
+  const mat1 = paneGet1.data.data.material;
+  check('  pane material is null before scan', mat1 == null, true);
+
+  const r1 = await api('POST', `/api/panes/${paneNumber}/scan`, token, {
+    station: 'cutting', action: 'scan_in',
+  });
+  check('SCAN_IN pane without material', r1.status, 200);
+
+  const paneGet2 = await api('GET', `/api/panes/${paneId}`, token);
+  const backfilled = paneGet2.data.data.material;
+  check('  material backfilled from order', backfilled != null, true);
+  if (backfilled) {
+    check('  material matches order material', String(backfilled._id || backfilled), matId);
+  }
+
+  await api('DELETE', `/api/panes/${paneId}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -746,6 +792,7 @@ async function main() {
   await testWebSocketEvents(token);
   await testNotifications(token);
   await testScanOutEdgeCases(token);
+  await testMaterialBackfill(token);
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);
