@@ -30,8 +30,8 @@ async function main() {
     }
     const id = nameToId.get(name) || nameToId.get(name.toLowerCase());
     if (!id) {
-      console.warn(`  ⚠  Station name "${name}" not found — skipping this field`);
-      return undefined;
+      console.warn(`  ⚠  Station name "${name}" not found — setting to null`);
+      return null;
     }
     return id;
   };
