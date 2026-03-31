@@ -9,33 +9,65 @@ STD Plus uses **JWT Bearer Token** authentication. All protected endpoints requi
 
 ## Roles & Authorization
 
-Every worker has a **role** that determines what they can do:
+STD Plus uses a **dynamic, permission-based** access control system. Roles are fully customizable — admins can create any role with any combination of permissions.
 
-| Role | Description |
+### How It Works
+
+1. **Roles** are stored in the database and managed via the [`/api/roles`](/api-reference/roles/list-all-roles) endpoints
+2. Each role has a **permissions array** — a list of permission keys like `orders:view`, `panes:scan`
+3. Every worker is assigned one role (as an ObjectId reference)
+4. On login, the full role object (with permissions) is returned
+5. Every API endpoint checks the worker's permissions before allowing access
+
+### System Roles (Defaults)
+
+Three system roles are pre-seeded. They cannot be deleted, but their permissions can be modified.
+
+| Role | Slug | Permissions |
+|---|---|---|
+| **Admin** | `admin` | `*` (wildcard — full access to everything) |
+| **Manager** | `manager` | All permissions except `workers:manage` and `roles:manage` |
+| **Worker** | `worker` | View-only for most resources, plus `claims:create`, `panes:scan`, `production_logs:create`, `inventory:move`, `withdrawals:create` |
+
+You can create additional custom roles (e.g. "หัวหน้าช่าง", "พนักงานสต๊อก") via `POST /api/roles`.
+
+### Permission Keys
+
+Permissions follow the `resource:action` format. Use `GET /api/roles/permissions` to fetch the full list programmatically.
+
+| Resource | Available Permissions |
 |---|---|
-| `admin` | Full access to all resources and actions |
-| `manager` | Can create and update most resources, but cannot manage workers or perform certain deletes |
-| `worker` | Can view resources and update their own assigned items only |
+| Workers | `workers:view`, `workers:manage` |
+| Customers | `customers:view`, `customers:manage` |
+| Materials | `materials:view`, `materials:manage` |
+| Inventories | `inventory:view`, `inventory:move`, `inventory:manage` |
+| Material Logs | `material_logs:view`, `material_logs:manage` |
+| Requests | `requests:view`, `requests:manage` |
+| Orders | `orders:view`, `orders:create`, `orders:manage` |
+| Claims | `claims:view`, `claims:create`, `claims:approve`, `claims:manage` |
+| Panes | `panes:view`, `panes:create`, `panes:scan`, `panes:manage` |
+| Pane Logs | `pane_logs:view` |
+| Production Logs | `production_logs:view`, `production_logs:create`, `production_logs:manage` |
+| Stations | `stations:view`, `stations:manage` |
+| Station Templates | `station_templates:view`, `station_templates:manage` |
+| Sticker Templates | `sticker_templates:view`, `sticker_templates:manage` |
+| Job Types | `job_types:view`, `job_types:manage` |
+| Pricing | `pricing:view`, `pricing:manage` |
+| Notifications | `notifications:view`, `notifications:create`, `notifications:manage` |
+| Withdrawals | `withdrawals:view`, `withdrawals:create`, `withdrawals:manage` |
+| Roles | `roles:view`, `roles:manage` |
 
-### Permission Matrix
+<Note>
+  `:view` grants read access (GET). `:create` grants creation (POST). `:manage` grants full CRUD (create, update, delete). A role with `orders:view` and `orders:create` can list and create orders, but cannot update or delete them.
+</Note>
 
-| Resource | View | Create | Update | Delete |
-|---|---|---|---|---|
-| Workers | all | admin | admin | admin |
-| Customers | all | admin, manager | admin, manager | admin |
-| Materials | all | admin, manager | admin, manager | admin |
-| Inventories | all | admin, manager | admin, manager (move: all) | admin |
-| Stations | all | admin, manager | admin, manager | admin |
-| Orders | all | admin, manager | all (own) | admin, manager |
-| Requests | all | admin, manager | admin, manager | admin, manager |
-| Withdrawals | all | all | admin, manager | admin, manager |
-| Claims | all | all | all (own) | admin, manager |
-| Panes | all | admin, manager | admin, manager | admin |
-| Production Logs | all | all | admin, manager | admin |
-| Material Logs | all | admin, manager | admin, manager | admin |
-| Notifications | all | admin, manager | all (own) | admin, manager |
+### Ownership Checks
 
-**"all (own)"** means workers can only update resources assigned to or owned by them.
+Some endpoints enforce **ownership** for users without the `:manage` permission:
+
+- **Orders** — users with `orders:view` (but not `orders:manage`) can only update orders assigned to them
+- **Claims** — users with `claims:view` (but not `claims:manage`) can only update claims they reported
+- **Notifications** — users with `notifications:view` (but not `notifications:manage`) can only update their own notifications
 
 ## Getting a Token
 
@@ -72,11 +104,21 @@ const token = data.token;
       "name": "Admin",
       "username": "admin",
       "position": "admin",
-      "role": "admin"
+      "role": {
+        "_id": "69a7fe4578410c57fad056e0",
+        "name": "Admin",
+        "slug": "admin",
+        "permissions": ["*"],
+        "isSystem": true
+      }
     }
   }
 }
 ```
+
+<Tip>
+  The `role` field is a fully populated object. Use `role.permissions` to check access on the frontend, and `role.slug` or `role.name` for display.
+</Tip>
 
 ## Using the Token
 
