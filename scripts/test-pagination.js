@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { snapshotIds, sweepCreatedData } = require('./test-helpers');
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
@@ -38,6 +39,10 @@ async function main() {
 
   const token = await login('admin', 'admin123');
   console.log(`   Token: ...${token.slice(-10)}\n`);
+
+  const snapshot = await snapshotIds(API, token);
+
+  try {
 
   const tmpl = await api('POST', '/api/station-templates', token, { name: 'Pagination Template' });
   const tmplId = tmpl.data.data._id;
@@ -257,6 +262,10 @@ async function main() {
   console.log('--- Cleanup: deleting 25 materials ---\n');
   await api('DELETE', '/api/materials', token, { ids: materialIds });
   console.log('   Done\n');
+
+  } finally {
+    await sweepCreatedData(API, token, snapshot);
+  }
 
   console.log('========================================');
   console.log(`   PASSED: ${passed}`);

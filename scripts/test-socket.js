@@ -1,6 +1,7 @@
 const { io } = require('socket.io-client');
 
 require('dotenv').config();
+const { snapshotIds, sweepCreatedData } = require('./test-helpers');
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
@@ -542,16 +543,23 @@ async function testOrderFirstStationNotification() {
 }
 
 async function main() {
-  await testSystemEvents();
-  await testJoinEvents();
-  await testLeaveEvents();
-  await testDataEvents();
-  await testSystemAlertRBAC();
-  await testQrCheckIn();
-  await testPricingEvent();
-  await testStickerTemplateAllEvents();
-  await testJobTypeEvent();
-  await testOrderFirstStationNotification();
+  const sweepToken = await getToken();
+  const snapshot = await snapshotIds(API, sweepToken);
+
+  try {
+    await testSystemEvents();
+    await testJoinEvents();
+    await testLeaveEvents();
+    await testDataEvents();
+    await testSystemAlertRBAC();
+    await testQrCheckIn();
+    await testPricingEvent();
+    await testStickerTemplateAllEvents();
+    await testJobTypeEvent();
+    await testOrderFirstStationNotification();
+  } finally {
+    await sweepCreatedData(API, sweepToken, snapshot);
+  }
 
   _log('\n========================================');
   _log(`   PASSED: ${passed}`);

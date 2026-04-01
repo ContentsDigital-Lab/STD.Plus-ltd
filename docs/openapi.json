@@ -294,8 +294,8 @@
                 "rawGlass": { "type": "object", "properties": { "glassType": { "type": "string" }, "color": { "type": "string" }, "thickness": { "type": "number", "minimum": 0 }, "sheetsPerPane": { "type": "integer", "minimum": 1 } } },
                 "glassType": { "type": "string" },
                 "glassTypeLabel": { "type": "string" },
-                "holes": { "type": "integer", "minimum": 0, "description": "Number of holes in this pane" },
-                "notches": { "type": "integer", "minimum": 0, "description": "Number of notches in this pane" },
+                "holes": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of hole positions and dimensions" },
+                "notches": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of notch positions and dimensions" },
                 "processes": { "type": "array", "items": { "type": "string" } },
                 "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
                 "material": { "type": "string", "description": "Material ObjectId" },
@@ -763,6 +763,29 @@
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed"], "default": "pending" }
         }
       },
+      "Vertex": {
+        "type": "object",
+        "required": ["x", "y"],
+        "properties": {
+          "x": { "type": "number", "description": "X coordinate" },
+          "y": { "type": "number", "description": "Y coordinate" }
+        }
+      },
+      "HoleNotch": {
+        "type": "object",
+        "required": ["id", "type", "x", "y"],
+        "properties": {
+          "id": { "type": "string", "description": "Frontend-generated unique ID" },
+          "type": { "type": "string", "enum": ["circle", "rectangle", "slot", "custom"], "description": "Shape type" },
+          "x": { "type": "number", "description": "Center X coordinate" },
+          "y": { "type": "number", "description": "Center Y coordinate" },
+          "diameter": { "type": "number", "description": "Diameter (for circle type)" },
+          "width": { "type": "number", "description": "Width (for rectangle/slot type)" },
+          "height": { "type": "number", "description": "Height (for rectangle type)" },
+          "length": { "type": "number", "description": "Length (for slot type)" },
+          "vertices": { "type": "array", "items": { "$ref": "#/components/schemas/Vertex" }, "description": "Custom vertices (for custom type)" }
+        }
+      },
       "QcResult": {
         "type": "object",
         "properties": {
@@ -790,8 +813,8 @@
           "rawGlass": { "type": "object", "description": "Raw material info for warehouse withdrawal", "properties": { "glassType": { "type": "string", "description": "Raw glass type (e.g. Clear, Tinted)" }, "color": { "type": "string", "description": "Glass color (e.g. เขียว, ใส, ชา, เทา)" }, "thickness": { "type": "number", "description": "Thickness in mm" }, "sheetsPerPane": { "type": "integer", "description": "Number of raw sheets needed per pane (2 for Laminated)", "default": 1 } } },
           "glassType": { "type": "string" },
           "glassTypeLabel": { "type": "string" },
-          "holes": { "type": "integer", "minimum": 0, "default": 0, "description": "Number of holes in this pane" },
-          "notches": { "type": "integer", "minimum": 0, "default": 0, "description": "Number of notches in this pane" },
+          "holes": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "default": [], "description": "Array of hole positions and dimensions" },
+          "notches": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "default": [], "description": "Array of notch positions and dimensions" },
           "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
           "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
           "withdrawal": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Withdrawal" }] },
@@ -820,8 +843,8 @@
           "rawGlass": { "type": "object", "properties": { "glassType": { "type": "string" }, "color": { "type": "string" }, "thickness": { "type": "number", "minimum": 0 }, "sheetsPerPane": { "type": "integer", "minimum": 1 } } },
           "glassType": { "type": "string" },
           "glassTypeLabel": { "type": "string" },
-          "holes": { "type": "integer", "minimum": 0, "description": "Number of holes in this pane" },
-          "notches": { "type": "integer", "minimum": 0, "description": "Number of notches in this pane" },
+          "holes": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of hole positions and dimensions" },
+          "notches": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of notch positions and dimensions" },
           "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
           "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
           "withdrawal": { "type": "string", "minLength": 1 },
@@ -879,8 +902,8 @@
           "rawGlass": { "type": "object", "properties": { "glassType": { "type": "string" }, "color": { "type": "string" }, "thickness": { "type": "number", "minimum": 0 }, "sheetsPerPane": { "type": "integer", "minimum": 1 } } },
           "glassType": { "type": "string" },
           "glassTypeLabel": { "type": "string" },
-          "holes": { "type": "integer", "minimum": 0, "description": "Number of holes in this pane" },
-          "notches": { "type": "integer", "minimum": 0, "description": "Number of notches in this pane" },
+          "holes": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of hole positions and dimensions" },
+          "notches": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of notch positions and dimensions" },
           "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
           "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
           "withdrawal": { "type": "string", "minLength": 1 },

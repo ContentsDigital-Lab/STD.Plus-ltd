@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { snapshotIds, sweepCreatedData } = require('./test-helpers');
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
@@ -95,8 +96,8 @@ async function testClaimPullsPaneFromStation(token, stns) {
     customer: custId,
     details: { type: 'tempered', quantity: 2 },
     panes: [
-      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered', jobType: 'Tempered', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 }, holes: 3, notches: 2 },
-      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 }, holes: 0, notches: 1 },
+      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered', jobType: 'Tempered', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 }, holes: [{ id: 'ch1', type: 'circle', x: 100, y: 200, diameter: 10 }, { id: 'ch2', type: 'circle', x: 300, y: 400, diameter: 15 }, { id: 'ch3', type: 'rectangle', x: 500, y: 100, width: 20, height: 30 }], notches: [{ id: 'cn1', type: 'rectangle', x: 0, y: 50, width: 20, height: 30 }, { id: 'cn2', type: 'custom', x: 50, y: 0, vertices: [{ x: 0, y: 0 }, { x: 10, y: 10 }] }] },
+      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 }, holes: [], notches: [{ id: 'cn3', type: 'rectangle', x: 0, y: 30, width: 15, height: 25 }] },
     ],
   });
   const reqId = reqRes.data.data._id;
@@ -211,8 +212,17 @@ async function testClaimApprovalCreateRemake(token, stns) {
         jobType: 'Tempered',
         rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 },
         processes: ['cutting', 'tempering'],
-        holes: 5,
-        notches: 2,
+        holes: [
+          { id: 'rh1', type: 'circle', x: 100, y: 200, diameter: 10 },
+          { id: 'rh2', type: 'circle', x: 300, y: 400, diameter: 15 },
+          { id: 'rh3', type: 'rectangle', x: 500, y: 100, width: 20, height: 30 },
+          { id: 'rh4', type: 'slot', x: 700, y: 300, width: 10, length: 50 },
+          { id: 'rh5', type: 'custom', x: 200, y: 500, vertices: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }] },
+        ],
+        notches: [
+          { id: 'rn1', type: 'rectangle', x: 0, y: 50, width: 20, height: 30 },
+          { id: 'rn2', type: 'custom', x: 50, y: 0, vertices: [{ x: 0, y: 0 }, { x: 10, y: 10 }] },
+        ],
       },
     ],
   });
@@ -278,8 +288,10 @@ async function testClaimApprovalCreateRemake(token, stns) {
   check('remade pane rawGlass.color', remade.rawGlass?.color, 'ใส');
   check('remade pane rawGlass.thickness', remade.rawGlass?.thickness, 5);
   check('remade pane rawGlass.sheetsPerPane', remade.rawGlass?.sheetsPerPane, 1);
-  check('remade pane holes cloned', remade.holes, 5);
-  check('remade pane notches cloned', remade.notches, 2);
+  check('remade pane holes cloned count', remade.holes.length, 5);
+  check('remade pane holes[0].id', remade.holes[0].id, 'rh1');
+  check('remade pane notches cloned count', remade.notches.length, 2);
+  check('remade pane notches[0].id', remade.notches[0].id, 'rn1');
   const expectedRoutingIds = JSON.stringify([stns.cutting, stns.edging, stns.qc]);
   check(
     'remade pane routing matches',
@@ -652,6 +664,8 @@ async function main() {
   const token = await login('admin', 'admin123');
   console.log(`   Token: ...${token.slice(-10)}`);
 
+  const snapshot = await snapshotIds(API, token);
+
   const stns = await createStations(token);
   try {
     await testClaimPullsPaneFromStation(token, stns);
@@ -661,7 +675,8 @@ async function main() {
     await testRejectionNoRemake(token, stns);
     await testCompletedPaneNotPulledAgain(token, stns);
   } finally {
-    await cleanupStations(token, stns);
+    await cleanupStations(token, stns).catch(() => {});
+    await sweepCreatedData(API, token, snapshot);
   }
 
   console.log('\n========================================');

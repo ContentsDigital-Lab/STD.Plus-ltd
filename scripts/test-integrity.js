@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { snapshotIds, sweepCreatedData } = require('./test-helpers');
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
@@ -1157,14 +1158,25 @@ async function testPaneNewFields(token) {
   const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 1 } });
   const reqId = reqRes.data.data._id;
 
+  const sampleHoles = [
+    { id: 'h1', type: 'circle', x: 100, y: 200, diameter: 10 },
+    { id: 'h2', type: 'circle', x: 300, y: 400, diameter: 15 },
+    { id: 'h3', type: 'rectangle', x: 500, y: 100, width: 20, height: 30 },
+    { id: 'h4', type: 'slot', x: 700, y: 300, width: 10, length: 50 },
+  ];
+  const sampleNotches = [
+    { id: 'n1', type: 'rectangle', x: 50, y: 0, width: 20, height: 30 },
+    { id: 'n2', type: 'custom', x: 150, y: 0, vertices: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 30 }] },
+  ];
+
   // Create pane with jobType + rawGlass + holes + notches
   const r1 = await api('POST', '/api/panes', token, {
     request: reqId,
     dimensions: { width: 800, height: 600, thickness: 5 },
     jobType: 'Laminated',
     rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 5, sheetsPerPane: 2 },
-    holes: 4,
-    notches: 2,
+    holes: sampleHoles,
+    notches: sampleNotches,
   });
   check('CREATE pane with jobType + rawGlass + holes + notches', r1.status, 201);
   const paneId = r1.data.data._id;
@@ -1173,23 +1185,36 @@ async function testPaneNewFields(token) {
   check('  rawGlass.color', r1.data.data.rawGlass.color, 'เขียว');
   check('  rawGlass.thickness', r1.data.data.rawGlass.thickness, 5);
   check('  rawGlass.sheetsPerPane', r1.data.data.rawGlass.sheetsPerPane, 2);
-  check('  holes persisted', r1.data.data.holes, 4);
-  check('  notches persisted', r1.data.data.notches, 2);
+  check('  holes count', r1.data.data.holes.length, 4);
+  check('  holes[0].id', r1.data.data.holes[0].id, 'h1');
+  check('  holes[0].type', r1.data.data.holes[0].type, 'circle');
+  check('  holes[0].diameter', r1.data.data.holes[0].diameter, 10);
+  check('  notches count', r1.data.data.notches.length, 2);
+  check('  notches[0].id', r1.data.data.notches[0].id, 'n1');
 
   // GET — verify persistence
   const r2 = await api('GET', `/api/panes/${paneId}`, token);
   check('GET pane jobType', r2.data.data.jobType, 'Laminated');
   check('  rawGlass.glassType', r2.data.data.rawGlass.glassType, 'Clear');
   check('  rawGlass.sheetsPerPane', r2.data.data.rawGlass.sheetsPerPane, 2);
-  check('  holes', r2.data.data.holes, 4);
-  check('  notches', r2.data.data.notches, 2);
+  check('  holes count', r2.data.data.holes.length, 4);
+  check('  notches count', r2.data.data.notches.length, 2);
 
   // UPDATE — change jobType, rawGlass, holes, notches
+  const updatedHoles = [
+    { id: 'h10', type: 'circle', x: 50, y: 50, diameter: 8 },
+    { id: 'h11', type: 'circle', x: 150, y: 150, diameter: 12 },
+  ];
+  const updatedNotches = [
+    { id: 'n10', type: 'rectangle', x: 0, y: 50, width: 25, height: 40 },
+    { id: 'n11', type: 'rectangle', x: 0, y: 150, width: 25, height: 40 },
+    { id: 'n12', type: 'custom', x: 0, y: 250, vertices: [{ x: 0, y: 0 }, { x: 10, y: 10 }] },
+  ];
   const r3 = await api('PATCH', `/api/panes/${paneId}`, token, {
     jobType: 'Tempered',
     rawGlass: { glassType: 'Tinted', color: 'ชา', thickness: 10, sheetsPerPane: 1 },
-    holes: 6,
-    notches: 3,
+    holes: updatedHoles,
+    notches: updatedNotches,
   });
   check('UPDATE pane jobType', r3.status, 200);
   check('  jobType updated', r3.data.data.jobType, 'Tempered');
@@ -1197,8 +1222,8 @@ async function testPaneNewFields(token) {
   check('  rawGlass.color updated', r3.data.data.rawGlass.color, 'ชา');
   check('  rawGlass.thickness updated', r3.data.data.rawGlass.thickness, 10);
   check('  rawGlass.sheetsPerPane updated', r3.data.data.rawGlass.sheetsPerPane, 1);
-  check('  holes updated', r3.data.data.holes, 6);
-  check('  notches updated', r3.data.data.notches, 3);
+  check('  holes updated count', r3.data.data.holes.length, 2);
+  check('  notches updated count', r3.data.data.notches.length, 3);
 
   // CREATE pane without new fields — should get defaults
   const r4 = await api('POST', '/api/panes', token, { request: reqId });
@@ -1209,16 +1234,23 @@ async function testPaneNewFields(token) {
   check('  default rawGlass.color is empty', r4.data.data.rawGlass.color, '');
   check('  default rawGlass.thickness is 0', r4.data.data.rawGlass.thickness, 0);
   check('  default rawGlass.sheetsPerPane is 1', r4.data.data.rawGlass.sheetsPerPane, 1);
-  check('  default holes is 0', r4.data.data.holes, 0);
-  check('  default notches is 0', r4.data.data.notches, 0);
+  check('  default holes is empty array', r4.data.data.holes.length, 0);
+  check('  default notches is empty array', r4.data.data.notches.length, 0);
 
   // Inline panes via request — with jobType + rawGlass + holes + notches
+  const inlineHoles = [{ id: 'ih1', type: 'circle', x: 100, y: 100, diameter: 12 }, { id: 'ih2', type: 'circle', x: 200, y: 200, diameter: 8 }];
+  const inlineNotches = [{ id: 'in1', type: 'rectangle', x: 0, y: 50, width: 15, height: 20 }];
+  const inlineNotches2 = [
+    { id: 'in2a', type: 'rectangle', x: 0, y: 30, width: 10, height: 15 },
+    { id: 'in2b', type: 'rectangle', x: 0, y: 100, width: 10, height: 15 },
+    { id: 'in2c', type: 'custom', x: 50, y: 0, vertices: [{ x: 0, y: 0 }, { x: 5, y: 5 }] },
+  ];
   const reqRes2 = await api('POST', '/api/requests', token, {
     customer: custId,
     details: { type: 'laminated', quantity: 2 },
     panes: [
-      { jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 }, holes: 3, notches: 1 },
-      { jobType: 'Tempered', rawGlass: { glassType: 'Tinted', color: 'เทา', thickness: 6, sheetsPerPane: 1 }, holes: 0, notches: 4 },
+      { jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 }, holes: inlineHoles, notches: inlineNotches },
+      { jobType: 'Tempered', rawGlass: { glassType: 'Tinted', color: 'เทา', thickness: 6, sheetsPerPane: 1 }, holes: [], notches: inlineNotches2 },
     ],
   });
   check('CREATE request with inline panes + new fields', reqRes2.status, 201);
@@ -1227,12 +1259,12 @@ async function testPaneNewFields(token) {
   const inlinePane2 = reqRes2.data.data.panes[1];
   check('  inline pane 1 jobType', inlinePane1.jobType, 'Laminated');
   check('  inline pane 1 rawGlass.sheetsPerPane', inlinePane1.rawGlass.sheetsPerPane, 2);
-  check('  inline pane 1 holes', inlinePane1.holes, 3);
-  check('  inline pane 1 notches', inlinePane1.notches, 1);
+  check('  inline pane 1 holes count', inlinePane1.holes.length, 2);
+  check('  inline pane 1 notches count', inlinePane1.notches.length, 1);
   check('  inline pane 2 jobType', inlinePane2.jobType, 'Tempered');
   check('  inline pane 2 rawGlass.color', inlinePane2.rawGlass.color, 'เทา');
-  check('  inline pane 2 holes', inlinePane2.holes, 0);
-  check('  inline pane 2 notches', inlinePane2.notches, 4);
+  check('  inline pane 2 holes count', inlinePane2.holes.length, 0);
+  check('  inline pane 2 notches count', inlinePane2.notches.length, 3);
 
   // Clean up
   await api('DELETE', `/api/panes/${paneId}`, token);
@@ -1975,6 +2007,8 @@ async function main() {
   const token = await login('admin', 'admin123');
   console.log(`   Token: ...${token.slice(-10)}`);
 
+  const snapshot = await snapshotIds(API, token);
+
   const roleIds = await getRoleIds(token);
 
   const stns = await createStations(token);
@@ -2015,7 +2049,8 @@ async function main() {
     await testProductionLogAdvancedFields(token, stns);
     await testNotificationReferences(token);
   } finally {
-    await cleanupStations(token, stns);
+    await cleanupStations(token, stns).catch(() => {});
+    await sweepCreatedData(API, token, snapshot);
   }
 
   console.log('\n========================================');

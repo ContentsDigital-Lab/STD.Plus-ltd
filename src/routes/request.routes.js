@@ -13,6 +13,23 @@ const detailsSchema = z.object({
   quantity: z.number().min(1),
 });
 
+const vertexSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+});
+
+const holeNotchSchema = z.object({
+  id:       z.string().min(1),
+  type:     z.enum(['circle', 'rectangle', 'slot', 'custom']),
+  x:        z.number(),
+  y:        z.number(),
+  diameter: z.number().optional(),
+  width:    z.number().optional(),
+  height:   z.number().optional(),
+  length:   z.number().optional(),
+  vertices: z.array(vertexSchema).optional(),
+});
+
 const paneItemSchema = z.object({
   currentStation: z.string().min(1).optional(),
   routing: z.array(z.string().min(1)).optional(),
@@ -31,8 +48,8 @@ const paneItemSchema = z.object({
   }).optional(),
   glassType: z.string().optional(),
   glassTypeLabel: z.string().optional(),
-  holes: z.number().int().min(0).optional(),
-  notches: z.number().int().min(0).optional(),
+  holes: z.array(holeNotchSchema).optional(),
+  notches: z.array(holeNotchSchema).optional(),
   processes: z.array(z.string().min(1)).optional(),
   edgeTasks: z.array(z.object({
     side: z.string().min(1),

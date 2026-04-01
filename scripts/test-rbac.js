@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { snapshotIds, sweepCreatedData } = require('./test-helpers');
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
@@ -747,72 +748,72 @@ async function testJobTypeRbac(tokens) {
 
 async function main() {
   console.log('=== RBAC Test Suite ===\n');
-  console.log('Setting up users...');
 
   const adminToken = await login('admin', 'admin123');
-  const roleIds = await getRoleIds(adminToken);
-  await setupUsers(adminToken, roleIds);
-  const stns = await setupStations(adminToken);
+  const snapshot = await snapshotIds(API, adminToken);
 
-  const managerToken = await login('manager1', 'manager123');
-  const workerToken = await login('worker1', 'worker123');
-  const tokens = { admin: adminToken, manager: managerToken, worker: workerToken };
+  try {
+    console.log('Setting up users...');
+    const roleIds = await getRoleIds(adminToken);
+    await setupUsers(adminToken, roleIds);
+    const stns = await setupStations(adminToken);
 
-  console.log('   Admin token:   ...', adminToken.slice(-10));
-  console.log('   Manager token: ...', managerToken.slice(-10));
-  console.log('   Worker token:  ...', workerToken.slice(-10));
+    const managerToken = await login('manager1', 'manager123');
+    const workerToken = await login('worker1', 'worker123');
+    const tokens = { admin: adminToken, manager: managerToken, worker: workerToken };
 
-  const me = await api('GET', '/api/auth/me', workerToken);
-  const workerId = me.data.data._id;
-  const adminMe = await api('GET', '/api/auth/me', adminToken);
-  const adminId = adminMe.data.data._id;
+    console.log('   Admin token:   ...', adminToken.slice(-10));
+    console.log('   Manager token: ...', managerToken.slice(-10));
+    console.log('   Worker token:  ...', workerToken.slice(-10));
 
-  // Test Workers
-  await testWorkers(tokens, roleIds);
+    const me = await api('GET', '/api/auth/me', workerToken);
+    const workerId = me.data.data._id;
+    const adminMe = await api('GET', '/api/auth/me', adminToken);
+    const adminId = adminMe.data.data._id;
 
-  // Test Customers, Materials, Station Templates (same pattern)
-  const custResult = await testResource(tokens, 'Customers', '/api/customers',
-    { name: 'Test Customer', phone: '0812345678' });
-  const matResult = await testResource(tokens, 'Materials', '/api/materials',
-    { name: 'Test Glass', unit: 'sheet', reorderPoint: 5 });
-  await testResource(tokens, 'Station Templates', '/api/station-templates',
-    { name: 'Test Template', uiSchema: {} });
+    // Test Workers
+    await testWorkers(tokens, roleIds);
 
-  // Need a material for inventory, a template for stations
-  const mat = await api('POST', '/api/materials', adminToken,
-    { name: 'RBAC Test Mat', unit: 'sheet', reorderPoint: 5 });
-  const matId = mat.data.data._id;
-  const cust = await api('POST', '/api/customers', adminToken, { name: 'RBAC Test Customer' });
-  const custId = cust.data.data._id;
-  const tmpl = await api('POST', '/api/station-templates', adminToken, { name: 'RBAC Test Template' });
-  const tmplId = tmpl.data.data._id;
+    // Test Customers, Materials, Station Templates (same pattern)
+    const custResult = await testResource(tokens, 'Customers', '/api/customers',
+      { name: 'Test Customer', phone: '0812345678' });
+    const matResult = await testResource(tokens, 'Materials', '/api/materials',
+      { name: 'Test Glass', unit: 'sheet', reorderPoint: 5 });
+    await testResource(tokens, 'Station Templates', '/api/station-templates',
+      { name: 'Test Template', uiSchema: {} });
 
-  await testResource(tokens, 'Inventories', '/api/inventories',
-    { material: matId, stockType: 'Raw', quantity: 100, location: 'Warehouse A' });
-  await testResource(tokens, 'Stations', '/api/stations',
-    { name: 'Cutting Station', templateId: tmplId });
+    // Need a material for inventory, a template for stations
+    const mat = await api('POST', '/api/materials', adminToken,
+      { name: 'RBAC Test Mat', unit: 'sheet', reorderPoint: 5 });
+    const matId = mat.data.data._id;
+    const cust = await api('POST', '/api/customers', adminToken, { name: 'RBAC Test Customer' });
+    const custId = cust.data.data._id;
+    const tmpl = await api('POST', '/api/station-templates', adminToken, { name: 'RBAC Test Template' });
+    const tmplId = tmpl.data.data._id;
 
-  // Test resources with ownership
-  await testMaterialLogs(tokens, matId);
-  await testOrders(tokens, custId, matId, workerId, stns);
-  await testRequests(tokens, custId);
-  await testWithdrawals(tokens, matId, workerId);
-  await testClaims(tokens, custId, matId, workerId, adminId);
-  await testPanes(tokens, custId, matId, stns);
-  await testProductionLogs(tokens, custId, matId, stns);
-  await testNotifications(tokens, workerId);
-  await testNotificationPreferences(tokens);
-  await testStickerTemplates(tokens);
-  await testPricingSettings(tokens);
-  await testAuthUpdateMe(tokens);
-  await testJobTypeRbac(tokens);
-  await testAuthEdgeCases(tokens);
+    await testResource(tokens, 'Inventories', '/api/inventories',
+      { material: matId, stockType: 'Raw', quantity: 100, location: 'Warehouse A' });
+    await testResource(tokens, 'Stations', '/api/stations',
+      { name: 'Cutting Station', templateId: tmplId });
 
-  // Cleanup shared test data
-  await api('DELETE', `/api/station-templates/${stns.tmplId}`, adminToken);
-  await api('DELETE', `/api/materials/${matId}`, adminToken);
-  await api('DELETE', `/api/customers/${custId}`, adminToken);
-  await api('DELETE', `/api/station-templates/${tmplId}`, adminToken);
+    // Test resources with ownership
+    await testMaterialLogs(tokens, matId);
+    await testOrders(tokens, custId, matId, workerId, stns);
+    await testRequests(tokens, custId);
+    await testWithdrawals(tokens, matId, workerId);
+    await testClaims(tokens, custId, matId, workerId, adminId);
+    await testPanes(tokens, custId, matId, stns);
+    await testProductionLogs(tokens, custId, matId, stns);
+    await testNotifications(tokens, workerId);
+    await testNotificationPreferences(tokens);
+    await testStickerTemplates(tokens);
+    await testPricingSettings(tokens);
+    await testAuthUpdateMe(tokens);
+    await testJobTypeRbac(tokens);
+    await testAuthEdgeCases(tokens);
+  } finally {
+    await sweepCreatedData(API, adminToken, snapshot);
+  }
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);

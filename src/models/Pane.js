@@ -7,6 +7,23 @@ const edgeTaskSchema = new mongoose.Schema({
   status:      { type: String, enum: ['pending', 'in_progress', 'completed'], default: 'pending' },
 }, { _id: false });
 
+const vertexSchema = new mongoose.Schema({
+  x: { type: Number, required: true },
+  y: { type: Number, required: true },
+}, { _id: false });
+
+const holeNotchSchema = new mongoose.Schema({
+  id:       { type: String, required: true },
+  type:     { type: String, enum: ['circle', 'rectangle', 'slot', 'custom'], required: true },
+  x:        { type: Number, required: true },
+  y:        { type: Number, required: true },
+  diameter: { type: Number },
+  width:    { type: Number },
+  height:   { type: Number },
+  length:   { type: Number },
+  vertices: { type: [vertexSchema], default: undefined },
+}, { _id: false });
+
 const paneSchema = new mongoose.Schema({
   paneNumber: {
     type:     String,
@@ -45,8 +62,8 @@ const paneSchema = new mongoose.Schema({
 
   glassType:      { type: String, default: '' },
   glassTypeLabel: { type: String, default: '' },
-  holes:          { type: Number, default: 0, min: 0 },
-  notches:        { type: Number, default: 0, min: 0 },
+  holes:          { type: [holeNotchSchema], default: [] },
+  notches:        { type: [holeNotchSchema], default: [] },
   processes:      { type: [String], default: [] },
   edgeTasks:      { type: [edgeTaskSchema], default: [] },
 
