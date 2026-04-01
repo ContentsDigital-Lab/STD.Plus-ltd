@@ -99,6 +99,8 @@ const createRemakePane = async (claim, remakeStationId, req) => {
     },
     glassType: originalPane.glassType || '',
     glassTypeLabel: originalPane.glassTypeLabel || '',
+    holes: originalPane.holes || 0,
+    notches: originalPane.notches || 0,
     processes: originalPane.processes ? [...originalPane.processes] : [],
     edgeTasks: originalPane.edgeTasks
       ? originalPane.edgeTasks.map(t => ({ side: t.side, edgeProfile: t.edgeProfile, machineType: t.machineType, status: 'pending' }))

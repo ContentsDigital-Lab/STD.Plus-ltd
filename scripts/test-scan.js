@@ -122,8 +122,8 @@ async function testBasicScanFlow(token, stns) {
     customer: custId,
     details: { type: 'tempered', quantity: 2 },
     panes: [
-      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered', jobType: 'Tempered', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 } },
-      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 } },
+      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered', jobType: 'Tempered', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 }, holes: 2, notches: 1 },
+      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 }, holes: 0, notches: 3 },
     ],
   });
   check('CREATE request with panes', reqRes.status, 201);
@@ -135,8 +135,12 @@ async function testBasicScanFlow(token, stns) {
   check('  pane 2 has paneNumber', !!pane2.paneNumber, true);
   check('  pane 1 jobType', pane1.jobType, 'Tempered');
   check('  pane 1 rawGlass.sheetsPerPane', pane1.rawGlass.sheetsPerPane, 1);
+  check('  pane 1 holes', pane1.holes, 2);
+  check('  pane 1 notches', pane1.notches, 1);
   check('  pane 2 jobType', pane2.jobType, 'Laminated');
   check('  pane 2 rawGlass.sheetsPerPane', pane2.rawGlass.sheetsPerPane, 2);
+  check('  pane 2 holes', pane2.holes, 0);
+  check('  pane 2 notches', pane2.notches, 3);
   console.log(`          pane 1: ${pane1.paneNumber}, pane 2: ${pane2.paneNumber}`);
 
   const ordRes = await api('POST', '/api/orders', token, {
@@ -214,11 +218,13 @@ async function testBasicScanFlow(token, stns) {
   check('  status is completed', r6.data.data.pane.currentStatus, 'completed');
   check('  completedAt is set', !!r6.data.data.pane.completedAt, true);
 
-  // ── verify jobType + rawGlass survived scan flow ──
+  // ── verify jobType + rawGlass + holes + notches survived scan flow ──
   const pane1Final = await api('GET', `/api/panes/${pane1._id}`, token);
   check('  jobType preserved after scan', pane1Final.data.data.jobType, 'Tempered');
   check('  rawGlass.glassType preserved', pane1Final.data.data.rawGlass.glassType, 'Clear');
   check('  rawGlass.sheetsPerPane preserved', pane1Final.data.data.rawGlass.sheetsPerPane, 1);
+  check('  holes preserved after scan', pane1Final.data.data.holes, 2);
+  check('  notches preserved after scan', pane1Final.data.data.notches, 1);
 
   // ── verify order progress ──
   const ordAfter = await api('GET', `/api/orders/${ordId}`, token);

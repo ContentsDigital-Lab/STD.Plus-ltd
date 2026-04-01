@@ -95,8 +95,8 @@ async function testClaimPullsPaneFromStation(token, stns) {
     customer: custId,
     details: { type: 'tempered', quantity: 2 },
     panes: [
-      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered', jobType: 'Tempered', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 } },
-      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 } },
+      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered', jobType: 'Tempered', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 }, holes: 3, notches: 2 },
+      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 }, holes: 0, notches: 1 },
     ],
   });
   const reqId = reqRes.data.data._id;
@@ -211,6 +211,8 @@ async function testClaimApprovalCreateRemake(token, stns) {
         jobType: 'Tempered',
         rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 },
         processes: ['cutting', 'tempering'],
+        holes: 5,
+        notches: 2,
       },
     ],
   });
@@ -276,6 +278,8 @@ async function testClaimApprovalCreateRemake(token, stns) {
   check('remade pane rawGlass.color', remade.rawGlass?.color, 'ใส');
   check('remade pane rawGlass.thickness', remade.rawGlass?.thickness, 5);
   check('remade pane rawGlass.sheetsPerPane', remade.rawGlass?.sheetsPerPane, 1);
+  check('remade pane holes cloned', remade.holes, 5);
+  check('remade pane notches cloned', remade.notches, 2);
   const expectedRoutingIds = JSON.stringify([stns.cutting, stns.edging, stns.qc]);
   check(
     'remade pane routing matches',

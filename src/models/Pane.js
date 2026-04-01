@@ -45,6 +45,8 @@ const paneSchema = new mongoose.Schema({
 
   glassType:      { type: String, default: '' },
   glassTypeLabel: { type: String, default: '' },
+  holes:          { type: Number, default: 0, min: 0 },
+  notches:        { type: Number, default: 0, min: 0 },
   processes:      { type: [String], default: [] },
   edgeTasks:      { type: [edgeTaskSchema], default: [] },
 

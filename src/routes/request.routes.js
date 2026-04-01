@@ -31,6 +31,8 @@ const paneItemSchema = z.object({
   }).optional(),
   glassType: z.string().optional(),
   glassTypeLabel: z.string().optional(),
+  holes: z.number().int().min(0).optional(),
+  notches: z.number().int().min(0).optional(),
   processes: z.array(z.string().min(1)).optional(),
   edgeTasks: z.array(z.object({
     side: z.string().min(1),

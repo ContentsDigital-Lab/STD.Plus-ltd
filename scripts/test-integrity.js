@@ -1157,31 +1157,39 @@ async function testPaneNewFields(token) {
   const reqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'tempered', quantity: 1 } });
   const reqId = reqRes.data.data._id;
 
-  // Create pane with jobType + rawGlass
+  // Create pane with jobType + rawGlass + holes + notches
   const r1 = await api('POST', '/api/panes', token, {
     request: reqId,
     dimensions: { width: 800, height: 600, thickness: 5 },
     jobType: 'Laminated',
     rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 5, sheetsPerPane: 2 },
+    holes: 4,
+    notches: 2,
   });
-  check('CREATE pane with jobType + rawGlass', r1.status, 201);
+  check('CREATE pane with jobType + rawGlass + holes + notches', r1.status, 201);
   const paneId = r1.data.data._id;
   check('  jobType persisted', r1.data.data.jobType, 'Laminated');
   check('  rawGlass.glassType', r1.data.data.rawGlass.glassType, 'Clear');
   check('  rawGlass.color', r1.data.data.rawGlass.color, 'เขียว');
   check('  rawGlass.thickness', r1.data.data.rawGlass.thickness, 5);
   check('  rawGlass.sheetsPerPane', r1.data.data.rawGlass.sheetsPerPane, 2);
+  check('  holes persisted', r1.data.data.holes, 4);
+  check('  notches persisted', r1.data.data.notches, 2);
 
   // GET — verify persistence
   const r2 = await api('GET', `/api/panes/${paneId}`, token);
   check('GET pane jobType', r2.data.data.jobType, 'Laminated');
   check('  rawGlass.glassType', r2.data.data.rawGlass.glassType, 'Clear');
   check('  rawGlass.sheetsPerPane', r2.data.data.rawGlass.sheetsPerPane, 2);
+  check('  holes', r2.data.data.holes, 4);
+  check('  notches', r2.data.data.notches, 2);
 
-  // UPDATE — change jobType and partial rawGlass
+  // UPDATE — change jobType, rawGlass, holes, notches
   const r3 = await api('PATCH', `/api/panes/${paneId}`, token, {
     jobType: 'Tempered',
     rawGlass: { glassType: 'Tinted', color: 'ชา', thickness: 10, sheetsPerPane: 1 },
+    holes: 6,
+    notches: 3,
   });
   check('UPDATE pane jobType', r3.status, 200);
   check('  jobType updated', r3.data.data.jobType, 'Tempered');
@@ -1189,6 +1197,8 @@ async function testPaneNewFields(token) {
   check('  rawGlass.color updated', r3.data.data.rawGlass.color, 'ชา');
   check('  rawGlass.thickness updated', r3.data.data.rawGlass.thickness, 10);
   check('  rawGlass.sheetsPerPane updated', r3.data.data.rawGlass.sheetsPerPane, 1);
+  check('  holes updated', r3.data.data.holes, 6);
+  check('  notches updated', r3.data.data.notches, 3);
 
   // CREATE pane without new fields — should get defaults
   const r4 = await api('POST', '/api/panes', token, { request: reqId });
@@ -1199,14 +1209,16 @@ async function testPaneNewFields(token) {
   check('  default rawGlass.color is empty', r4.data.data.rawGlass.color, '');
   check('  default rawGlass.thickness is 0', r4.data.data.rawGlass.thickness, 0);
   check('  default rawGlass.sheetsPerPane is 1', r4.data.data.rawGlass.sheetsPerPane, 1);
+  check('  default holes is 0', r4.data.data.holes, 0);
+  check('  default notches is 0', r4.data.data.notches, 0);
 
-  // Inline panes via request — with jobType + rawGlass
+  // Inline panes via request — with jobType + rawGlass + holes + notches
   const reqRes2 = await api('POST', '/api/requests', token, {
     customer: custId,
     details: { type: 'laminated', quantity: 2 },
     panes: [
-      { jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 } },
-      { jobType: 'Tempered', rawGlass: { glassType: 'Tinted', color: 'เทา', thickness: 6, sheetsPerPane: 1 } },
+      { jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 }, holes: 3, notches: 1 },
+      { jobType: 'Tempered', rawGlass: { glassType: 'Tinted', color: 'เทา', thickness: 6, sheetsPerPane: 1 }, holes: 0, notches: 4 },
     ],
   });
   check('CREATE request with inline panes + new fields', reqRes2.status, 201);
@@ -1215,8 +1227,12 @@ async function testPaneNewFields(token) {
   const inlinePane2 = reqRes2.data.data.panes[1];
   check('  inline pane 1 jobType', inlinePane1.jobType, 'Laminated');
   check('  inline pane 1 rawGlass.sheetsPerPane', inlinePane1.rawGlass.sheetsPerPane, 2);
+  check('  inline pane 1 holes', inlinePane1.holes, 3);
+  check('  inline pane 1 notches', inlinePane1.notches, 1);
   check('  inline pane 2 jobType', inlinePane2.jobType, 'Tempered');
   check('  inline pane 2 rawGlass.color', inlinePane2.rawGlass.color, 'เทา');
+  check('  inline pane 2 holes', inlinePane2.holes, 0);
+  check('  inline pane 2 notches', inlinePane2.notches, 4);
 
   // Clean up
   await api('DELETE', `/api/panes/${paneId}`, token);
