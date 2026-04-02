@@ -18,15 +18,15 @@ If no settings document exists yet, one is automatically created with default va
   <Expandable title="properties">
     <ResponseField name="_id" type="string" />
     <ResponseField name="singleton" type="boolean" description="Always true — enforces single document" />
-    <ResponseField name="glassPrices" type="object" description="Nested map: glass type → thickness → { pricePerSqFt, grindingRate }">
+    <ResponseField name="glassPrices" type="object" description="Nested map: glass type → thickness → { pricePerSqFt, grindingRate }. grindingRate is either a number (legacy) or an object keyed by grinding type (e.g. { rough: 50, polished: 75 })">
       ```json
       {
         "Clear": {
-          "3mm": { "pricePerSqFt": 35, "grindingRate": 50 },
-          "5mm": { "pricePerSqFt": 50, "grindingRate": 50 }
+          "3mm": { "pricePerSqFt": 35, "grindingRate": { "rough": 30, "polished": 50 } },
+          "5mm": { "pricePerSqFt": 50, "grindingRate": { "rough": 50, "polished": 70 } }
         },
         "Tempered": {
-          "5mm": { "pricePerSqFt": 85, "grindingRate": 75 }
+          "5mm": { "pricePerSqFt": 85, "grindingRate": { "rough": 60, "polished": 90 } }
         }
       }
       ```

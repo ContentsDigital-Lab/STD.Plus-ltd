@@ -13,13 +13,23 @@ After a successful update, the server emits a `pricing:updated` WebSocket event 
 ## Request Body
 
 <ParamField body="glassPrices" type="object" optional>
-  Nested map of glass type → thickness → pricing. Each entry must have `pricePerSqFt` (number, min 0) and `grindingRate` (number, min 0).
+  Nested map of glass type → thickness → pricing. Each entry must have `pricePerSqFt` (number, min 0) and `grindingRate`. `grindingRate` accepts either a single number (legacy) or an object keyed by grinding type.
 
+  **Number format (legacy):**
   ```json
   {
     "Clear": {
-      "5mm": { "pricePerSqFt": 55, "grindingRate": 50 },
-      "6mm": { "pricePerSqFt": 60, "grindingRate": 50 }
+      "5mm": { "pricePerSqFt": 55, "grindingRate": 50 }
+    }
+  }
+  ```
+
+  **Object format (recommended):**
+  ```json
+  {
+    "Clear": {
+      "5mm": { "pricePerSqFt": 55, "grindingRate": { "rough": 50, "polished": 75 } },
+      "6mm": { "pricePerSqFt": 60, "grindingRate": { "rough": 55, "polished": 80 } }
     }
   }
   ```
