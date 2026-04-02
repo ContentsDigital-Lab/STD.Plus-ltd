@@ -40,9 +40,11 @@ const pullPaneFromStation = async (paneId, req) => {
         order.stationBreakdown = breakdown;
       }
 
-      order.paneCount = Math.max(0, (order.paneCount || 0) - 1);
-      if (order.paneCount > 0) {
-        order.progressPercent = Math.round(((order.panesCompleted || 0) / order.paneCount) * 100);
+      if (pane.laminateRole !== 'sheet') {
+        order.paneCount = Math.max(0, (order.paneCount || 0) - 1);
+        if (order.paneCount > 0) {
+          order.progressPercent = Math.round(((order.panesCompleted || 0) / order.paneCount) * 100);
+        }
       }
 
       await order.save();
@@ -81,6 +83,16 @@ const createRemakePane = async (claim, remakeStationId, req) => {
   const paneNumber = await Counter.getNext('pane', 'PNE');
   const qrCode = `STDPLUS:${paneNumber}`;
 
+  const isSheet = originalPane.laminateRole === 'sheet';
+
+  let remakeSheetLabel = '';
+  if (isSheet) {
+    const baseLabel = (originalPane.sheetLabel || 'A').replace(/\d+$/, '');
+    const existingSiblings = await Pane.find({ parentPane: originalPane.parentPane, laminateRole: 'sheet' }).lean();
+    const suffix = existingSiblings.length > 0 ? existingSiblings.length : 2;
+    remakeSheetLabel = `${baseLabel}${suffix}`;
+  }
+
   const remadePane = await Pane.create({
     paneNumber,
     qrCode,
@@ -114,7 +126,17 @@ const createRemakePane = async (claim, remakeStationId, req) => {
     edgeTasks: originalPane.edgeTasks
       ? originalPane.edgeTasks.map(t => ({ side: t.side, edgeProfile: t.edgeProfile, machineType: t.machineType, status: 'pending' }))
       : [],
+    laminateRole: isSheet ? 'sheet' : originalPane.laminateRole || 'single',
+    parentPane: isSheet ? originalPane.parentPane : null,
+    sheetLabel: remakeSheetLabel,
+    laminateStation: isSheet ? originalPane.laminateStation : null,
   });
+
+  if (isSheet && originalPane.parentPane) {
+    await Pane.findByIdAndUpdate(originalPane.parentPane, {
+      $push: { childPanes: remadePane._id },
+    });
+  }
 
   await Claim.findByIdAndUpdate(claim._id, { remadePane: remadePane._id });
 

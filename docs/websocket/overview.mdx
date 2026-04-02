@@ -68,9 +68,9 @@ When data changes via the REST API, the server emits events to the relevant room
 | `withdrawal` | `withdrawal:updated` |
 | `order` | `order:updated` |
 | `claim` | `claim:updated` |
-| `pane` | `pane:updated` |
-| `production` | `pane:updated`, `production-log:updated` |
+| `pane` | `pane:updated`, `laminate:ready`, `pane:laminated` |
+| `production` | `pane:updated`, `production-log:updated`, `laminate:ready`, `pane:laminated` |
 | `pricing` | `pricing:updated` |
 | `station` | `station:updated`, `station-template:updated`, `station:pane_arrived` |
-| `station:<stationId>` | `station:check_in`, `scan-confirmed`, `station:pane_arrived`, `notification` (order arrived) |
+| `station:<stationId>` | `station:check_in`, `scan-confirmed`, `station:pane_arrived`, `notification` (order arrived), `laminate:ready`, `laminate:waiting`, `pane:laminated` |
 | *(broadcast)* | `system_alert` |

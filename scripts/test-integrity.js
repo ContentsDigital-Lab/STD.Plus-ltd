@@ -2032,6 +2032,219 @@ async function testNotificationReferences(token) {
   await api('DELETE', `/api/notifications/${notifId2}`, token);
 }
 
+// ──────────────────────────────────────────────
+// LAMINATE PAIRING
+// ──────────────────────────────────────────────
+
+async function testLaminatePairing(token, stns) {
+  console.log('\n=== Laminate Pairing — Auto-Create Sheets ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'Laminate Cust' });
+  const custId = cust.data.data._id;
+
+  const tmpl = await api('POST', '/api/station-templates', token, { name: 'Laminate Tmpl' });
+  const tmplId = tmpl.data.data._id;
+
+  const cutting = (await api('POST', '/api/stations', token, { name: 'lam_cutting', templateId: tmplId })).data.data._id;
+  const edging = (await api('POST', '/api/stations', token, { name: 'lam_edging', templateId: tmplId })).data.data._id;
+  const lamStation = (await api('POST', '/api/stations', token, { name: 'lam_laminate', templateId: tmplId, isLaminateStation: true })).data.data._id;
+  const qcStation = (await api('POST', '/api/stations', token, { name: 'lam_qc', templateId: tmplId })).data.data._id;
+
+  const routing = [cutting, edging, lamStation, qcStation];
+
+  // Reject if sheetsPerPane > 1 but no laminate station in routing
+  const noLamRouting = [cutting, edging, qcStation];
+  const rejectRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'laminated', quantity: 1 },
+    panes: [{ routing: noLamRouting, rawGlass: { sheetsPerPane: 2 }, dimensions: { width: 800, height: 600, thickness: 5 } }],
+  });
+  check('REJECT request without laminate station', rejectRes.status, 400);
+
+  // Create request with laminate pane
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'laminated', quantity: 1 },
+    panes: [
+      {
+        routing,
+        dimensions: { width: 800, height: 600, thickness: 5 },
+        rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 },
+        jobType: 'Laminated',
+        cornerSpec: 'chamfer 3mm',
+        dimensionTolerance: '±1mm',
+        holes: [{ id: 'lh1', type: 'circle', x: 100, y: 200, diameter: 10 }],
+      },
+    ],
+  });
+  check('CREATE request with sheetsPerPane: 2', reqRes.status, 201);
+  const reqId = reqRes.data.data._id;
+  const allPanes = reqRes.data.data.panes;
+
+  const sheets = allPanes.filter(p => p.laminateRole === 'sheet');
+  const parents = allPanes.filter(p => p.laminateRole === 'parent');
+
+  check('2 sheet panes created', sheets.length, 2);
+  check('1 parent pane created', parents.length, 1);
+
+  const parent = parents[0];
+  const sheetA = sheets.find(s => s.sheetLabel === 'A');
+  const sheetB = sheets.find(s => s.sheetLabel === 'B');
+
+  check('parent has childPanes array', parent.childPanes.length, 2);
+  check('parent laminateRole', parent.laminateRole, 'parent');
+  check('parent currentStation is null', parent.currentStation, null);
+  check('parent currentStatus is pending', parent.currentStatus, 'pending');
+  check('parent routing is post-laminate only', parent.routing.length, 1);
+
+  check('sheet A exists', !!sheetA, true);
+  check('sheet B exists', !!sheetB, true);
+  check('sheet A laminateRole', sheetA.laminateRole, 'sheet');
+  check('sheet A parentPane set', String(sheetA.parentPane), String(parent._id));
+  check('sheet A routing is pre-laminate + laminate', sheetA.routing.length, 3);
+  check('sheet A paneNumber has suffix', sheetA.paneNumber.endsWith('-A'), true);
+  check('sheet B paneNumber has suffix', sheetB.paneNumber.endsWith('-B'), true);
+  check('sheet A cornerSpec cloned', sheetA.cornerSpec, 'chamfer 3mm');
+  check('sheet A holes cloned', sheetA.holes.length, 1);
+  check('sheet A dimensions.width', sheetA.dimensions.width, 800);
+
+  // Query filters
+  const parentFilter = await api('GET', `/api/panes?laminateRole=parent&request=${reqId}`, token);
+  check('laminateRole=parent filter', parentFilter.data.data.length, 1);
+
+  const sheetFilter = await api('GET', `/api/panes?laminateRole=sheet&parentPane=${parent._id}`, token);
+  check('parentPane filter returns sheets', sheetFilter.data.data.length, 2);
+
+  // Non-laminate pane should default to 'single'
+  const singleReqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 1 },
+    panes: [{ routing: [cutting], dimensions: { width: 500, height: 400, thickness: 4 } }],
+  });
+  const singlePane = singleReqRes.data.data.panes[0];
+  check('non-laminate pane is single', singlePane.laminateRole, 'single');
+
+  // Cleanup
+  for (const p of allPanes) await api('DELETE', `/api/panes/${p._id}`, token);
+  await api('DELETE', `/api/panes/${singlePane._id}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/requests/${singleReqRes.data.data._id}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+async function testLaminateScanFlow(token) {
+  console.log('\n=== Laminate Scan Flow — Merge at Station ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'LamScan Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'LamScan Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const tmpl = await api('POST', '/api/station-templates', token, { name: 'LamScan Tmpl' });
+  const tmplId = tmpl.data.data._id;
+
+  const cutting = (await api('POST', '/api/stations', token, { name: 'ls_cutting', templateId: tmplId })).data.data._id;
+  const lamStation = (await api('POST', '/api/stations', token, { name: 'ls_laminate', templateId: tmplId, isLaminateStation: true })).data.data._id;
+  const qcStation = (await api('POST', '/api/stations', token, { name: 'ls_qc', templateId: tmplId })).data.data._id;
+
+  const routing = [cutting, lamStation, qcStation];
+
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'laminated', quantity: 1 },
+    panes: [{
+      routing,
+      dimensions: { width: 800, height: 600, thickness: 5 },
+      rawGlass: { glassType: 'Clear', sheetsPerPane: 2 },
+    }],
+  });
+  check('CREATE laminate request', reqRes.status, 201);
+  const reqId = reqRes.data.data._id;
+  const allPanes = reqRes.data.data.panes;
+
+  const parent = allPanes.find(p => p.laminateRole === 'parent');
+  const sheetA = allPanes.find(p => p.sheetLabel === 'A');
+  const sheetB = allPanes.find(p => p.sheetLabel === 'B');
+
+  // Create order and link panes
+  const ordRes = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1,
+  });
+  const ordId = ordRes.data.data._id;
+
+  // Panes are auto-linked to order via backfill when order is created with request
+  // Verify paneCount is correct (only parent counts, not sheets)
+  const ordAfterLink = await api('GET', `/api/orders/${ordId}`, token);
+  check('paneCount is 1 (only parent counts)', ordAfterLink.data.data.paneCount, 1);
+
+  // Scan sheet A through cutting
+  await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: cutting, action: 'scan_in' });
+  await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: cutting, action: 'complete' });
+  await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: cutting, action: 'scan_out' });
+
+  // Scan sheet B through cutting
+  await api('POST', `/api/panes/${sheetB.paneNumber}/scan`, token, { station: cutting, action: 'scan_in' });
+  await api('POST', `/api/panes/${sheetB.paneNumber}/scan`, token, { station: cutting, action: 'complete' });
+  await api('POST', `/api/panes/${sheetB.paneNumber}/scan`, token, { station: cutting, action: 'scan_out' });
+
+  // Both sheets should now be at laminate station
+  const sheetAAtLam = await api('GET', `/api/panes/${sheetA._id}`, token);
+  check('sheet A at laminate station', sheetAAtLam.data.data.currentStation?._id || sheetAAtLam.data.data.currentStation, lamStation);
+
+  // Scan sheet A into laminate station
+  await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: lamStation, action: 'scan_in' });
+
+  // Try laminate before all sheets present — should fail
+  const earlyLam = await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
+  check('laminate fails before all sheets present', earlyLam.status, 400);
+
+  // Scan sheet B into laminate station
+  await api('POST', `/api/panes/${sheetB.paneNumber}/scan`, token, { station: lamStation, action: 'scan_in' });
+
+  // Now laminate — all sheets present
+  const lamRes = await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
+  check('LAMINATE action succeeds', lamRes.status, 200);
+  check('mergedSheets count', lamRes.data.data.mergedSheets, 2);
+  check('parent nextStation is qc', lamRes.data.data.nextStation, qcStation);
+
+  // Verify sheets are completed
+  const sheetAAfter = await api('GET', `/api/panes/${sheetA._id}`, token);
+  check('sheet A completed after merge', sheetAAfter.data.data.currentStatus, 'completed');
+  check('sheet A station null after merge', sheetAAfter.data.data.currentStation, null);
+
+  const sheetBAfter = await api('GET', `/api/panes/${sheetB._id}`, token);
+  check('sheet B completed after merge', sheetBAfter.data.data.currentStatus, 'completed');
+
+  // Verify parent activated
+  const parentAfter = await api('GET', `/api/panes/${parent._id}`, token);
+  check('parent status pending at qc', parentAfter.data.data.currentStatus, 'pending');
+  check('parent at qc station', parentAfter.data.data.currentStation?._id || parentAfter.data.data.currentStation, qcStation);
+
+  // Scan parent through QC to complete
+  await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: qcStation, action: 'scan_in' });
+  await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: qcStation, action: 'complete' });
+  await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: qcStation, action: 'scan_out' });
+
+  const parentFinal = await api('GET', `/api/panes/${parent._id}`, token);
+  check('parent completed after QC', parentFinal.data.data.currentStatus, 'completed');
+
+  // Verify PaneLogs contain laminate actions
+  const paneLogs = await api('GET', '/api/pane-logs', token);
+  const lamCompleteLogs = paneLogs.data.data.filter(l => l.action === 'laminate_complete');
+  const lamStartLogs = paneLogs.data.data.filter(l => l.action === 'laminate_start');
+  check('laminate_complete logs exist', lamCompleteLogs.length >= 2, true);
+  check('laminate_start log exists', lamStartLogs.length >= 1, true);
+
+  // Cleanup
+  for (const p of allPanes) await api('DELETE', `/api/panes/${p._id}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -2082,6 +2295,8 @@ async function main() {
     await testPaneDeliveredAt(token);
     await testProductionLogAdvancedFields(token, stns);
     await testNotificationReferences(token);
+    await testLaminatePairing(token, stns);
+    await testLaminateScanFlow(token);
   } finally {
     await cleanupStations(token, stns).catch(() => {});
     await sweepCreatedData(API, token, snapshot);

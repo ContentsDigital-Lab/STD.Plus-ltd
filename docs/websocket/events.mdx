@@ -167,6 +167,9 @@ socket.on('order:updated', (payload) => {
 | `pricing:updated` | INBOUND | `pricing` | Pricing settings update |
 | `station:check_in` | INBOUND | `station:<stationId>` | Order update with station changes |
 | `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | QR scan with `scan_out` action |
+| `laminate:ready` | INBOUND | `dashboard`, `pane`, `production`, `station:<id>` | Sheet `scan_in` at lamination station (all sheets present) |
+| `laminate:waiting` | INBOUND | `station:<id>` | Sheet `scan_in` at lamination station (sheets still missing) |
+| `pane:laminated` | INBOUND | `dashboard`, `pane`, `production`, `station:<id>` | `laminate` scan action on parent pane |
 
 **Payload format:**
 
@@ -186,7 +189,7 @@ Most events use `created`, `updated`, or `deleted`. Some events have additional 
 
 | Event | Extra actions | Description |
 |---|---|---|
-| `pane:updated` | `scanned` | Emitted on every QR scan action (`scan_in`, `start`, `complete`, `scan_out`) |
+| `pane:updated` | `scanned` | Emitted on every QR scan action (`scan_in`, `start`, `complete`, `scan_out`, `laminate`) |
 | `inventory:updated` | `adjusted` | Emitted when a withdrawal is approved/rejected (inventory quantity changes) |
 | `inventory:updated` | `moved` | Emitted on inventory move/split. Payload: `{ action: "moved", data: { source, target, quantity } }` |
 | `log:updated` | `pane_scanned` | Emitted on every QR scan. Payload: `{ action: "pane_scanned", data: { paneLog, material } }` |
@@ -286,6 +289,73 @@ socket.on('notification', (payload) => {
   "message": "กระจก PNE-0001 เข้าสถานีนี้แล้ว"
 }
 ```
+
+### Laminate Pairing Events
+
+Emitted during the [laminate pairing flow](/scanning/overview#laminate-panes) when child sheets arrive at a lamination station and when they are merged into a parent pane.
+
+#### `laminate:ready`
+
+Emitted when all active child sheets have arrived at the lamination station. The frontend can use this to enable the "merge" button.
+
+```javascript
+socket.on('laminate:ready', (payload) => {
+  console.log(payload.parentPaneNumber); // "PNE-0100"
+  console.log(payload.sheetsPresent);    // 2
+  console.log(payload.sheetsTotal);      // 2
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `laminate:ready` | INBOUND | `dashboard`, `pane`, `production`, `station:<stationId>` | `scan_in` of the last active sheet at its lamination station |
+
+**Payload:**
+
+| Field | Description |
+|---|---|
+| `parentPaneNumber` | The parent pane number (e.g. `PNE-0100`) |
+| `parentPaneId` | The parent pane's `_id` |
+| `sheetsPresent` | Number of sheets currently at the station |
+| `sheetsTotal` | Total active sheets expected |
+
+#### `laminate:waiting`
+
+Emitted when a sheet arrives at the lamination station but other sheets are still missing.
+
+```javascript
+socket.on('laminate:waiting', (payload) => {
+  console.log(`${payload.sheetsPresent}/${payload.sheetsTotal} sheets arrived`);
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `laminate:waiting` | INBOUND | `station:<stationId>` | `scan_in` of a sheet at its lamination station (when siblings are still missing) |
+
+**Payload:** Same shape as `laminate:ready`.
+
+#### `pane:laminated`
+
+Emitted when the `laminate` scan action merges child sheets into a parent pane.
+
+```javascript
+socket.on('pane:laminated', (payload) => {
+  console.log(payload.parent.paneNumber); // "PNE-0100"
+  console.log(payload.sheets);            // ["PNE-0100-A", "PNE-0100-B"]
+});
+```
+
+| Event | Direction | Emitted to | Triggered by |
+|---|---|---|---|
+| `pane:laminated` | INBOUND | `dashboard`, `pane`, `production`, `station:<stationId>` | `POST /api/panes/{paneNumber}/scan` with `action: "laminate"` |
+
+**Payload:**
+
+| Field | Description |
+|---|---|
+| `parent` | The fully populated parent pane object (now active at its first post-lamination station) |
+| `sheets` | Array of merged sheet pane numbers (e.g. `["PNE-0100-A", "PNE-0100-B"]`) |
 
 ### Pricing Updated
 

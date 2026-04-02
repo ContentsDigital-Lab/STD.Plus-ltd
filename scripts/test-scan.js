@@ -124,7 +124,7 @@ async function testBasicScanFlow(token, stns) {
     details: { type: 'tempered', quantity: 2 },
     panes: [
       { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered', jobType: 'Tempered', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 }, holes: [{ id: 'sh1', type: 'circle', x: 100, y: 200, diameter: 10 }, { id: 'sh2', type: 'circle', x: 300, y: 400, diameter: 15 }], notches: [{ id: 'sn1', type: 'rectangle', x: 0, y: 50, width: 20, height: 30 }] },
-      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 }, holes: [], notches: [{ id: 'sn2', type: 'rectangle', x: 0, y: 30, width: 15, height: 25 }, { id: 'sn3', type: 'rectangle', x: 0, y: 100, width: 15, height: 25 }, { id: 'sn4', type: 'custom', x: 50, y: 0, vertices: [{ x: 0, y: 0 }, { x: 10, y: 10 }] }] },
+      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 1 }, holes: [], notches: [{ id: 'sn2', type: 'rectangle', x: 0, y: 30, width: 15, height: 25 }, { id: 'sn3', type: 'rectangle', x: 0, y: 100, width: 15, height: 25 }, { id: 'sn4', type: 'custom', x: 50, y: 0, vertices: [{ x: 0, y: 0 }, { x: 10, y: 10 }] }] },
     ],
   });
   check('CREATE request with panes', reqRes.status, 201);
@@ -139,7 +139,7 @@ async function testBasicScanFlow(token, stns) {
   check('  pane 1 holes count', pane1.holes.length, 2);
   check('  pane 1 notches count', pane1.notches.length, 1);
   check('  pane 2 jobType', pane2.jobType, 'Laminated');
-  check('  pane 2 rawGlass.sheetsPerPane', pane2.rawGlass.sheetsPerPane, 2);
+  check('  pane 2 rawGlass.sheetsPerPane', pane2.rawGlass.sheetsPerPane, 1);
   check('  pane 2 holes count', pane2.holes.length, 0);
   check('  pane 2 notches count', pane2.notches.length, 3);
   console.log(`          pane 1: ${pane1.paneNumber}, pane 2: ${pane2.paneNumber}`);

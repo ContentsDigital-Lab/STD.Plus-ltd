@@ -72,6 +72,11 @@ const createSchema = z.object({
     edgeTasks:     z.array(edgeTaskSchema).optional(),
     withdrawal:    z.string().min(1).optional(),
     remakeOf:      z.string().min(1).optional(),
+    laminateRole:    z.enum(['single', 'parent', 'sheet']).optional(),
+    parentPane:      z.string().min(1).optional(),
+    childPanes:      z.array(z.string().min(1)).optional(),
+    sheetLabel:      z.string().optional(),
+    laminateStation: z.string().min(1).optional(),
     startedAt:     z.string().datetime().optional(),
     completedAt:   z.string().datetime().optional(),
     deliveredAt:   z.string().datetime().optional(),
@@ -102,6 +107,11 @@ const updateSchema = z.object({
     edgeTasks:     z.array(edgeTaskSchema).optional(),
     withdrawal:    z.string().min(1).optional(),
     remakeOf:      z.string().min(1).optional(),
+    laminateRole:    z.enum(['single', 'parent', 'sheet']).optional(),
+    parentPane:      z.string().min(1).optional(),
+    childPanes:      z.array(z.string().min(1)).optional(),
+    sheetLabel:      z.string().optional(),
+    laminateStation: z.string().min(1).optional(),
     startedAt:     z.string().datetime().optional(),
     completedAt:   z.string().datetime().optional(),
     deliveredAt:   z.string().datetime().optional(),
@@ -118,7 +128,7 @@ const deleteManySchema = z.object({
 const scanSchema = z.object({
   body: z.object({
     station: z.string().min(1),
-    action: z.enum(['scan_in', 'start', 'complete', 'scan_out']),
+    action: z.enum(['scan_in', 'start', 'complete', 'scan_out', 'laminate']),
     operator: z.string().min(1).optional(),
   }),
 });

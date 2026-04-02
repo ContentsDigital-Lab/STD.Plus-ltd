@@ -23,6 +23,10 @@ const stationSchema = new mongoose.Schema({
     enum: ['online', 'offline', 'maintenance'],
     default: 'offline',
   },
+  isLaminateStation: {
+    type: Boolean,
+    default: false,
+  },
   notes: {
     type: String,
     default: '',

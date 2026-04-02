@@ -69,6 +69,12 @@ const paneSchema = new mongoose.Schema({
   processes:      { type: [String], default: [] },
   edgeTasks:      { type: [edgeTaskSchema], default: [] },
 
+  laminateRole:    { type: String, enum: ['single', 'parent', 'sheet'], default: 'single' },
+  parentPane:      { type: mongoose.Schema.Types.ObjectId, ref: 'Pane', default: null },
+  childPanes:      { type: [mongoose.Schema.Types.ObjectId], ref: 'Pane', default: [] },
+  sheetLabel:      { type: String, default: '' },
+  laminateStation: { type: mongoose.Schema.Types.ObjectId, ref: 'Station', default: null },
+
   startedAt:   { type: Date, default: null },
   completedAt: { type: Date, default: null },
   deliveredAt: { type: Date, default: null },
@@ -76,4 +82,5 @@ const paneSchema = new mongoose.Schema({
 
 paneSchema.index({ order: 1 });
 paneSchema.index({ currentStation: 1, currentStatus: 1 });
+paneSchema.index({ parentPane: 1 });
 module.exports = mongoose.model('Pane', paneSchema);

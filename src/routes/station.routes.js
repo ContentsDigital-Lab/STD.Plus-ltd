@@ -15,6 +15,7 @@ const createSchema = z.object({
     templateId: z.string().min(1),
     colorId: z.enum(stationColors).optional(),
     status: z.enum(['online', 'offline', 'maintenance']).optional(),
+    isLaminateStation: z.boolean().optional(),
     notes: z.string().optional(),
   }),
 });
@@ -25,6 +26,7 @@ const updateSchema = z.object({
     templateId: z.string().min(1).optional(),
     colorId: z.enum(stationColors).optional(),
     status: z.enum(['online', 'offline', 'maintenance']).optional(),
+    isLaminateStation: z.boolean().optional(),
     notes: z.string().optional(),
   }),
 });

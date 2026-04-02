@@ -97,7 +97,7 @@ async function testClaimPullsPaneFromStation(token, stns) {
     details: { type: 'tempered', quantity: 2 },
     panes: [
       { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered', jobType: 'Tempered', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 1 }, holes: [{ id: 'ch1', type: 'circle', x: 100, y: 200, diameter: 10 }, { id: 'ch2', type: 'circle', x: 300, y: 400, diameter: 15 }, { id: 'ch3', type: 'rectangle', x: 500, y: 100, width: 20, height: 30 }], notches: [{ id: 'cn1', type: 'rectangle', x: 0, y: 50, width: 20, height: 30 }, { id: 'cn2', type: 'custom', x: 50, y: 0, vertices: [{ x: 0, y: 0 }, { x: 10, y: 10 }] }] },
-      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 }, holes: [], notches: [{ id: 'cn3', type: 'rectangle', x: 0, y: 30, width: 15, height: 25 }] },
+      { routing, dimensions: { width: 1000, height: 500, thickness: 6 }, glassType: 'laminated', jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 1 }, holes: [], notches: [{ id: 'cn3', type: 'rectangle', x: 0, y: 30, width: 15, height: 25 }] },
     ],
   });
   const reqId = reqRes.data.data._id;
@@ -876,6 +876,122 @@ async function testPaneCountClaimRemakeRelease(token, stns) {
 }
 
 // ──────────────────────────────────────────────
+// 9. LAMINATE SHEET CLAIM + REMAKE
+// ──────────────────────────────────────────────
+
+async function testLaminateClaimRemake(token, stns) {
+  console.log('\n=== Laminate Sheet Claim + Remake ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const cust = await api('POST', '/api/customers', token, { name: 'LamClaim Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'LamClaim Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const tmpl = await api('POST', '/api/station-templates', token, { name: 'LamClaim Tmpl' });
+  const tmplId = tmpl.data.data._id;
+
+  const cuttingStn = (await api('POST', '/api/stations', token, { name: 'lc_cutting', templateId: tmplId })).data.data._id;
+  const lamStn = (await api('POST', '/api/stations', token, { name: 'lc_laminate', templateId: tmplId, isLaminateStation: true })).data.data._id;
+  const qcStn = (await api('POST', '/api/stations', token, { name: 'lc_qc', templateId: tmplId })).data.data._id;
+
+  const routing = [cuttingStn, lamStn, qcStn];
+
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'laminated', quantity: 1 },
+    panes: [{
+      routing,
+      dimensions: { width: 800, height: 600, thickness: 5 },
+      rawGlass: { glassType: 'Clear', sheetsPerPane: 2 },
+    }],
+  });
+  check('CREATE laminate request', reqRes.status, 201);
+  const reqId = reqRes.data.data._id;
+  const allPanes = reqRes.data.data.panes;
+
+  const parent = allPanes.find(p => p.laminateRole === 'parent');
+  const sheetA = allPanes.find(p => p.sheetLabel === 'A');
+
+  // Create order and link
+  const ordRes = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1,
+    assignedTo: workerId,
+  });
+  const ordId = ordRes.data.data._id;
+
+  await api('PATCH', `/api/panes/${parent._id}`, token, { order: ordId });
+  await api('PATCH', `/api/panes/${sheetA._id}`, token, { order: ordId, material: matId });
+
+  // Claim sheet A
+  const claimRes = await api('POST', '/api/claims/from-pane', token, {
+    paneNumber: sheetA.paneNumber,
+    source: 'worker',
+    description: 'Scratch on sheet A',
+    defectCode: 'scratch',
+    defectStation: cuttingStn,
+    reportedBy: workerId,
+  });
+  check('CREATE claim on sheet', claimRes.status, 201);
+  const claimId = claimRes.data.data._id;
+
+  // Verify sheet is claimed
+  const sheetAAfter = await api('GET', `/api/panes/${sheetA._id}`, token);
+  check('sheet A claimed', sheetAAfter.data.data.currentStatus, 'claimed');
+
+  // Verify paneCount NOT decremented (sheets don't count)
+  const ordAfterClaim = await api('GET', `/api/orders/${ordId}`, token);
+  check('paneCount unchanged for sheet claim', ordAfterClaim.data.data.paneCount, 1);
+
+  // Approve claim — remake should be a sheet linked to same parent
+  const approveRes = await api('PATCH', `/api/claims/${claimId}`, token, {
+    status: 'approved',
+    decision: 'destroy',
+    approvedBy: workerId,
+    remakeStation: stns.orderRelease,
+  });
+  check('APPROVE sheet claim', approveRes.status, 200);
+  const remadePaneId = approveRes.data.data.remadePane._id || approveRes.data.data.remadePane;
+  checkTruthy('remake sheet created', remadePaneId);
+
+  // Verify remake is a sheet linked to same parent
+  const remadeRes = await api('GET', `/api/panes/${remadePaneId}`, token);
+  const remade = remadeRes.data.data;
+  check('remake laminateRole is sheet', remade.laminateRole, 'sheet');
+  check('remake parentPane matches', String(remade.parentPane?._id || remade.parentPane), String(parent._id));
+  check('remake sheetLabel has suffix', remade.sheetLabel.startsWith('A'), true);
+
+  // Verify parent childPanes updated
+  const parentAfter = await api('GET', `/api/panes/${parent._id}`, token);
+  const childIds = parentAfter.data.data.childPanes.map(c => String(c._id || c));
+  check('parent childPanes includes remake', childIds.includes(String(remadePaneId)), true);
+  check('parent childPanes includes original (for history)', childIds.includes(String(sheetA._id)), true);
+
+  // Cleanup
+  const matLogs = await api('GET', '/api/material-logs?limit=100', token);
+  const remakeLogs = matLogs.data.data.filter(l => l.actionType === 'remake');
+  if (remakeLogs.length > 0) {
+    await api('DELETE', '/api/material-logs', token, { ids: remakeLogs.map(l => l._id) });
+  }
+  const notifs = await api('GET', '/api/notifications?limit=100', token);
+  const testNotifs = notifs.data.data.filter(n => n.type === 'pane_arrived' || n.type === 'claim_approved');
+  if (testNotifs.length > 0) {
+    await api('DELETE', '/api/notifications', token, { ids: testNotifs.map(n => n._id) });
+  }
+
+  await api('DELETE', `/api/claims/${claimId}`, token);
+  for (const p of allPanes) await api('DELETE', `/api/panes/${p._id}`, token);
+  await api('DELETE', `/api/panes/${remadePaneId}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -897,6 +1013,7 @@ async function main() {
     await testCompletedPaneNotPulledAgain(token, stns);
     await testStatusNeFilter(token, stns);
     await testPaneCountClaimRemakeRelease(token, stns);
+    await testLaminateClaimRemake(token, stns);
   } finally {
     await cleanupStations(token, stns).catch(() => {});
     await sweepCreatedData(API, token, snapshot);
