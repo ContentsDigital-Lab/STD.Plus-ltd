@@ -53,7 +53,8 @@ exports.getAll = async (req, res, next) => {
     if (req.query.station) {
       filter.currentStation = req.query.station === 'null' ? null : req.query.station;
     }
-    if (req.query.status)   filter.currentStatus  = req.query.status;
+    if (req.query.status)    filter.currentStatus = req.query.status;
+    if (req.query.status_ne) filter.currentStatus = { $ne: req.query.status_ne };
 
     const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit) || 200));
     const sort  = req.query.sort || '-createdAt';
@@ -123,19 +124,44 @@ exports.create = async (req, res, next) => {
 // ── PATCH /panes/:id ──────────────────────────────────────────────────────────
 exports.update = async (req, res, next) => {
   try {
-    const { request, order, withdrawal, remakeOf } = req.validated?.body ?? req.body;
+    const body = req.validated?.body ?? req.body;
+    const { request, order, withdrawal, remakeOf } = body;
     await verifyReferences([
       { model: Request, id: request, label: 'Request' },
       { model: Order, id: order, label: 'Order' },
       { model: Withdrawal, id: withdrawal, label: 'Withdrawal' },
       { model: Pane, id: remakeOf, label: 'Pane (remakeOf)' },
     ]);
+
+    const existingPane = await Pane.findById(req.params.id).lean();
+    if (!existingPane) return fail(res, 'Pane not found', 404);
+
     const pane = await Pane.findByIdAndUpdate(
       req.params.id,
-      req.validated?.body ?? req.body,
+      body,
       { new: true, runValidators: true }
     ).populate(POPULATE_FIELDS).lean();
     if (!pane) return fail(res, 'Pane not found', 404);
+
+    const wasUnlinked = !existingPane.order;
+    const isNowLinked = !!order;
+    if (wasUnlinked && isNowLinked) {
+      const targetOrder = await Order.findById(order);
+      if (targetOrder) {
+        targetOrder.paneCount = (targetOrder.paneCount || 0) + 1;
+        if (targetOrder.paneCount > 0) {
+          targetOrder.progressPercent = Math.round(
+            ((targetOrder.panesCompleted || 0) / targetOrder.paneCount) * 100
+          );
+        }
+        await targetOrder.save();
+        const populatedOrder = await targetOrder.populate([
+          'request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo',
+        ]);
+        emit(req, 'order:updated', { action: 'updated', data: populatedOrder }, ['dashboard', 'order']);
+      }
+    }
+
     emit(req, 'pane:updated', { action: 'updated', data: pane }, ['dashboard', 'pane', 'production']);
     success(res, pane, 'Pane updated');
   } catch (err) {

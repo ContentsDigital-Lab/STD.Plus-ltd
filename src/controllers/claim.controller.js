@@ -28,17 +28,24 @@ const pullPaneFromStation = async (paneId, req) => {
   pane.currentStatus = 'claimed';
   await pane.save();
 
-  if (pane.order && previousStationId) {
+  if (pane.order) {
     const order = await Order.findById(pane.order);
     if (order) {
-      const breakdown = order.stationBreakdown instanceof Map
-        ? order.stationBreakdown
-        : new Map(Object.entries(order.stationBreakdown || {}));
-      const count = breakdown.get(previousStationId) || 0;
-      if (count > 0) breakdown.set(previousStationId, count - 1);
-      order.stationBreakdown = breakdown;
-      await order.save();
+      if (previousStationId) {
+        const breakdown = order.stationBreakdown instanceof Map
+          ? order.stationBreakdown
+          : new Map(Object.entries(order.stationBreakdown || {}));
+        const count = breakdown.get(previousStationId) || 0;
+        if (count > 0) breakdown.set(previousStationId, count - 1);
+        order.stationBreakdown = breakdown;
+      }
 
+      order.paneCount = Math.max(0, (order.paneCount || 0) - 1);
+      if (order.paneCount > 0) {
+        order.progressPercent = Math.round(((order.panesCompleted || 0) / order.paneCount) * 100);
+      }
+
+      await order.save();
       emit(req, 'order:updated', { action: 'updated', data: order }, ['dashboard', 'order']);
     }
   }

@@ -134,10 +134,11 @@ async function testClaimPullsPaneFromStation(token, stns) {
   check('pane1 currentStation is null (claimed)', pane1After.data.data.currentStation, null);
   check('pane1 currentStatus is "claimed"', pane1After.data.data.currentStatus, 'claimed');
 
-  // Verify order station breakdown updated
+  // Verify order station breakdown and paneCount updated
   const ordAfter = await api('GET', `/api/orders/${ordId}`, token);
   const breakdown = ordAfter.data.data.stationBreakdown || {};
   check('order breakdown edging decremented', (breakdown[stns.edging] || 0) === 0, true);
+  check('order paneCount decremented (2→1)', ordAfter.data.data.paneCount, 1);
 
   // Test claim via POST /api/orders/:orderId/claims (pane2 at cutting)
   const claimRes2 = await api('POST', `/api/orders/${ordId}/claims`, token, {
@@ -154,6 +155,9 @@ async function testClaimPullsPaneFromStation(token, stns) {
   const pane2After = await api('GET', `/api/panes/${pane2._id}`, token);
   check('pane2 currentStation is null (claimed)', pane2After.data.data.currentStation, null);
   check('pane2 currentStatus is "claimed"', pane2After.data.data.currentStatus, 'claimed');
+
+  const ordAfter2 = await api('GET', `/api/orders/${ordId}`, token);
+  check('order paneCount decremented again (1→0)', ordAfter2.data.data.paneCount, 0);
 
   // Cleanup
   await api('DELETE', `/api/claims/${claimId}`, token);
@@ -299,9 +303,9 @@ async function testClaimApprovalCreateRemake(token, stns) {
     expectedRoutingIds
   );
 
-  // Verify original order is unchanged
+  // Verify order paneCount decremented after claim
   const ordAfter = await api('GET', `/api/orders/${ordId}`, token);
-  check('original order paneCount unchanged', ordAfter.data.data.paneCount, 1);
+  check('order paneCount decremented after claim', ordAfter.data.data.paneCount, 0);
 
   // Verify MaterialLog was created
   const matLogs = await api('GET', '/api/material-logs?limit=100', token);
@@ -655,6 +659,219 @@ async function testCompletedPaneNotPulledAgain(token, stns) {
 }
 
 // ──────────────────────────────────────────────
+// 7. STATUS_NE FILTER EXCLUDES CLAIMED PANES
+// ──────────────────────────────────────────────
+
+async function testStatusNeFilter(token, stns) {
+  console.log('\n=== status_ne Filter Excludes Claimed Panes ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const cust = await api('POST', '/api/customers', token, { name: 'StatusNe Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'StatusNe Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const routing = [stns.cutting, stns.edging];
+
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 3 },
+    panes: [
+      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' },
+      { routing, dimensions: { width: 900, height: 700, thickness: 5 }, glassType: 'tempered' },
+      { routing, dimensions: { width: 1000, height: 800, thickness: 5 }, glassType: 'tempered' },
+    ],
+  });
+  const reqId = reqRes.data.data._id;
+  const pane1 = reqRes.data.data.panes[0];
+  const pane2 = reqRes.data.data.panes[1];
+  const pane3 = reqRes.data.data.panes[2];
+
+  const ordRes = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 3, request: reqId, paneCount: 3,
+    assignedTo: workerId, stations: routing,
+  });
+  const ordId = ordRes.data.data._id;
+
+  // Fetch all panes for order — should be 3
+  const allPanes = await api('GET', `/api/panes?order=${ordId}`, token);
+  check('all panes for order = 3', allPanes.data.data.length, 3);
+
+  // Claim pane1
+  const claimRes = await api('POST', '/api/claims/from-pane', token, {
+    paneNumber: pane1.paneNumber,
+    source: 'worker',
+    description: 'Defect on pane 1',
+    defectCode: 'scratch',
+    reportedBy: workerId,
+  });
+  check('CREATE claim for filter test', claimRes.status, 201);
+  const claimId = claimRes.data.data._id;
+
+  // Fetch all panes (no filter) — still 3
+  const allAfterClaim = await api('GET', `/api/panes?order=${ordId}`, token);
+  check('all panes (unfiltered) still 3', allAfterClaim.data.data.length, 3);
+
+  // Fetch with status_ne=claimed — should be 2
+  const filtered = await api('GET', `/api/panes?order=${ordId}&status_ne=claimed`, token);
+  check('panes with status_ne=claimed = 2', filtered.data.data.length, 2);
+
+  // Verify the claimed pane is excluded
+  const filteredIds = filtered.data.data.map(p => p._id);
+  check('claimed pane excluded', filteredIds.includes(pane1._id), false);
+  check('pane2 included', filteredIds.includes(pane2._id), true);
+  check('pane3 included', filteredIds.includes(pane3._id), true);
+
+  // Fetch with status=claimed — should be 1
+  const claimedOnly = await api('GET', `/api/panes?order=${ordId}&status=claimed`, token);
+  check('panes with status=claimed = 1', claimedOnly.data.data.length, 1);
+  check('claimed pane is pane1', claimedOnly.data.data[0]._id, pane1._id);
+
+  // Cleanup
+  await api('DELETE', `/api/claims/${claimId}`, token);
+  await api('DELETE', `/api/panes/${pane1._id}`, token);
+  await api('DELETE', `/api/panes/${pane2._id}`, token);
+  await api('DELETE', `/api/panes/${pane3._id}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 8. PANE COUNT LIFECYCLE: CLAIM → REMAKE → RELEASE
+// ──────────────────────────────────────────────
+
+async function testPaneCountClaimRemakeRelease(token, stns) {
+  console.log('\n=== Pane Count Lifecycle: Claim → Remake → Release ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const cust = await api('POST', '/api/customers', token, { name: 'Lifecycle Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'Lifecycle Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const routing = [stns.cutting, stns.edging, stns.qc];
+
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 3 },
+    panes: [
+      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' },
+      { routing, dimensions: { width: 900, height: 700, thickness: 5 }, glassType: 'tempered' },
+      { routing, dimensions: { width: 1000, height: 800, thickness: 5 }, glassType: 'tempered' },
+    ],
+  });
+  const reqId = reqRes.data.data._id;
+  const pane1 = reqRes.data.data.panes[0];
+
+  const ordRes = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 3, request: reqId, paneCount: 3,
+    assignedTo: workerId, stations: routing,
+  });
+  const ordId = ordRes.data.data._id;
+
+  // Verify initial state
+  const ordInitial = await api('GET', `/api/orders/${ordId}`, token);
+  check('initial paneCount = 3', ordInitial.data.data.paneCount, 3);
+
+  // Move pane1 to edging, then claim it
+  await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
+  await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_out' });
+
+  const claimRes = await api('POST', '/api/claims/from-pane', token, {
+    paneNumber: pane1.paneNumber,
+    source: 'worker',
+    description: 'Cracked at edging',
+    defectCode: 'broken',
+    defectStation: stns.edging,
+    reportedBy: workerId,
+  });
+  check('CREATE claim', claimRes.status, 201);
+  const claimId = claimRes.data.data._id;
+
+  // Verify paneCount decremented to 2
+  const ordAfterClaim = await api('GET', `/api/orders/${ordId}`, token);
+  check('paneCount after claim = 2 (3→2)', ordAfterClaim.data.data.paneCount, 2);
+
+  // Approve claim → remake pane created with order: null
+  const approveRes = await api('PATCH', `/api/claims/${claimId}`, token, {
+    status: 'approved',
+    decision: 'destroy',
+    approvedBy: workerId,
+    remakeStation: stns.orderRelease,
+  });
+  check('APPROVE claim', approveRes.status, 200);
+  const remadePaneId = approveRes.data.data.remadePane._id || approveRes.data.data.remadePane;
+  checkTruthy('remake pane created', remadePaneId);
+
+  // paneCount should still be 2 (remake has order: null)
+  const ordAfterApprove = await api('GET', `/api/orders/${ordId}`, token);
+  check('paneCount after approve still 2', ordAfterApprove.data.data.paneCount, 2);
+
+  // Release remake pane into the same order via PATCH
+  const releaseRes = await api('PATCH', `/api/panes/${remadePaneId}`, token, {
+    order: ordId,
+  });
+  check('RELEASE remake pane into order', releaseRes.status, 200);
+
+  // paneCount should now be 3 again (2→3)
+  const ordAfterRelease = await api('GET', `/api/orders/${ordId}`, token);
+  check('paneCount after release = 3 (2→3)', ordAfterRelease.data.data.paneCount, 3);
+
+  // Verify active panes (excluding claimed) = 3
+  const activePanes = await api('GET', `/api/panes?order=${ordId}&status_ne=claimed`, token);
+  check('active panes (status_ne=claimed) = 3', activePanes.data.data.length, 3);
+
+  // Verify claimed pane still exists but is excluded
+  const allPanes = await api('GET', `/api/panes?order=${ordId}`, token);
+  check('total panes including claimed = 4', allPanes.data.data.length, 4);
+
+  const claimedPanes = allPanes.data.data.filter(p => p.currentStatus === 'claimed');
+  check('exactly 1 claimed pane', claimedPanes.length, 1);
+  check('claimed pane is pane1', claimedPanes[0].paneNumber, pane1.paneNumber);
+
+  // Cleanup
+  const matLogs = await api('GET', '/api/material-logs?limit=100', token);
+  const remakeLogs = matLogs.data.data.filter(l => l.actionType === 'remake');
+  if (remakeLogs.length > 0) {
+    await api('DELETE', '/api/material-logs', token, { ids: remakeLogs.map(l => l._id) });
+  }
+
+  const logs = await api('GET', '/api/production-logs?limit=100', token);
+  const scanLogs = logs.data.data.filter(l =>
+    String(l.pane?._id || l.pane) === String(pane1._id)
+  );
+  if (scanLogs.length > 0) {
+    await api('DELETE', '/api/production-logs', token, { ids: scanLogs.map(l => l._id) });
+  }
+
+  const notifs = await api('GET', '/api/notifications?limit=100', token);
+  const testNotifs = notifs.data.data.filter(n =>
+    n.type === 'pane_arrived' || n.type === 'claim_approved'
+  );
+  if (testNotifs.length > 0) {
+    await api('DELETE', '/api/notifications', token, { ids: testNotifs.map(n => n._id) });
+  }
+
+  await api('DELETE', `/api/claims/${claimId}`, token);
+  await api('DELETE', `/api/panes/${remadePaneId}`, token);
+  await api('DELETE', `/api/panes/${pane1._id}`, token);
+  const remainingPanes = reqRes.data.data.panes.slice(1);
+  for (const p of remainingPanes) {
+    await api('DELETE', `/api/panes/${p._id}`, token);
+  }
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -674,6 +891,8 @@ async function main() {
     await testNoDuplicateRemake(token, stns);
     await testRejectionNoRemake(token, stns);
     await testCompletedPaneNotPulledAgain(token, stns);
+    await testStatusNeFilter(token, stns);
+    await testPaneCountClaimRemakeRelease(token, stns);
   } finally {
     await cleanupStations(token, stns).catch(() => {});
     await sweepCreatedData(API, token, snapshot);

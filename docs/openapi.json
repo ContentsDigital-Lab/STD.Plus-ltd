@@ -2250,7 +2250,7 @@
       "post": {
         "tags": ["Claims"],
         "summary": "Create a claim for an order",
-        "description": "Requires `claims:create` permission. Creates a new claim linked to the specified order.\n\n**Side effect:** If a `pane` ID is provided and that pane is currently in a station (not yet completed), the pane is **pulled from the station system** — its `currentStation` is set to `null` and `currentStatus` to `claimed`, and the order's `stationBreakdown` is decremented accordingly. Real-time events are emitted so the frontend removes the pane from station views.",
+        "description": "Requires `claims:create` permission. Creates a new claim linked to the specified order.\n\n**Side effect:** If a `pane` ID is provided and that pane is currently in a station (not yet completed), the pane is **pulled from the station system** — its `currentStation` is set to `null` and `currentStatus` to `claimed`, and the order's `stationBreakdown` is decremented accordingly. The order's `paneCount` is also **decremented** and `progressPercent` is recalculated so that progress tracking remains accurate after the pane is removed. Real-time events are emitted so the frontend removes the pane from station views.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -2301,7 +2301,7 @@
       "post": {
         "tags": ["Claims"],
         "summary": "Create claim from pane number",
-        "description": "Convenience endpoint that accepts a `paneNumber` (e.g. `PNE-0001`) and automatically resolves the pane's `order` and `material`. No need to provide order ID in the URL or material ID in the body.\n\nRequires `claims:create` permission.\n\n**Side effect:** The claimed pane is **pulled from the station system** — its `currentStation` is set to `null` and `currentStatus` to `claimed`, and the order's `stationBreakdown` is decremented accordingly. Real-time events are emitted so the frontend removes the pane from station views. Already-completed panes are not affected.",
+        "description": "Convenience endpoint that accepts a `paneNumber` (e.g. `PNE-0001`) and automatically resolves the pane's `order` and `material`. No need to provide order ID in the URL or material ID in the body.\n\nRequires `claims:create` permission.\n\n**Side effect:** The claimed pane is **pulled from the station system** — its `currentStation` is set to `null` and `currentStatus` to `claimed`, and the order's `stationBreakdown` is decremented accordingly. The order's `paneCount` is also **decremented** and `progressPercent` is recalculated so that progress tracking remains accurate after the pane is removed. Real-time events are emitted so the frontend removes the pane from station views. Already-completed panes are not affected.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -2617,7 +2617,8 @@
           { "name": "request", "in": "query", "schema": { "type": "string" }, "description": "Filter by request ID" },
           { "name": "material", "in": "query", "schema": { "type": "string" }, "description": "Filter by material ID" },
           { "name": "station", "in": "query", "schema": { "type": "string" }, "description": "Filter by current station ObjectId. Use the string `null` to find panes in virtual states (queued, completed, claimed)." },
-          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed", "claimed"] }, "description": "Filter by current status" },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed", "claimed"] }, "description": "Filter by exact current status" },
+          { "name": "status_ne", "in": "query", "schema": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed", "claimed"] }, "description": "Exclude panes with this status (not-equal filter). Useful for excluding claimed panes from order views: `?order=<id>&status_ne=claimed`. If both `status` and `status_ne` are provided, `status_ne` takes precedence." },
           { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 200, "maximum": 1000, "minimum": 1 }, "description": "Max results to return (default 200, max 1000)" },
           { "name": "sort", "in": "query", "schema": { "type": "string", "default": "-createdAt" }, "description": "Sort field (prefix with `-` for descending)" }
         ],
@@ -2669,7 +2670,7 @@
       "patch": {
         "tags": ["Panes"],
         "summary": "Update a pane",
-        "description": "Requires `panes:manage` permission.",
+        "description": "Requires `panes:manage` permission.\n\n**Order release side effect:** When a pane's `order` field is set and the pane was previously unlinked (`order: null`), the target order's `paneCount` is automatically incremented and `progressPercent` is recalculated. This is the mechanism used to release a remake pane into an order — the remake pane is created with `order: null` during claim approval, then later assigned to the order via this endpoint, which keeps the order's pane count accurate. A real-time `order:updated` event is emitted.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaneUpdateBody" } } } },
