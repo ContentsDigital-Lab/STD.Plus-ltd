@@ -1169,7 +1169,7 @@ async function testPaneNewFields(token) {
     { id: 'n2', type: 'custom', x: 150, y: 0, vertices: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 30 }] },
   ];
 
-  // Create pane with jobType + rawGlass + holes + notches
+  // Create pane with jobType + rawGlass + holes + notches + cornerSpec + dimensionTolerance
   const r1 = await api('POST', '/api/panes', token, {
     request: reqId,
     dimensions: { width: 800, height: 600, thickness: 5 },
@@ -1177,6 +1177,8 @@ async function testPaneNewFields(token) {
     rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 5, sheetsPerPane: 2 },
     holes: sampleHoles,
     notches: sampleNotches,
+    cornerSpec: 'chamfer 3mm',
+    dimensionTolerance: '±1mm',
   });
   check('CREATE pane with jobType + rawGlass + holes + notches', r1.status, 201);
   const paneId = r1.data.data._id;
@@ -1191,6 +1193,8 @@ async function testPaneNewFields(token) {
   check('  holes[0].diameter', r1.data.data.holes[0].diameter, 10);
   check('  notches count', r1.data.data.notches.length, 2);
   check('  notches[0].id', r1.data.data.notches[0].id, 'n1');
+  check('  cornerSpec persisted', r1.data.data.cornerSpec, 'chamfer 3mm');
+  check('  dimensionTolerance persisted', r1.data.data.dimensionTolerance, '±1mm');
 
   // GET — verify persistence
   const r2 = await api('GET', `/api/panes/${paneId}`, token);
@@ -1199,6 +1203,8 @@ async function testPaneNewFields(token) {
   check('  rawGlass.sheetsPerPane', r2.data.data.rawGlass.sheetsPerPane, 2);
   check('  holes count', r2.data.data.holes.length, 4);
   check('  notches count', r2.data.data.notches.length, 2);
+  check('  cornerSpec persisted', r2.data.data.cornerSpec, 'chamfer 3mm');
+  check('  dimensionTolerance persisted', r2.data.data.dimensionTolerance, '±1mm');
 
   // UPDATE — change jobType, rawGlass, holes, notches
   const updatedHoles = [
@@ -1215,6 +1221,8 @@ async function testPaneNewFields(token) {
     rawGlass: { glassType: 'Tinted', color: 'ชา', thickness: 10, sheetsPerPane: 1 },
     holes: updatedHoles,
     notches: updatedNotches,
+    cornerSpec: 'radius 5mm',
+    dimensionTolerance: '±2mm',
   });
   check('UPDATE pane jobType', r3.status, 200);
   check('  jobType updated', r3.data.data.jobType, 'Tempered');
@@ -1224,6 +1232,8 @@ async function testPaneNewFields(token) {
   check('  rawGlass.sheetsPerPane updated', r3.data.data.rawGlass.sheetsPerPane, 1);
   check('  holes updated count', r3.data.data.holes.length, 2);
   check('  notches updated count', r3.data.data.notches.length, 3);
+  check('  cornerSpec updated', r3.data.data.cornerSpec, 'radius 5mm');
+  check('  dimensionTolerance updated', r3.data.data.dimensionTolerance, '±2mm');
 
   // CREATE pane without new fields — should get defaults
   const r4 = await api('POST', '/api/panes', token, { request: reqId });
@@ -1236,6 +1246,8 @@ async function testPaneNewFields(token) {
   check('  default rawGlass.sheetsPerPane is 1', r4.data.data.rawGlass.sheetsPerPane, 1);
   check('  default holes is empty array', r4.data.data.holes.length, 0);
   check('  default notches is empty array', r4.data.data.notches.length, 0);
+  check('  default cornerSpec is empty', r4.data.data.cornerSpec, '');
+  check('  default dimensionTolerance is empty', r4.data.data.dimensionTolerance, '');
 
   // Inline panes via request — with jobType + rawGlass + holes + notches
   const inlineHoles = [{ id: 'ih1', type: 'circle', x: 100, y: 100, diameter: 12 }, { id: 'ih2', type: 'circle', x: 200, y: 200, diameter: 8 }];
@@ -1249,7 +1261,7 @@ async function testPaneNewFields(token) {
     customer: custId,
     details: { type: 'laminated', quantity: 2 },
     panes: [
-      { jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 }, holes: inlineHoles, notches: inlineNotches },
+      { jobType: 'Laminated', rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 }, holes: inlineHoles, notches: inlineNotches, cornerSpec: 'flat', dimensionTolerance: '±0.5mm' },
       { jobType: 'Tempered', rawGlass: { glassType: 'Tinted', color: 'เทา', thickness: 6, sheetsPerPane: 1 }, holes: [], notches: inlineNotches2 },
     ],
   });
@@ -1261,10 +1273,14 @@ async function testPaneNewFields(token) {
   check('  inline pane 1 rawGlass.sheetsPerPane', inlinePane1.rawGlass.sheetsPerPane, 2);
   check('  inline pane 1 holes count', inlinePane1.holes.length, 2);
   check('  inline pane 1 notches count', inlinePane1.notches.length, 1);
+  check('  inline pane 1 cornerSpec', inlinePane1.cornerSpec, 'flat');
+  check('  inline pane 1 dimensionTolerance', inlinePane1.dimensionTolerance, '±0.5mm');
   check('  inline pane 2 jobType', inlinePane2.jobType, 'Tempered');
   check('  inline pane 2 rawGlass.color', inlinePane2.rawGlass.color, 'เทา');
   check('  inline pane 2 holes count', inlinePane2.holes.length, 0);
   check('  inline pane 2 notches count', inlinePane2.notches.length, 3);
+  check('  inline pane 2 cornerSpec default', inlinePane2.cornerSpec, '');
+  check('  inline pane 2 dimensionTolerance default', inlinePane2.dimensionTolerance, '');
 
   // Clean up
   await api('DELETE', `/api/panes/${paneId}`, token);
@@ -1436,16 +1452,34 @@ async function testPricingSettings(token) {
   check('  notchPrice updated', r3.data.data.notchPrice, 150);
   check('  holePriceEach preserved', r3.data.data.holePriceEach, 75);
 
-  // PUT — update glassPrices partially
+  // PUT — update glassPrices with grindingRate as plain number (backward-compat)
   const r4 = await api('PUT', '/api/pricing-settings', token, {
     glassPrices: { Custom: { '4mm': { pricePerSqFt: 40, grindingRate: 30 } } },
   });
-  check('PUT pricing-settings glassPrices', r4.status, 200);
+  check('PUT pricing-settings glassPrices (grindingRate number)', r4.status, 200);
   check('  Custom glass type added', r4.data.data.glassPrices.Custom !== undefined, true);
   check('  Custom 4mm pricePerSqFt', r4.data.data.glassPrices.Custom['4mm'].pricePerSqFt, 40);
+  check('  Custom 4mm grindingRate (number)', r4.data.data.glassPrices.Custom['4mm'].grindingRate, 30);
+
+  // PUT — update glassPrices with grindingRate as object { rough, polished }
+  const r4b = await api('PUT', '/api/pricing-settings', token, {
+    glassPrices: { Custom: { '4mm': { pricePerSqFt: 40, grindingRate: { rough: 25, polished: 55 } } } },
+  });
+  check('PUT pricing-settings glassPrices (grindingRate object)', r4b.status, 200);
+  const grRate = r4b.data.data.glassPrices.Custom['4mm'].grindingRate;
+  check('  grindingRate is object', typeof grRate, 'object');
+  check('  grindingRate.rough', grRate.rough, 25);
+  check('  grindingRate.polished', grRate.polished, 55);
+
+  // GET — verify grindingRate object persisted
+  const r4c = await api('GET', '/api/pricing-settings', token);
+  const grRatePersisted = r4c.data.data.glassPrices.Custom['4mm'].grindingRate;
+  check('GET grindingRate object persisted', typeof grRatePersisted, 'object');
+  check('  grindingRate.rough persisted', grRatePersisted.rough, 25);
+  check('  grindingRate.polished persisted', grRatePersisted.polished, 55);
 
   // PUT — updatedBy is set
-  check('  updatedBy is set', r4.data.data.updatedBy !== null, true);
+  check('  updatedBy is set', r4b.data.data.updatedBy !== null, true);
 
   // GET again — verify persistence
   const r5 = await api('GET', '/api/pricing-settings', token);

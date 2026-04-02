@@ -106,6 +106,8 @@ const createRemakePane = async (claim, remakeStationId, req) => {
     },
     glassType: originalPane.glassType || '',
     glassTypeLabel: originalPane.glassTypeLabel || '',
+    cornerSpec: originalPane.cornerSpec || '',
+    dimensionTolerance: originalPane.dimensionTolerance || '',
     holes: originalPane.holes?.length ? originalPane.holes.map(h => h.toObject ? h.toObject() : { ...h }) : [],
     notches: originalPane.notches?.length ? originalPane.notches.map(n => n.toObject ? n.toObject() : { ...n }) : [],
     processes: originalPane.processes ? [...originalPane.processes] : [],

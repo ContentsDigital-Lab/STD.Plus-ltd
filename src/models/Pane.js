@@ -60,8 +60,10 @@ const paneSchema = new mongoose.Schema({
     sheetsPerPane: { type: Number, default: 1  },
   },
 
-  glassType:      { type: String, default: '' },
-  glassTypeLabel: { type: String, default: '' },
+  glassType:           { type: String, default: '' },
+  glassTypeLabel:      { type: String, default: '' },
+  cornerSpec:          { type: String, default: '' },
+  dimensionTolerance:  { type: String, default: '' },
   holes:          { type: [holeNotchSchema], default: [] },
   notches:        { type: [holeNotchSchema], default: [] },
   processes:      { type: [String], default: [] },

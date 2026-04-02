@@ -58,6 +58,8 @@ const paneItemSchema = z.object({
     status: z.enum(['pending', 'in_progress', 'completed']).optional(),
   })).optional(),
   notes: z.string().optional(),
+  cornerSpec: z.string().optional(),
+  dimensionTolerance: z.string().optional(),
 });
 
 const createSchema = z.object({

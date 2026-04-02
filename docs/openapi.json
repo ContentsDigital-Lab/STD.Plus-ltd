@@ -296,6 +296,8 @@
                 "glassTypeLabel": { "type": "string" },
                 "holes": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of hole positions and dimensions" },
                 "notches": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of notch positions and dimensions" },
+                "cornerSpec": { "type": "string", "description": "Corner cutting specification (e.g. 'chamfer 3mm', 'radius 5mm')" },
+                "dimensionTolerance": { "type": "string", "description": "Acceptable dimension tolerance (e.g. '±1mm')" },
                 "processes": { "type": "array", "items": { "type": "string" } },
                 "edgeTasks": { "type": "array", "items": { "$ref": "#/components/schemas/EdgeTask" } },
                 "material": { "type": "string", "description": "Material ObjectId" },
@@ -813,6 +815,8 @@
           "rawGlass": { "type": "object", "description": "Raw material info for warehouse withdrawal", "properties": { "glassType": { "type": "string", "description": "Raw glass type (e.g. Clear, Tinted)" }, "color": { "type": "string", "description": "Glass color (e.g. เขียว, ใส, ชา, เทา)" }, "thickness": { "type": "number", "description": "Thickness in mm" }, "sheetsPerPane": { "type": "integer", "description": "Number of raw sheets needed per pane (2 for Laminated)", "default": 1 } } },
           "glassType": { "type": "string" },
           "glassTypeLabel": { "type": "string" },
+          "cornerSpec": { "type": "string", "description": "Corner cutting specification" },
+          "dimensionTolerance": { "type": "string", "description": "Acceptable dimension tolerance" },
           "holes": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "default": [], "description": "Array of hole positions and dimensions" },
           "notches": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "default": [], "description": "Array of notch positions and dimensions" },
           "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
@@ -843,6 +847,8 @@
           "rawGlass": { "type": "object", "properties": { "glassType": { "type": "string" }, "color": { "type": "string" }, "thickness": { "type": "number", "minimum": 0 }, "sheetsPerPane": { "type": "integer", "minimum": 1 } } },
           "glassType": { "type": "string" },
           "glassTypeLabel": { "type": "string" },
+          "cornerSpec": { "type": "string", "description": "Corner cutting specification" },
+          "dimensionTolerance": { "type": "string", "description": "Acceptable dimension tolerance" },
           "holes": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of hole positions and dimensions" },
           "notches": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of notch positions and dimensions" },
           "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
@@ -902,6 +908,8 @@
           "rawGlass": { "type": "object", "properties": { "glassType": { "type": "string" }, "color": { "type": "string" }, "thickness": { "type": "number", "minimum": 0 }, "sheetsPerPane": { "type": "integer", "minimum": 1 } } },
           "glassType": { "type": "string" },
           "glassTypeLabel": { "type": "string" },
+          "cornerSpec": { "type": "string", "description": "Corner cutting specification" },
+          "dimensionTolerance": { "type": "string", "description": "Acceptable dimension tolerance" },
           "holes": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of hole positions and dimensions" },
           "notches": { "type": "array", "items": { "$ref": "#/components/schemas/HoleNotch" }, "description": "Array of notch positions and dimensions" },
           "processes": { "type": "array", "items": { "type": "string" }, "description": "Processing steps required (e.g. temper, laminate, assembly, cnc)" },
@@ -3102,7 +3110,7 @@
                           "properties": {
                             "_id": { "type": "string" },
                             "singleton": { "type": "boolean", "example": true },
-                            "glassPrices": { "type": "object", "description": "Nested map: glass type → thickness → { pricePerSqFt, grindingRate }", "additionalProperties": { "type": "object", "additionalProperties": { "type": "object", "properties": { "pricePerSqFt": { "type": "number" }, "grindingRate": { "type": "number" } } } } },
+                            "glassPrices": { "type": "object", "description": "Nested map: glass type → thickness → { pricePerSqFt, grindingRate }. `grindingRate` is an object keyed by grinding type (e.g. `{ rough: 50, polished: 75 }`). Legacy single-number values may still exist in older data.", "additionalProperties": { "type": "object", "additionalProperties": { "type": "object", "properties": { "pricePerSqFt": { "type": "number" }, "grindingRate": { "oneOf": [{ "type": "number" }, { "type": "object", "description": "Grinding rates by type (e.g. rough, polished)", "additionalProperties": { "type": "number", "minimum": 0 } }] } } } } },
                             "holePriceEach": { "type": "number", "example": 50 },
                             "notchPrice": { "type": "number", "example": 100 },
                             "updatedBy": { "oneOf": [{ "type": "string", "nullable": true }, { "type": "object", "properties": { "_id": { "type": "string" }, "name": { "type": "string" }, "role": { "type": "string" } } }] },
@@ -3132,7 +3140,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "glassPrices": { "type": "object", "description": "Nested map: glass type → thickness → { pricePerSqFt, grindingRate }", "additionalProperties": { "type": "object", "additionalProperties": { "type": "object", "properties": { "pricePerSqFt": { "type": "number", "minimum": 0 }, "grindingRate": { "type": "number", "minimum": 0 } }, "required": ["pricePerSqFt", "grindingRate"] } } },
+                  "glassPrices": { "type": "object", "description": "Nested map: glass type → thickness → { pricePerSqFt, grindingRate }. `grindingRate` can be a single number (legacy) or an object keyed by grinding type (e.g. `{ rough: 50, polished: 75 }`).", "additionalProperties": { "type": "object", "additionalProperties": { "type": "object", "properties": { "pricePerSqFt": { "type": "number", "minimum": 0 }, "grindingRate": { "oneOf": [{ "type": "number", "minimum": 0 }, { "type": "object", "description": "Grinding rates by type (e.g. rough, polished)", "additionalProperties": { "type": "number", "minimum": 0 } }] } }, "required": ["pricePerSqFt", "grindingRate"] } } },
                   "holePriceEach": { "type": "number", "minimum": 0 },
                   "notchPrice": { "type": "number", "minimum": 0 }
                 }

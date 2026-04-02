@@ -7,9 +7,14 @@ const pricingSettingsController = require('../controllers/pricingSettings.contro
 
 const router = Router();
 
+const grindingRateSchema = z.union([
+  z.number().min(0),
+  z.record(z.string(), z.number().min(0)),
+]);
+
 const glassVariantSchema = z.object({
   pricePerSqFt: z.number().min(0),
-  grindingRate:  z.number().min(0),
+  grindingRate:  grindingRateSchema,
 });
 
 const updateSchema = z.object({

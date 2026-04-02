@@ -4,7 +4,7 @@ const { Schema, model } = require('mongoose');
 const glassVariantSchema = new Schema(
   {
     pricePerSqFt: { type: Number, required: true, min: 0 },
-    grindingRate:  { type: Number, required: true, min: 0 },
+    grindingRate:  { type: Schema.Types.Mixed, required: true },
   },
   { _id: false }
 );

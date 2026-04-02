@@ -227,6 +227,8 @@ async function testClaimApprovalCreateRemake(token, stns) {
           { id: 'rn1', type: 'rectangle', x: 0, y: 50, width: 20, height: 30 },
           { id: 'rn2', type: 'custom', x: 50, y: 0, vertices: [{ x: 0, y: 0 }, { x: 10, y: 10 }] },
         ],
+        cornerSpec: 'chamfer 3mm',
+        dimensionTolerance: '±1mm',
       },
     ],
   });
@@ -296,6 +298,8 @@ async function testClaimApprovalCreateRemake(token, stns) {
   check('remade pane holes[0].id', remade.holes[0].id, 'rh1');
   check('remade pane notches cloned count', remade.notches.length, 2);
   check('remade pane notches[0].id', remade.notches[0].id, 'rn1');
+  check('remade pane cornerSpec cloned', remade.cornerSpec, 'chamfer 3mm');
+  check('remade pane dimensionTolerance cloned', remade.dimensionTolerance, '±1mm');
   const expectedRoutingIds = JSON.stringify([stns.cutting, stns.edging, stns.qc]);
   check(
     'remade pane routing matches',
