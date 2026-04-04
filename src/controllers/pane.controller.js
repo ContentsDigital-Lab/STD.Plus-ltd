@@ -87,6 +87,24 @@ exports.getById = async (req, res, next) => {
 };
 
 // ── POST /panes ───────────────────────────────────────────────────────────────
+const SHEET_LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+const logInventoryCut = async (req, body) => {
+  if (!body.inventory) return;
+  const inv = await Inventory.findById(body.inventory).lean();
+  if (inv) {
+    await MaterialLog.create({
+      material:        inv.material,
+      actionType:      'cut',
+      quantityChanged: -1,
+      referenceId:     inv._id,
+      stockType:       inv.stockType ?? null,
+      order:           body.order ?? null,
+    }).catch(err => console.error('[pane.create] MaterialLog cut failed:', err));
+    emit(req, 'log:updated', { action: 'created' }, ['log']);
+  }
+};
+
 exports.create = async (req, res, next) => {
   try {
     const { request, order, withdrawal, remakeOf } = req.validated.body;
@@ -101,24 +119,73 @@ exports.create = async (req, res, next) => {
       body.paneNumber = await Counter.getNext('pane', 'PNE');
     }
     body.qrCode = `STDPLUS:${body.paneNumber}`;
+
+    const sheetsPerPane = body.rawGlass?.sheetsPerPane || 1;
+    const hasRouting = body.routing?.length > 0;
+
+    if (sheetsPerPane > 1 && hasRouting) {
+      const routingIds = body.routing.map(String);
+      const stations = await Station.find({ _id: { $in: routingIds } }).lean();
+      const stationMap = Object.fromEntries(stations.map(s => [s._id.toString(), s]));
+      const lamIdx = routingIds.findIndex(id => stationMap[id]?.isLaminateStation);
+
+      if (lamIdx === -1) {
+        return fail(res, 'Routing must include a lamination station when sheetsPerPane > 1', 400);
+      }
+
+      const laminateStationId = routingIds[lamIdx];
+      const childRouting = routingIds.slice(0, lamIdx + 1);
+      const parentRouting = routingIds.slice(lamIdx + 1);
+
+      const parentPane = await Pane.create({
+        ...body,
+        laminateRole: 'parent',
+        laminateStation: laminateStationId,
+        routing: parentRouting,
+        currentStation: null,
+        currentStatus: 'pending',
+      });
+
+      const childIds = [];
+      const createdSheets = [];
+      for (let i = 0; i < sheetsPerPane; i++) {
+        const label = SHEET_LABELS[i] || `S${i + 1}`;
+        const childNumber = `${body.paneNumber}-${label}`;
+        const child = await Pane.create({
+          ...body,
+          paneNumber: childNumber,
+          qrCode: `STDPLUS:${childNumber}`,
+          laminateRole: 'sheet',
+          parentPane: parentPane._id,
+          sheetLabel: label,
+          laminateStation: laminateStationId,
+          routing: childRouting,
+          currentStation: childRouting[0],
+          currentStatus: 'pending',
+        });
+        childIds.push(child._id);
+        createdSheets.push(child);
+      }
+
+      parentPane.childPanes = childIds;
+      await parentPane.save();
+
+      const populatedParent = await parentPane.populate(POPULATE_FIELDS);
+
+      await logInventoryCut(req, body);
+
+      emit(req, 'pane:updated', { action: 'created', data: populatedParent }, ['dashboard', 'pane', 'production']);
+      for (const sheet of createdSheets) {
+        emit(req, 'pane:updated', { action: 'created', data: sheet }, ['dashboard', 'pane', 'production']);
+      }
+
+      return success(res, { parent: populatedParent, sheets: createdSheets }, 'Laminate pane created', 201);
+    }
+
     const pane = await Pane.create(body);
     const populated = await pane.populate(POPULATE_FIELDS);
 
-    // If linked to an inventory slot → auto-create a 'cut' MaterialLog for traceability
-    if (body.inventory) {
-      const inv = await Inventory.findById(body.inventory).lean();
-      if (inv) {
-        await MaterialLog.create({
-          material:        inv.material,
-          actionType:      'cut',
-          quantityChanged: -1,
-          referenceId:     inv._id,
-          stockType:       inv.stockType ?? null,
-          order:           body.order ?? null,
-        }).catch(err => console.error('[pane.create] MaterialLog cut failed:', err));
-        emit(req, 'log:updated', { action: 'created' }, ['log']);
-      }
-    }
+    await logInventoryCut(req, body);
 
     emit(req, 'pane:updated', { action: 'created', data: populated }, ['dashboard', 'pane', 'production']);
     success(res, populated, 'Pane created', 201);
@@ -141,6 +208,88 @@ exports.update = async (req, res, next) => {
 
     const existingPane = await Pane.findById(req.params.id).lean();
     if (!existingPane) return fail(res, 'Pane not found', 404);
+
+    const effectiveRouting = body.routing || existingPane.routing || [];
+    const effectiveSheetsPerPane = body.rawGlass?.sheetsPerPane ?? existingPane.rawGlass?.sheetsPerPane ?? 1;
+    const isSingle = (existingPane.laminateRole || 'single') === 'single';
+
+    if (isSingle && effectiveSheetsPerPane > 1 && effectiveRouting.length > 0) {
+      const routingIds = effectiveRouting.map(String);
+      const stations = await Station.find({ _id: { $in: routingIds } }).lean();
+      const stationMap = Object.fromEntries(stations.map(s => [s._id.toString(), s]));
+      const lamIdx = routingIds.findIndex(id => stationMap[id]?.isLaminateStation);
+
+      if (lamIdx !== -1) {
+        const laminateStationId = routingIds[lamIdx];
+        const childRouting = routingIds.slice(0, lamIdx + 1);
+        const parentRouting = routingIds.slice(lamIdx + 1);
+
+        const mergedData = { ...existingPane, ...body };
+
+        const parentPane = await Pane.findByIdAndUpdate(
+          req.params.id,
+          {
+            ...body,
+            laminateRole: 'parent',
+            laminateStation: laminateStationId,
+            routing: parentRouting,
+            currentStation: null,
+            currentStatus: 'pending',
+          },
+          { new: true, runValidators: true }
+        );
+
+        const paneNumber = existingPane.paneNumber;
+        const childIds = [];
+        const createdSheets = [];
+        for (let i = 0; i < effectiveSheetsPerPane; i++) {
+          const label = SHEET_LABELS[i] || `S${i + 1}`;
+          const childNumber = `${paneNumber}-${label}`;
+          const child = await Pane.create({
+            request: mergedData.request,
+            order: mergedData.order || null,
+            material: mergedData.material || null,
+            withdrawal: mergedData.withdrawal || null,
+            inventory: mergedData.inventory || null,
+            dimensions: mergedData.dimensions,
+            jobType: mergedData.jobType,
+            rawGlass: mergedData.rawGlass,
+            glassType: mergedData.glassType,
+            glassTypeLabel: mergedData.glassTypeLabel,
+            cornerSpec: mergedData.cornerSpec,
+            dimensionTolerance: mergedData.dimensionTolerance,
+            holes: mergedData.holes || [],
+            notches: mergedData.notches || [],
+            processes: mergedData.processes || [],
+            edgeTasks: mergedData.edgeTasks || [],
+            customRouting: mergedData.customRouting || false,
+            paneNumber: childNumber,
+            qrCode: `STDPLUS:${childNumber}`,
+            laminateRole: 'sheet',
+            parentPane: parentPane._id,
+            sheetLabel: label,
+            laminateStation: laminateStationId,
+            routing: childRouting,
+            currentStation: childRouting[0],
+            currentStatus: 'pending',
+          });
+          childIds.push(child._id);
+          createdSheets.push(child);
+        }
+
+        parentPane.childPanes = childIds;
+        await parentPane.save();
+
+        const populatedParent = await parentPane.populate(POPULATE_FIELDS);
+
+        emit(req, 'pane:updated', { action: 'updated', data: populatedParent }, ['dashboard', 'pane', 'production']);
+        for (const sheet of createdSheets) {
+          emit(req, 'pane:updated', { action: 'created', data: sheet }, ['dashboard', 'pane', 'production']);
+        }
+
+        return success(res, { parent: populatedParent, sheets: createdSheets }, 'Laminate pane split created');
+      }
+    }
 
     const pane = await Pane.findByIdAndUpdate(
       req.params.id,
@@ -256,13 +405,9 @@ exports.scan = async (req, res, next) => {
         });
       }
 
-      const parentRoute = Array.isArray(pane.routing) ? pane.routing.map(r => r.toString()) : [];
-      const firstPostLam = parentRoute.length > 0 ? parentRoute[0] : null;
-
-      pane.currentStation = firstPostLam;
-      pane.currentStatus = firstPostLam ? 'pending' : 'completed';
+      pane.currentStation = lamStationStr;
+      pane.currentStatus = 'awaiting_scan_out';
       if (!pane.startedAt) pane.startedAt = now;
-      if (!firstPostLam) pane.completedAt = now;
       await pane.save();
 
       await PaneLog.create({
@@ -280,17 +425,7 @@ exports.scan = async (req, res, next) => {
             : new Map(Object.entries(order.stationBreakdown || {}));
           const lamCount = breakdown.get(lamStationStr) || 0;
           if (lamCount > 0) breakdown.set(lamStationStr, Math.max(0, lamCount - activeSheets.length));
-          if (firstPostLam) breakdown.set(firstPostLam, (breakdown.get(firstPostLam) || 0) + 1);
-
-          if (!firstPostLam) {
-            order.panesCompleted = (order.panesCompleted || 0) + 1;
-            if (order.paneCount > 0) {
-              order.progressPercent = Math.round((order.panesCompleted / order.paneCount) * 100);
-            }
-            if (order.panesCompleted >= order.paneCount && order.paneCount > 0) {
-              order.status = 'completed';
-            }
-          }
+          breakdown.set(lamStationStr, (breakdown.get(lamStationStr) || 0) + 1);
 
           order.stationBreakdown = breakdown;
           await order.save();
@@ -303,17 +438,9 @@ exports.scan = async (req, res, next) => {
         sheets: activeSheets.map(s => s.paneNumber),
       }, ['dashboard', 'pane', 'production', `station:${lamStationStr}`]);
 
-      if (firstPostLam) {
-        emit(req, 'station:pane_arrived', {
-          paneNumber: pane.paneNumber, paneId: pane._id,
-          fromStation: lamStationStr, toStation: firstPostLam, orderId: pane.order,
-        }, [`station:${firstPostLam}`, 'station']);
-      }
-
       return success(res, {
         pane: populated.toObject ? populated.toObject() : populated,
         mergedSheets: activeSheets.length,
-        nextStation: firstPostLam ?? undefined,
       });
     }
 
@@ -353,8 +480,17 @@ exports.scan = async (req, res, next) => {
       }
 
       const route = Array.isArray(pane.routing) ? pane.routing.map(r => r.toString()) : [];
-      const idx   = route.indexOf(station);
-      const nextRouteId = (idx >= 0 && idx < route.length - 1) ? route[idx + 1] : null;
+      const isParentAtLamStation = pane.laminateRole === 'parent'
+        && pane.laminateStation
+        && pane.laminateStation.toString() === station;
+
+      let nextRouteId;
+      if (isParentAtLamStation) {
+        nextRouteId = route.length > 0 ? route[0] : null;
+      } else {
+        const idx = route.indexOf(station);
+        nextRouteId = (idx >= 0 && idx < route.length - 1) ? route[idx + 1] : null;
+      }
       nextStation = nextRouteId;
 
       if (nextStation) {

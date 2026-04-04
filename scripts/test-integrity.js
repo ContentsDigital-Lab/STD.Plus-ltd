@@ -2206,7 +2206,6 @@ async function testLaminateScanFlow(token) {
   const lamRes = await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
   check('LAMINATE action succeeds', lamRes.status, 200);
   check('mergedSheets count', lamRes.data.data.mergedSheets, 2);
-  check('parent nextStation is qc', lamRes.data.data.nextStation, qcStation);
 
   // Verify sheets are completed
   const sheetAAfter = await api('GET', `/api/panes/${sheetA._id}`, token);
@@ -2216,10 +2215,16 @@ async function testLaminateScanFlow(token) {
   const sheetBAfter = await api('GET', `/api/panes/${sheetB._id}`, token);
   check('sheet B completed after merge', sheetBAfter.data.data.currentStatus, 'completed');
 
-  // Verify parent activated
+  // Verify parent awaiting scan_out at laminate station (not auto-advanced)
   const parentAfter = await api('GET', `/api/panes/${parent._id}`, token);
-  check('parent status pending at qc', parentAfter.data.data.currentStatus, 'pending');
-  check('parent at qc station', parentAfter.data.data.currentStation?._id || parentAfter.data.data.currentStation, qcStation);
+  check('parent awaiting_scan_out at laminate station', parentAfter.data.data.currentStatus, 'awaiting_scan_out');
+  check('parent at laminate station', parentAfter.data.data.currentStation?._id || parentAfter.data.data.currentStation, lamStation);
+
+  // Scan out parent from laminate station → should advance to QC
+  const lamScanOut = await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: lamStation, action: 'scan_out' });
+  check('parent scan_out from laminate succeeds', lamScanOut.status, 200);
+  check('parent advanced to qc', lamScanOut.data.data.pane.currentStation?._id, qcStation);
+  check('parent status pending at qc', lamScanOut.data.data.pane.currentStatus, 'pending');
 
   // Scan parent through QC to complete
   await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: qcStation, action: 'scan_in' });

@@ -815,6 +815,161 @@ async function testMaterialBackfill(token, stns) {
 }
 
 // ──────────────────────────────────────────────
+// 7. LAMINATE PANE CREATION VIA POST /panes
+// ──────────────────────────────────────────────
+
+async function testLaminateCreateViaPanes(token) {
+  console.log('\n=== Laminate Pane Creation via POST /panes ===\n');
+
+  const tmpl = await api('POST', '/api/station-templates', token, { name: `LamCreate Tmpl ${Date.now()}` });
+  const tmplId = tmpl.data.data._id;
+
+  const cuttingStn = (await api('POST', '/api/stations', token, { name: 'lc_cut', templateId: tmplId })).data.data._id;
+  const lamStn = (await api('POST', '/api/stations', token, { name: 'lc_lam', templateId: tmplId, isLaminateStation: true })).data.data._id;
+  const qcStn = (await api('POST', '/api/stations', token, { name: 'lc_qc', templateId: tmplId })).data.data._id;
+
+  const cust = await api('POST', '/api/customers', token, { name: 'LamCreate Cust' });
+  const custId = cust.data.data._id;
+
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'laminated', quantity: 1 },
+  });
+  const reqId = reqRes.data.data._id;
+
+  const routing = [cuttingStn, lamStn, qcStn];
+
+  // Create pane via POST /api/panes with sheetsPerPane: 2
+  const createRes = await api('POST', '/api/panes', token, {
+    request: reqId,
+    routing,
+    dimensions: { width: 800, height: 600, thickness: 5 },
+    rawGlass: { glassType: 'Clear', color: 'ใส', thickness: 5, sheetsPerPane: 2 },
+    jobType: 'Laminated',
+  });
+  check('POST /panes laminate returns 201', createRes.status, 201);
+
+  const data = createRes.data.data;
+  check('response has parent', !!data.parent, true);
+  check('response has sheets array', Array.isArray(data.sheets), true);
+  check('sheets count = 2', data.sheets.length, 2);
+
+  const parent = data.parent;
+  check('parent laminateRole = parent', parent.laminateRole, 'parent');
+  check('parent currentStation is null', parent.currentStation, null);
+  check('parent currentStatus is pending', parent.currentStatus, 'pending');
+  check('parent has 2 childPanes', parent.childPanes.length, 2);
+  check('parent routing = post-lamination only', parent.routing.length, 1);
+
+  const sheetA = data.sheets.find(s => s.sheetLabel === 'A');
+  const sheetB = data.sheets.find(s => s.sheetLabel === 'B');
+  check('sheet A exists', !!sheetA, true);
+  check('sheet B exists', !!sheetB, true);
+  check('sheet A laminateRole = sheet', sheetA.laminateRole, 'sheet');
+  check('sheet A parentPane set', !!sheetA.parentPane, true);
+  check('sheet A routing = pre-lamination', sheetA.routing.length, 2);
+  check('sheet A currentStation = first station', String(sheetA.currentStation?._id || sheetA.currentStation), cuttingStn);
+  check('sheet A paneNumber has -A suffix', sheetA.paneNumber.endsWith('-A'), true);
+  check('sheet B paneNumber has -B suffix', sheetB.paneNumber.endsWith('-B'), true);
+
+  // Error case: sheetsPerPane > 1 but no laminate station in routing
+  const noLamRes = await api('POST', '/api/panes', token, {
+    request: reqId,
+    routing: [cuttingStn, qcStn],
+    rawGlass: { sheetsPerPane: 2 },
+  });
+  check('POST /panes without laminate station returns 400', noLamRes.status, 400);
+
+  // Cleanup
+  await api('DELETE', `/api/panes/${sheetA._id}`, token);
+  await api('DELETE', `/api/panes/${sheetB._id}`, token);
+  await api('DELETE', `/api/panes/${parent._id}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 8. LAMINATE SPLIT VIA PATCH /panes/:id
+// ──────────────────────────────────────────────
+
+async function testLaminateSplitViaPatch(token) {
+  console.log('\n=== Laminate Split via PATCH /panes/:id ===\n');
+
+  const tmpl = await api('POST', '/api/station-templates', token, { name: `LamPatch Tmpl ${Date.now()}` });
+  const tmplId = tmpl.data.data._id;
+
+  const cuttingStn = (await api('POST', '/api/stations', token, { name: 'lp_cut', templateId: tmplId })).data.data._id;
+  const lamStn = (await api('POST', '/api/stations', token, { name: 'lp_lam', templateId: tmplId, isLaminateStation: true })).data.data._id;
+  const qcStn = (await api('POST', '/api/stations', token, { name: 'lp_qc', templateId: tmplId })).data.data._id;
+
+  const cust = await api('POST', '/api/customers', token, { name: 'LamPatch Cust' });
+  const custId = cust.data.data._id;
+
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'laminated', quantity: 1 },
+  });
+  const reqId = reqRes.data.data._id;
+
+  // Create a pane WITHOUT routing (simulates Order Release workflow)
+  const createRes = await api('POST', '/api/panes', token, {
+    request: reqId,
+    dimensions: { width: 1000, height: 500, thickness: 6 },
+    rawGlass: { glassType: 'Clear', color: 'เขียว', thickness: 6, sheetsPerPane: 2 },
+    jobType: 'Laminated',
+  });
+  check('POST /panes without routing = 201', createRes.status, 201);
+  const paneId = createRes.data.data._id;
+  const paneNumber = createRes.data.data.paneNumber;
+  check('pane is single (no routing)', createRes.data.data.laminateRole, 'single');
+
+  // Now PATCH with routing that includes laminate station (Order Release assigns routing)
+  const routing = [cuttingStn, lamStn, qcStn];
+  const patchRes = await api('PATCH', `/api/panes/${paneId}`, token, {
+    routing,
+  });
+  check('PATCH triggers laminate split', patchRes.status, 200);
+
+  const patchData = patchRes.data.data;
+  check('response has parent', !!patchData.parent, true);
+  check('response has sheets array', Array.isArray(patchData.sheets), true);
+  check('sheets count = 2', patchData.sheets.length, 2);
+
+  const parent = patchData.parent;
+  check('parent laminateRole = parent', parent.laminateRole, 'parent');
+  check('parent paneNumber unchanged', parent.paneNumber, paneNumber);
+  check('parent currentStation is null', parent.currentStation, null);
+  check('parent routing = post-lamination [qc]', (parent.routing || []).length, 1);
+
+  const sheetA = patchData.sheets.find(s => s.sheetLabel === 'A');
+  const sheetB = patchData.sheets.find(s => s.sheetLabel === 'B');
+  check('sheet A exists', !!sheetA, true);
+  check('sheet B exists', !!sheetB, true);
+  check('sheet A laminateRole = sheet', sheetA.laminateRole, 'sheet');
+  check('sheet A routing = pre-lamination [cut, lam]', sheetA.routing.length, 2);
+  check('sheet A currentStation = cutting', String(sheetA.currentStation?._id || sheetA.currentStation), cuttingStn);
+  check('sheet A dimensions cloned', sheetA.dimensions?.width, 1000);
+  check('sheet A rawGlass cloned', sheetA.rawGlass?.sheetsPerPane, 2);
+
+  // Verify already-split pane doesn't split again on subsequent PATCH
+  const patchAgain = await api('PATCH', `/api/panes/${paneId}`, token, {
+    notes: 'some update',
+  });
+  check('PATCH on parent does not re-split', patchAgain.status, 200);
+  check('response is single pane (no re-split)', !!patchAgain.data.data.paneNumber, true);
+  check('parent still has laminateRole parent', patchAgain.data.data.laminateRole, 'parent');
+
+  // Cleanup
+  await api('DELETE', `/api/panes/${sheetA._id}`, token);
+  await api('DELETE', `/api/panes/${sheetB._id}`, token);
+  await api('DELETE', `/api/panes/${paneId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -834,6 +989,8 @@ async function main() {
     await testNotifications(token, stns);
     await testScanOutEdgeCases(token, stns);
     await testMaterialBackfill(token, stns);
+    await testLaminateCreateViaPanes(token);
+    await testLaminateSplitViaPatch(token);
   } finally {
     await cleanupStations(token, stns).catch(() => {});
     await sweepCreatedData(API, token, snapshot);

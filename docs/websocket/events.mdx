@@ -354,7 +354,7 @@ socket.on('pane:laminated', (payload) => {
 
 | Field | Description |
 |---|---|
-| `parent` | The fully populated parent pane object (now active at its first post-lamination station) |
+| `parent` | The fully populated parent pane object (at the lamination station with status `awaiting_scan_out`) |
 | `sheets` | Array of merged sheet pane numbers (e.g. `["PNE-0100-A", "PNE-0100-B"]`) |
 
 ### Pricing Updated

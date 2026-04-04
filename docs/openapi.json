@@ -903,7 +903,7 @@
               "updatedAt": { "type": "string", "format": "date-time" }
             }
           },
-          "nextStation": { "type": "string", "nullable": true, "description": "Station ObjectId the pane moved to (only present on `scan_out` and `laminate` actions, null if last station)" },
+          "nextStation": { "type": "string", "nullable": true, "description": "Station ObjectId the pane moved to (only present on `scan_out` action, null if last station)" },
           "mergedSheets": { "type": "integer", "description": "Number of child sheets merged (only present on `laminate` action)" }
         }
       },
@@ -2659,11 +2659,41 @@
       "post": {
         "tags": ["Panes"],
         "summary": "Create a pane",
-        "description": "Requires `panes:create` permission.",
+        "description": "Requires `panes:create` permission.\n\n**Laminate auto-splitting:** When `rawGlass.sheetsPerPane` is greater than 1 **and** the `routing` array includes a station with `isLaminateStation: true`, the endpoint automatically creates a laminate pane structure instead of a single pane:\n- 1 **parent** pane (`laminateRole: \"parent\"`) with routing set to post-lamination stations only, `currentStation: null`, `currentStatus: \"pending\"`\n- N **sheet** panes (`laminateRole: \"sheet\"`) with routing set to pre-lamination stations (up to and including the laminate station), each starting at the first station\n- Parent and sheets are linked via `childPanes` / `parentPane`\n\nThe response shape changes to `{ parent: Pane, sheets: Pane[] }` instead of a single `Pane`.\n\nReturns `400` if `sheetsPerPane > 1` but no laminate station is found in the routing.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaneCreateBody" } } } },
         "responses": {
-          "201": { "description": "Pane created", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Pane" } } }] } } } },
+          "201": {
+            "description": "Pane created. For regular panes, `data` is a single Pane object. For laminate panes (`sheetsPerPane > 1`), `data` is `{ parent: Pane, sheets: Pane[] }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "oneOf": [
+                            { "$ref": "#/components/schemas/Pane", "description": "Single pane (regular)" },
+                            {
+                              "type": "object",
+                              "description": "Laminate pane structure (when sheetsPerPane > 1)",
+                              "properties": {
+                                "parent": { "$ref": "#/components/schemas/Pane" },
+                                "sheets": { "type": "array", "items": { "$ref": "#/components/schemas/Pane" } }
+                              },
+                              "required": ["parent", "sheets"]
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "400": { "$ref": "#/components/responses/400" },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" }
@@ -2699,12 +2729,42 @@
       "patch": {
         "tags": ["Panes"],
         "summary": "Update a pane",
-        "description": "Requires `panes:manage` permission.\n\n**Order release side effect:** When a pane's `order` field is set and the pane was previously unlinked (`order: null`), the target order's `paneCount` is automatically incremented and `progressPercent` is recalculated. This is the mechanism used to release a remake pane into an order — the remake pane is created with `order: null` during claim approval, then later assigned to the order via this endpoint, which keeps the order's pane count accurate. A real-time `order:updated` event is emitted.",
+        "description": "Requires `panes:manage` permission.\n\n**Laminate auto-splitting:** When a pane with `laminateRole: \"single\"` is updated with `routing` that includes a laminate station, and `rawGlass.sheetsPerPane` is greater than 1 (either from the update body or from the existing pane data), the endpoint automatically splits the pane into a laminate structure:\n- The existing pane becomes the **parent** (`laminateRole: \"parent\"`) with routing set to post-lamination stations only\n- N **sheet** panes are created (`laminateRole: \"sheet\"`) with routing up to and including the laminate station, each starting at the first station\n- Parent and sheets are linked via `childPanes` / `parentPane`\n- Response shape becomes `{ parent: Pane, sheets: Pane[] }`\n\nThis is the typical flow: panes are created without routing at Order Release, then when routing is assigned during release, the laminate split happens automatically.\n\n**Order release side effect:** When a pane's `order` field is set and the pane was previously unlinked (`order: null`), the target order's `paneCount` is automatically incremented and `progressPercent` is recalculated. This is the mechanism used to release a remake pane into an order — the remake pane is created with `order: null` during claim approval, then later assigned to the order via this endpoint, which keeps the order's pane count accurate. A real-time `order:updated` event is emitted.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaneUpdateBody" } } } },
         "responses": {
-          "200": { "description": "Pane updated", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/SuccessResponse" }, { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Pane" } } }] } } } },
+          "200": {
+            "description": "Pane updated. For regular updates, `data` is a single Pane object. When laminate split is triggered, `data` is `{ parent: Pane, sheets: Pane[] }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "oneOf": [
+                            { "$ref": "#/components/schemas/Pane", "description": "Single pane (regular update)" },
+                            {
+                              "type": "object",
+                              "description": "Laminate pane structure (when split is triggered)",
+                              "properties": {
+                                "parent": { "$ref": "#/components/schemas/Pane" },
+                                "sheets": { "type": "array", "items": { "$ref": "#/components/schemas/Pane" } }
+                              },
+                              "required": ["parent", "sheets"]
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "401": { "$ref": "#/components/responses/401" },
           "403": { "$ref": "#/components/responses/403" },
           "404": { "$ref": "#/components/responses/404" }
@@ -2809,7 +2869,7 @@
       "post": {
         "tags": ["QR Scanning"],
         "summary": "Scan a pane (QR scan endpoint)",
-        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Actions:**\n- `scan_in` — Sets `currentStation` to the station, `currentStatus` to `in_progress`, and `startedAt` (if not already set). For sheet panes at a laminate station, emits `laminate:ready` or `laminate:waiting` WebSocket events.\n- `start` — Sets `currentStation` to the station and `currentStatus` to `in_progress`.\n- `complete` — Sets `currentStation` to the station and `currentStatus` to `awaiting_scan_out`.\n- `scan_out` — Requires status `awaiting_scan_out`. Advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set. Sheet panes do not update `panesCompleted`/`progressPercent`.\n- `laminate` — **Must be called on a parent pane**. Validates all active child sheets (status != claimed) are present at the lamination station. Marks all active child sheets as `completed`, activates the parent pane with its first post-lamination station. Creates `laminate_complete` PaneLogs for children and `laminate_start` for the parent. Updates `order.stationBreakdown`. Returns `mergedSheets` count.\n\n**Side effects (every action):**\n- Creates a `PaneLog` entry.\n- Emits `pane:updated` with `action: \"scanned\"` to `dashboard`, `pane`, `production`, `station:<name>`.\n- Emits `log:updated` with `action: \"pane_scanned\"` to `log`.\n- If the pane has no `material` but has an `order`, the order's material is backfilled onto the pane.\n\n**Additional side effects (scan_out only):**\n- Updates associated `Order` progress (`panesCompleted`, `progressPercent`, `stationBreakdown`) and order `status`.\n- Emits `order:updated`, `station:pane_arrived`, and `notification` WebSocket events.\n- Creates a `Notification` for the order's assigned worker (if any).\n- Emits a station-room `notification` event to `station:<nextStation>` for the pane arrival.\n\n**Validations:**\n- `complete` and `scan_out` must be performed at the pane's `currentStation`.\n- `scan_out` requires pane status to be `awaiting_scan_out` (i.e. `complete` must be called first).\n- Scanning a pane that is already `completed` returns 400.\n- `laminate` can only be called on parent panes; all active child sheets must be at the lamination station.\n\nRequires `panes:scan` permission.",
+        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Actions:**\n- `scan_in` — Sets `currentStation` to the station, `currentStatus` to `in_progress`, and `startedAt` (if not already set). For sheet panes at a laminate station, emits `laminate:ready` or `laminate:waiting` WebSocket events.\n- `start` — Sets `currentStation` to the station and `currentStatus` to `in_progress`.\n- `complete` — Sets `currentStation` to the station and `currentStatus` to `awaiting_scan_out`.\n- `scan_out` — Requires status `awaiting_scan_out`. Advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set. Sheet panes do not update `panesCompleted`/`progressPercent`.\n- `laminate` — **Must be called on a parent pane**. Validates all active child sheets (status != claimed) are present at the lamination station. Marks all active child sheets as `completed`, sets the parent pane to `awaiting_scan_out` at the lamination station (does not auto-advance). The worker must then `scan_out` the parent from the lamination station to advance it to the first post-lamination station. Creates `laminate_complete` PaneLogs for children and `laminate_start` for the parent. Updates `order.stationBreakdown`. Returns `mergedSheets` count.\n\n**Side effects (every action):**\n- Creates a `PaneLog` entry.\n- Emits `pane:updated` with `action: \"scanned\"` to `dashboard`, `pane`, `production`, `station:<name>`.\n- Emits `log:updated` with `action: \"pane_scanned\"` to `log`.\n- If the pane has no `material` but has an `order`, the order's material is backfilled onto the pane.\n\n**Additional side effects (scan_out only):**\n- Updates associated `Order` progress (`panesCompleted`, `progressPercent`, `stationBreakdown`) and order `status`.\n- Emits `order:updated`, `station:pane_arrived`, and `notification` WebSocket events.\n- Creates a `Notification` for the order's assigned worker (if any).\n- Emits a station-room `notification` event to `station:<nextStation>` for the pane arrival.\n\n**Validations:**\n- `complete` and `scan_out` must be performed at the pane's `currentStation`.\n- `scan_out` requires pane status to be `awaiting_scan_out` (i.e. `complete` must be called first).\n- Scanning a pane that is already `completed` returns 400.\n- `laminate` can only be called on parent panes; all active child sheets must be at the lamination station.\n\nRequires `panes:scan` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {

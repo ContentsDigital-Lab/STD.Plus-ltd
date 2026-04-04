@@ -52,7 +52,7 @@ The routing is split at the **lamination station** (a station with `isLaminateSt
 
 ```
 Sheet A:  cutting → edging → lamination ─┐
-                                          ├─ merge → Parent: qc → delivery
+                                          ├─ merge → Parent: lamination (awaiting_scan_out) → scan_out → qc → delivery
 Sheet B:  cutting → edging → lamination ─┘
 ```
 
@@ -60,7 +60,7 @@ Sheets travel independently through their routing. When they arrive at the lamin
 - The system checks if all **active** siblings (not claimed) are present
 - Emits `laminate:ready` when all sheets are at the station, or `laminate:waiting` with a progress count
 
-A fifth scan action, **laminate**, merges the sheets into the parent (see below).
+A fifth scan action, **laminate**, merges the sheets into the parent. After merging, the parent stays at the lamination station with status `awaiting_scan_out` — the worker must then **scan_out** to advance it to the next station (see below).
 
 ### Two-Step Completion Flow
 
@@ -106,15 +106,16 @@ POST /api/panes/PNE-0100/scan
 
 1. Validates that all **active** child sheets (`currentStatus !== 'claimed'`) are at the lamination station
 2. Marks all active child sheets as `completed` with `completedAt`
-3. Activates the parent pane — sets it to the first post-lamination station with status `pending`
+3. Sets the parent pane to `awaiting_scan_out` **at the lamination station** — it does not advance automatically
 4. Creates `PaneLog` entries: `laminate_complete` for each sheet, `laminate_start` for the parent
-5. Updates `order.stationBreakdown` — decrements lamination station count (for sheets), increments next station count (for parent)
+5. Updates `order.stationBreakdown` — decrements lamination station count (for sheets), adds 1 for the parent at the lamination station
 6. Emits `pane:laminated` WebSocket event
 
+The worker then performs a **scan_out** on the parent pane at the lamination station, which advances it to the first post-lamination station (e.g. `qc`). This follows the same two-step `complete → scan_out` pattern used at every other station.
+
 **Response** includes:
-- `pane` — the activated parent pane
+- `pane` — the parent pane (at the lamination station, status `awaiting_scan_out`)
 - `mergedSheets` — number of sheets merged (e.g. `2`)
-- `nextStation` — the parent's next station ID
 
 <Note>
   `panesCompleted` and `progressPercent` on the order are **not** updated during the merge. They only update when the parent pane itself completes its final station via `scan_out`.
@@ -132,7 +133,7 @@ Every scan triggers several side effects:
 | **Order Completion** | On `scan_out` (last station, last pane) | When all panes are `completed`, the order status changes to `completed` |
 | **Notification** | On `scan_out` | If the order has an `assignedTo` worker, a notification is created and sent via WebSocket |
 | **Laminate Check** | On `scan_in` at lamination station | If the scanned pane is a sheet arriving at its lamination station, checks siblings and emits `laminate:ready` or `laminate:waiting` |
-| **Sheet Merge** | On `laminate` action | All active child sheets are completed, parent pane is activated, `stationBreakdown` is updated |
+| **Sheet Merge** | On `laminate` action | All active child sheets are completed, parent pane is set to `awaiting_scan_out` at the lamination station, `stationBreakdown` is updated |
 
 ## WebSocket Events
 
