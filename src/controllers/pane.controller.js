@@ -66,6 +66,13 @@ exports.getAll = async (req, res, next) => {
     if (req.query.laminateRole) filter.laminateRole = req.query.laminateRole;
     if (req.query.parentPane)   filter.parentPane   = req.query.parentPane;
 
+    // Filter for withdrawal status
+    if (req.query.isWithdrawn === 'true') {
+      filter.withdrawal = { $ne: null };
+    } else if (req.query.isWithdrawn === 'false') {
+      filter.withdrawal = null;
+    }
+
     const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit) || 200));
     const sort  = req.query.sort || '-createdAt';
 
