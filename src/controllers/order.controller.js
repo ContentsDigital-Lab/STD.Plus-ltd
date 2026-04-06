@@ -16,7 +16,8 @@ const paginate = require('../utils/paginate');
 const { hasPermission } = require('../config/permissions');
 
 const POPULATE_FIELDS = [
-  'request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo',
+  { path: 'request', select: 'deadline details requestNumber' },
+  'customer', 'material', 'claim', 'withdrawal', 'assignedTo',
   { path: 'stations', select: 'name' },
   { path: 'stationHistory.station', select: 'name' },
 ];
@@ -65,7 +66,10 @@ exports.getAll = async (req, res, next) => {
     if (req.query.stationId) filter.stations = req.query.stationId;
     const { data, pagination } = await paginate(Order, {
       filter,
-      populate: POPULATE_FIELDS,
+      populate: req.query.populate === 'true' ? POPULATE_FIELDS : POPULATE_FIELDS.map(f => {
+        if (typeof f === 'object' && f.path === 'request') return 'request';
+        return f;
+      }),
       page: req.query.page,
       limit: req.query.limit,
       sort: req.query.sort,
@@ -78,7 +82,11 @@ exports.getAll = async (req, res, next) => {
 
 exports.getById = async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id).populate(POPULATE_FIELDS);
+    const populate = req.query.populate === 'true' ? POPULATE_FIELDS : POPULATE_FIELDS.map(f => {
+      if (typeof f === 'object' && f.path === 'request') return 'request';
+      return f;
+    });
+    const order = await Order.findById(req.params.id).populate(populate);
     if (!order) return fail(res, 'Order not found', 404);
     success(res, order);
   } catch (err) {
@@ -101,7 +109,7 @@ exports.create = async (req, res, next) => {
     }
 
     const populated = await order.populate(POPULATE_FIELDS);
-    emit(req, 'order:updated', { action: 'created', data: populated }, ['dashboard', 'order']);
+    emit(req, 'order:updated', { action: 'created', data: populated });
 
     // Notify the first station when a new order is created
     const firstStationRef = Array.isArray(order.stations) && order.stations[0];
@@ -149,7 +157,7 @@ exports.update = async (req, res, next) => {
     }).populate(POPULATE_FIELDS);
     if (!order) return fail(res, 'Order not found', 404);
 
-    emit(req, 'order:updated', { action: 'updated', data: order }, ['dashboard', 'order']);
+    emit(req, 'order:updated', { action: 'updated', data: order });
 
     const body = req.validated.body;
     if (body.stationHistory || body.currentStationIndex !== undefined) {
@@ -192,7 +200,8 @@ exports.deleteOne = async (req, res, next) => {
     await cascadeDeleteReferenced(req.params.id, ORDER_DEPENDENTS);
     const order = await Order.findByIdAndDelete(req.params.id);
     if (!order) return fail(res, 'Order not found', 404);
-    emit(req, 'order:updated', { action: 'deleted', data: order }, ['dashboard', 'order']);
+    emit(req, 'order:updated', { action: 'updated', data: order });
+    emit(req, 'order:updated', { action: 'deleted', data: order });
     success(res, null, 'Order deleted');
   } catch (err) {
     next(err);
@@ -204,7 +213,7 @@ exports.deleteMany = async (req, res, next) => {
     const { ids } = req.validated.body;
     await cascadeDeleteManyReferenced(ids, ORDER_DEPENDENTS);
     const result = await Order.deleteMany({ _id: { $in: ids } });
-    emit(req, 'order:updated', { action: 'deleted', data: { ids } }, ['dashboard', 'order']);
+    emit(req, 'order:updated', { action: 'deleted', data: { ids } });
     success(res, { deletedCount: result.deletedCount }, 'Orders deleted');
   } catch (err) {
     next(err);

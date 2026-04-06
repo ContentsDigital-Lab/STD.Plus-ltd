@@ -17,8 +17,12 @@ const Inventory = require('../models/Inventory');
 const Station = require('../models/Station');
 
 const POPULATE_FIELDS = [
-  { path: 'order',          select: 'orderNumber code customer material' },
-  { path: 'request',        select: 'code' },
+  {
+    path: 'order',
+    select: 'orderNumber code customer material priority',
+    populate: { path: 'request', select: 'deadline' }
+  },
+  { path: 'request',        select: 'code deadline' },
   { path: 'withdrawal' },
   { path: 'remakeOf' },
   { path: 'material',       select: 'name' },
@@ -65,7 +69,12 @@ exports.getAll = async (req, res, next) => {
     const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit) || 200));
     const sort  = req.query.sort || '-createdAt';
 
-    const data = await Pane.find(filter).sort(sort).limit(limit).populate(POPULATE_FIELDS).lean();
+    const populate = req.query.populate === 'true' ? POPULATE_FIELDS : POPULATE_FIELDS.map(f => {
+      if (f.path === 'order') return { ...f, populate: undefined };
+      return f;
+    });
+
+    const data = await Pane.find(filter).sort(sort).limit(limit).populate(populate).lean();
     success(res, data);
   } catch (err) {
     next(err);
@@ -76,9 +85,14 @@ exports.getAll = async (req, res, next) => {
 exports.getById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const populate = req.query.populate === 'true' ? POPULATE_FIELDS : POPULATE_FIELDS.map(f => {
+      if (f.path === 'order') return { ...f, populate: undefined };
+      return f;
+    });
+
     const pane = mongoose.Types.ObjectId.isValid(id)
-      ? await Pane.findById(id).populate(POPULATE_FIELDS).lean()
-      : await Pane.findOne({ paneNumber: id.toUpperCase() }).populate(POPULATE_FIELDS).lean();
+      ? await Pane.findById(id).populate(populate).lean()
+      : await Pane.findOne({ paneNumber: id.toUpperCase() }).populate(populate).lean();
     if (!pane) return fail(res, 'Pane not found', 404);
     success(res, pane);
   } catch (err) {
@@ -174,9 +188,9 @@ exports.create = async (req, res, next) => {
 
       await logInventoryCut(req, body);
 
-      emit(req, 'pane:updated', { action: 'created', data: populatedParent }, ['dashboard', 'pane', 'production']);
+      emit(req, 'pane:updated', { action: 'created', data: populatedParent });
       for (const sheet of createdSheets) {
-        emit(req, 'pane:updated', { action: 'created', data: sheet }, ['dashboard', 'pane', 'production']);
+        emit(req, 'pane:updated', { action: 'created', data: sheet });
       }
 
       return success(res, { parent: populatedParent, sheets: createdSheets }, 'Laminate pane created', 201);
@@ -187,7 +201,7 @@ exports.create = async (req, res, next) => {
 
     await logInventoryCut(req, body);
 
-    emit(req, 'pane:updated', { action: 'created', data: populated }, ['dashboard', 'pane', 'production']);
+    emit(req, 'pane:updated', { action: 'created', data: populated }, []);
     success(res, populated, 'Pane created', 201);
   } catch (err) {
     next(err);
@@ -318,7 +332,7 @@ exports.update = async (req, res, next) => {
       }
     }
 
-    emit(req, 'pane:updated', { action: 'updated', data: pane }, ['dashboard', 'pane', 'production']);
+    emit(req, 'pane:updated', { action: 'updated', data: pane });
     success(res, pane, 'Pane updated');
   } catch (err) {
     next(err);
@@ -523,8 +537,7 @@ exports.scan = async (req, res, next) => {
       completedAt: action === 'scan_out' ? now : null,
     });
 
-    emit(req, 'pane:updated', { action: 'scanned', data: populated },
-      ['dashboard', 'pane', 'production', `station:${station}`]);
+    emit(req, 'pane:updated', { action: 'scanned', data: populated });
     emit(req, 'log:updated', { action: 'pane_scanned', data: { paneLog: log, material: materialId } }, ['log']);
 
     // Lamination awareness: when a sheet scans in at its laminate station, check siblings
@@ -701,7 +714,7 @@ exports.batchScan = async (req, res, next) => {
     for (let i = 0; i < populatedPanes.length; i++) {
       const p = populatedPanes[i];
       const logInfo = logs[i];
-      emit(req, 'pane:updated', { action: 'scanned', data: p }, ['dashboard', 'pane', 'production', `station:${station}`]);
+      emit(req, 'pane:updated', { action: 'scanned', data: p });
       emit(req, 'log:updated', { action: 'pane_scanned', data: { paneLog: logInfo.log, material: logInfo.materialId } }, ['log']);
     }
 
