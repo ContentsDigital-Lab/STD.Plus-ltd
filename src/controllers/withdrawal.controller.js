@@ -13,7 +13,7 @@ const { hasPermission } = require('../config/permissions');
 const Pane = require('../models/Pane');
 const MaterialLog = require('../models/MaterialLog');
 
-const POPULATE_FIELDS = ['order', 'pane', 'withdrawnBy', 'material', 'approvedBy', 'inventory'];
+const POPULATE_FIELDS = ['order', 'panes', 'withdrawnBy', 'material', 'approvedBy', 'inventory'];
 
 const deductInventory = async (materialId, stockType, quantity, inventoryId = null) => {
   if (inventoryId) {
@@ -91,14 +91,19 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { material, withdrawnBy, order, approvedBy, pane, quantity, stockType } = req.validated.body;
-    await verifyReferences([
+    const { material, withdrawnBy, order, approvedBy, panes, quantity, stockType } = req.validated.body;
+    const refs = [
       { model: Material, id: material, label: 'Material' },
       { model: Worker, id: withdrawnBy, label: 'Worker (withdrawnBy)' },
       { model: Worker, id: approvedBy, label: 'Worker (approvedBy)' },
       { model: Order, id: order, label: 'Order' },
-      { model: Pane, id: pane, label: 'Pane' },
-    ]);
+    ];
+    if (panes && Array.isArray(panes)) {
+      panes.forEach(pId => refs.push({ model: Pane, id: pId, label: 'Pane' }));
+    } else if (panes) {
+      refs.push({ model: Pane, id: panes, label: 'Pane' });
+    }
+    await verifyReferences(refs);
 
     await deductInventory(material, stockType, quantity, req.validated.body.inventory);
 
@@ -106,7 +111,6 @@ exports.create = async (req, res, next) => {
     const populated = await withdrawal.populate(POPULATE_FIELDS);
 
     // Create MaterialLog for traceability
-    console.log('[withdrawal.create] Creating MaterialLog with:', { material, order, pane, withdrawnBy, quantity, stockType });
     try {
       const matLog = await MaterialLog.create({
         material,
@@ -115,11 +119,11 @@ exports.create = async (req, res, next) => {
         quantityChanged: -quantity,
         stockType:       stockType ?? null,
         order:           order ?? null,
-        pane:            pane ?? null,
+        panes:           panes ?? [],
         worker:          withdrawnBy ?? null,
       });
       console.log('[withdrawal.create] MaterialLog created:', matLog._id);
-      const populatedLog = await matLog.populate(['material', 'order', 'pane', 'worker']);
+      const populatedLog = await matLog.populate(['material', 'order', 'panes', 'worker']);
       emit(req, 'log:updated', { action: 'created', data: populatedLog }, ['dashboard', 'log']);
     } catch (err) {
       console.error('[withdrawal.create] MaterialLog failed:', err);
@@ -144,7 +148,11 @@ exports.update = async (req, res, next) => {
     if (updates.withdrawnBy) refs.push({ model: Worker, id: updates.withdrawnBy, label: 'Worker (withdrawnBy)' });
     if (updates.approvedBy) refs.push({ model: Worker, id: updates.approvedBy, label: 'Worker (approvedBy)' });
     if (updates.order) refs.push({ model: Order, id: updates.order, label: 'Order' });
-    if (updates.pane) refs.push({ model: Pane, id: updates.pane, label: 'Pane' });
+    if (updates.panes && Array.isArray(updates.panes)) {
+      updates.panes.forEach(pId => refs.push({ model: Pane, id: pId, label: 'Pane' }));
+    } else if (updates.panes) {
+      refs.push({ model: Pane, id: updates.panes, label: 'Pane' });
+    }
     if (refs.length) await verifyReferences(refs);
 
     const inventoryAffected = updates.material || updates.stockType || updates.quantity !== undefined;

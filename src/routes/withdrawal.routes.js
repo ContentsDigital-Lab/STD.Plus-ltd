@@ -16,7 +16,7 @@ const withdrawnDimensionsSchema = z.object({
 const createSchema = z.object({
   body: z.object({
     order: z.string().min(1).optional(),
-    pane: z.string().min(1).optional(),
+    panes: z.array(z.string().min(1)).optional(),
     withdrawnBy: z.string().min(1),
     material: z.string().min(1),
     quantity: z.number().min(1),
@@ -33,7 +33,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   body: z.object({
     order: z.string().min(1).optional(),
-    pane: z.string().min(1).optional(),
+    panes: z.array(z.string().min(1)).optional(),
     withdrawnBy: z.string().min(1).optional(),
     material: z.string().min(1).optional(),
     quantity: z.number().min(1).optional(),

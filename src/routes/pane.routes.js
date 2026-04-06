@@ -133,6 +133,14 @@ const scanSchema = z.object({
   }),
 });
 
+const batchScanSchema = z.object({
+  body: z.object({
+    paneNumbers: z.array(z.string().min(1)).min(1),
+    station:     z.string().min(1),
+    action:      z.enum(['scan_in', 'start', 'complete']),
+  }),
+});
+
 router.get('/',                    auth, requirePermission('panes:view'), paneController.getAll);
 router.get('/:id',                 auth, requirePermission('panes:view'), paneController.getById);
 router.post('/',                   auth, requirePermission('panes:create'), validate(createSchema), paneController.create);
@@ -140,5 +148,6 @@ router.patch('/:id',               auth, requirePermission('panes:manage'), vali
 router.delete('/',                 auth, requirePermission('panes:manage'), validate(deleteManySchema), paneController.deleteMany);
 router.delete('/:id',              auth, requirePermission('panes:manage'), paneController.deleteOne);
 router.post('/:paneNumber/scan',   auth, requirePermission('panes:scan'), validate(scanSchema), paneController.scan);
+router.post('/batch-scan',         auth, requirePermission('panes:scan'), validate(batchScanSchema), paneController.batchScan);
 
 module.exports = router;

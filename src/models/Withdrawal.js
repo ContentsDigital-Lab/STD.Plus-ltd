@@ -36,11 +36,10 @@ const withdrawalSchema = new mongoose.Schema({
     ref: 'Worker',
     default: null,
   },
-  pane: {
+  panes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Pane',
-    default: null,
-  },
+  }],
   withdrawnDimensions: {
     width: { type: Number, default: null },
     height: { type: Number, default: null },

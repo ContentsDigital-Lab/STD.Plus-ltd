@@ -50,6 +50,7 @@ const paneSchema = new mongoose.Schema({
     width:     { type: Number, default: 0 },
     height:    { type: Number, default: 0 },
     thickness: { type: Number, default: 0 },
+    area:      { type: Number, default: 0 },
   },
 
   jobType:        { type: String, default: '' },
@@ -83,4 +84,14 @@ const paneSchema = new mongoose.Schema({
 paneSchema.index({ order: 1 });
 paneSchema.index({ currentStation: 1, currentStatus: 1 });
 paneSchema.index({ parentPane: 1 });
+paneSchema.index({ 'dimensions.area': 1 });
+
+paneSchema.pre('save', async function () {
+  if (this.dimensions && this.dimensions.width && this.dimensions.height) {
+    this.dimensions.area = this.dimensions.width * this.dimensions.height;
+  } else if (this.dimensions) {
+    this.dimensions.area = 0;
+  }
+});
+
 module.exports = mongoose.model('Pane', paneSchema);

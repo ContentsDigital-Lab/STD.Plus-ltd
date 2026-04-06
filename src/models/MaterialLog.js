@@ -6,11 +6,10 @@ const materialLogSchema = new mongoose.Schema({
     ref: 'Material',
     required: true,
   },
-  pane: {
+  panes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Pane',
-    default: null,
-  },
+  }],
   actionType: {
     type: String,
     enum: ['withdraw', 'claim', 'import', 'cut', 'remake'],

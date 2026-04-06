@@ -630,3 +630,89 @@ exports.scan = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.batchScan = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { paneNumbers, station, action } = req.validated.body;
+    if (!['scan_in', 'start', 'complete'].includes(action)) {
+      throw new Error(`Action ${action} not supported in batch-scan`);
+    }
+
+    const panes = await Pane.find({ paneNumber: { $in: paneNumbers.map(n => n.toUpperCase()) } }).session(session);
+    if (panes.length === 0) {
+      throw new Error('No valid panes found for the given numbers');
+    }
+
+    const now = new Date();
+    const results = [];
+    const logs = [];
+
+    for (const pane of panes) {
+      if (pane.currentStatus === 'completed') {
+        throw new Error(`Pane ${pane.paneNumber} is already completed`);
+      }
+
+      if (action === 'scan_in' || action === 'start') {
+        pane.currentStation = station;
+        pane.currentStatus = 'in_progress';
+        if (!pane.startedAt) pane.startedAt = now;
+      } else if (action === 'complete') {
+        const currentStationStr = pane.currentStation ? pane.currentStation.toString() : null;
+        if (currentStationStr !== station) {
+          throw new Error(`Pane ${pane.paneNumber} is at station ${currentStationStr}, cannot complete at ${station}`);
+        }
+        pane.currentStatus = 'awaiting_scan_out';
+      }
+
+      await pane.save({ session });
+
+      let materialId = pane.material ?? null;
+      if (!materialId && pane.order) {
+        const ord = await Order.findById(pane.order).select('material').lean();
+        materialId = ord?.material ?? null;
+        if (materialId) {
+          await Pane.updateOne({ _id: pane._id }, { material: materialId }, { session });
+        }
+      }
+
+      const log = new PaneLog({
+        pane: pane._id,
+        order: pane.order ?? null,
+        material: materialId,
+        worker: req.user?._id ?? null,
+        station,
+        action,
+        completedAt: null,
+      });
+      await log.save({ session });
+
+      logs.push({ log, materialId, paneId: pane._id });
+      results.push(pane);
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // After commit, populate and emit
+    const populatedPanes = await Promise.all(results.map(p => p.populate(POPULATE_FIELDS)));
+
+    for (let i = 0; i < populatedPanes.length; i++) {
+      const p = populatedPanes[i];
+      const logInfo = logs[i];
+      emit(req, 'pane:updated', { action: 'scanned', data: p }, ['dashboard', 'pane', 'production', `station:${station}`]);
+      emit(req, 'log:updated', { action: 'pane_scanned', data: { paneLog: logInfo.log, material: logInfo.materialId } }, ['log']);
+    }
+
+    success(res, {
+      updatedCount: populatedPanes.length,
+      panes: populatedPanes,
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    next(err);
+  }
+};
+
