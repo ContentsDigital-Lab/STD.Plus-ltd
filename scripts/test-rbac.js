@@ -646,6 +646,155 @@ async function testPricingSettings(tokens) {
   await api('PUT', path, tokens.admin, { holePriceEach: 50 });
 }
 
+async function testRoles(tokens) {
+  console.log('\n=== Roles (admin only for CUD, system role protection) ===\n');
+  const path = '/api/roles';
+
+  const r1 = await api('GET', path, tokens.admin);
+  check('GET    /roles               (admin)', r1.status, 200);
+  const r2 = await api('GET', path, tokens.manager);
+  check('GET    /roles               (manager)', r2.status, 200);
+  const r3 = await api('GET', path, tokens.worker);
+  check('GET    /roles               (worker)', r3.status, 200);
+
+  // GET /roles/permissions
+  const r3b = await api('GET', `${path}/permissions`, tokens.admin);
+  check('GET    /roles/permissions   (admin)', r3b.status, 200);
+  check('  returns array', Array.isArray(r3b.data.data), true);
+  const r3c = await api('GET', `${path}/permissions`, tokens.worker);
+  check('GET    /roles/permissions   (worker)', r3c.status, 200);
+
+  const body = { name: 'RBAC Test Role', slug: 'rbac_test', permissions: ['workers:view', 'customers:view'] };
+
+  const r4 = await api('POST', path, tokens.admin, body);
+  check('POST   /roles               (admin)', r4.status, 201);
+  const roleId = r4.data.data?._id;
+
+  const r5 = await api('POST', path, tokens.manager, { ...body, slug: 'rbac_test_m' });
+  check('POST   /roles               (manager)', r5.status, 403);
+  const r6 = await api('POST', path, tokens.worker, { ...body, slug: 'rbac_test_w' });
+  check('POST   /roles               (worker)', r6.status, 403);
+
+  if (roleId) {
+    const r7 = await api('PATCH', `${path}/${roleId}`, tokens.manager, { name: 'Hacked' });
+    check('PATCH  /roles/:id           (manager)', r7.status, 403);
+    const r8 = await api('PATCH', `${path}/${roleId}`, tokens.worker, { name: 'Hacked' });
+    check('PATCH  /roles/:id           (worker)', r8.status, 403);
+    const r9 = await api('PATCH', `${path}/${roleId}`, tokens.admin, { name: 'Updated Test Role' });
+    check('PATCH  /roles/:id           (admin)', r9.status, 200);
+
+    // System role protection: cannot delete system roles
+    const systemRoles = r1.data.data.filter(r => r.isSystem);
+    if (systemRoles.length > 0) {
+      const sysId = systemRoles[0]._id;
+      const r10 = await api('DELETE', `${path}/${sysId}`, tokens.admin);
+      check('DELETE /roles/:id (system)    (admin)', r10.status, 400);
+    }
+
+    // Duplicate slug
+    const r11 = await api('POST', path, tokens.admin, { name: 'Dup Role', slug: 'rbac_test', permissions: [] });
+    check('POST   /roles (dup slug)    (admin)', r11.status, 409);
+
+    const r12 = await api('DELETE', `${path}/${roleId}`, tokens.worker);
+    check('DELETE /roles/:id           (worker)', r12.status, 403);
+    const r13 = await api('DELETE', `${path}/${roleId}`, tokens.manager);
+    check('DELETE /roles/:id           (manager)', r13.status, 403);
+    const r14 = await api('DELETE', `${path}/${roleId}`, tokens.admin);
+    check('DELETE /roles/:id           (admin)', r14.status, 200);
+  }
+}
+
+async function testInventoryMove(tokens, materialId) {
+  console.log('\n=== Inventory Move (admin+manager+worker can move) ===\n');
+
+  const inv1 = await api('POST', '/api/inventories', tokens.admin, {
+    material: materialId, stockType: 'Raw', quantity: 100, location: 'RBAC Move Source',
+  });
+  const inv1Id = inv1.data.data?._id;
+
+  if (inv1Id) {
+    const r1 = await api('POST', `/api/inventories/${inv1Id}/move`, tokens.worker, {
+      quantity: 5, toLocation: 'RBAC Move Dest Worker',
+    });
+    check('POST   /inventories/:id/move (worker)', r1.status, 200);
+
+    const r2 = await api('POST', `/api/inventories/${inv1Id}/move`, tokens.manager, {
+      quantity: 5, toLocation: 'RBAC Move Dest Manager',
+    });
+    check('POST   /inventories/:id/move (manager)', r2.status, 200);
+
+    const r3 = await api('POST', `/api/inventories/${inv1Id}/move`, tokens.admin, {
+      quantity: 5, toLocation: 'RBAC Move Dest Admin',
+    });
+    check('POST   /inventories/:id/move (admin)', r3.status, 200);
+
+    // Cleanup created inventories
+    const allInv = await api('GET', '/api/inventories?limit=100', tokens.admin);
+    const testInvs = allInv.data.data.filter(i => i.location?.startsWith('RBAC Move'));
+    for (const inv of testInvs) {
+      await api('DELETE', `/api/inventories/${inv._id}`, tokens.admin);
+    }
+  }
+}
+
+async function testBatchScanRbac(tokens, stns) {
+  console.log('\n=== Batch Scan RBAC (all roles with panes:scan can batch-scan) ===\n');
+
+  const cust = await api('POST', '/api/customers', tokens.admin, { name: 'BatchScan RBAC Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', tokens.admin, { name: 'BatchScan RBAC Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const reqRes = await api('POST', '/api/requests', tokens.admin, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 3 },
+    panes: [
+      { routing: [stns.cutting, stns.polishing], glassType: 'tempered' },
+      { routing: [stns.cutting, stns.polishing], glassType: 'tempered' },
+      { routing: [stns.cutting, stns.polishing], glassType: 'tempered' },
+    ],
+  });
+  const reqId = reqRes.data.data._id;
+  const paneNumbers = reqRes.data.data.panes.map(p => p.paneNumber);
+  const paneIds = reqRes.data.data.panes.map(p => p._id);
+
+  const ordRes = await api('POST', '/api/orders', tokens.admin, {
+    customer: custId, material: matId, quantity: 3, request: reqId, paneCount: 3,
+  });
+  const ordId = ordRes.data.data._id;
+
+  // batch-scan uses MongoDB transactions which require a replica set.
+  // If the dev DB is standalone, all calls return 500 (transaction infra error).
+  // The RBAC check happens before the transaction, so we verify no role gets 403.
+  const r1 = await api('POST', '/api/panes/batch-scan', tokens.worker, {
+    paneNumbers: [paneNumbers[0]], station: stns.cutting, action: 'scan_in',
+  });
+  check('POST   /panes/batch-scan   (worker) — not 403', r1.status !== 403, true);
+
+  const r2 = await api('POST', '/api/panes/batch-scan', tokens.manager, {
+    paneNumbers: [paneNumbers[1]], station: stns.cutting, action: 'scan_in',
+  });
+  check('POST   /panes/batch-scan   (manager) — not 403', r2.status !== 403, true);
+
+  const r3 = await api('POST', '/api/panes/batch-scan', tokens.admin, {
+    paneNumbers: [paneNumbers[2]], station: stns.cutting, action: 'scan_in',
+  });
+  check('POST   /panes/batch-scan   (admin) — not 403', r3.status !== 403, true);
+
+  if (r1.status === 200 && r2.status === 200 && r3.status === 200) {
+    console.log('          (all returned 200 — transactions supported)');
+  } else {
+    console.log('          (some returned 500 — likely standalone MongoDB without replica set)');
+  }
+
+  // Cleanup
+  for (const id of paneIds) await api('DELETE', `/api/panes/${id}`, tokens.admin);
+  await api('DELETE', `/api/orders/${ordId}`, tokens.admin);
+  await api('DELETE', `/api/requests/${reqId}`, tokens.admin);
+  await api('DELETE', `/api/materials/${matId}`, tokens.admin);
+  await api('DELETE', `/api/customers/${custId}`, tokens.admin);
+}
+
 async function testAuthEdgeCases(tokens) {
   console.log('\n=== Auth Edge Cases ===\n');
 
@@ -810,6 +959,9 @@ async function main() {
     await testPricingSettings(tokens);
     await testAuthUpdateMe(tokens);
     await testJobTypeRbac(tokens);
+    await testRoles(tokens);
+    await testInventoryMove(tokens, matId);
+    await testBatchScanRbac(tokens, stns);
     await testAuthEdgeCases(tokens);
   } finally {
     await sweepCreatedData(API, adminToken, snapshot);

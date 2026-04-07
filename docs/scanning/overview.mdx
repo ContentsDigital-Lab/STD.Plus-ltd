@@ -90,6 +90,21 @@ scan_in → start → complete (awaiting_scan_out) → scan_out (moves to next s
   </Step>
 </Steps>
 
+## Batch Scanning
+
+For scanning multiple panes at the same station simultaneously, use the batch scan endpoint:
+
+```
+POST /api/panes/batch-scan
+{
+  "paneNumbers": ["PNE-0001", "PNE-0002", "PNE-0003"],
+  "station": "<station-id>",
+  "action": "scan_in"
+}
+```
+
+Batch scan supports `scan_in`, `start`, and `complete` actions. It runs in a single transaction — if any pane fails validation, the entire batch rolls back. The `scan_out` and `laminate` actions must be done individually via the single-pane scan endpoint.
+
 ## Laminate Merge
 
 The `laminate` action is called on the **parent** pane number (e.g. `PNE-0100`) once all child sheets have arrived at the lamination station.

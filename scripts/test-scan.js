@@ -815,7 +815,136 @@ async function testMaterialBackfill(token, stns) {
 }
 
 // ──────────────────────────────────────────────
-// 7. LAMINATE PANE CREATION VIA POST /panes
+// 7. BATCH SCAN
+// ──────────────────────────────────────────────
+
+async function testBatchScan(token, stns) {
+  console.log('\n=== Batch Scan ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'Batch Scan Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'Batch Scan Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const routing = [stns.cutting, stns.edging, stns.qc];
+
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 3 },
+    panes: [
+      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' },
+      { routing, dimensions: { width: 900, height: 700, thickness: 5 }, glassType: 'tempered' },
+      { routing, dimensions: { width: 1000, height: 800, thickness: 5 }, glassType: 'tempered' },
+    ],
+  });
+  const reqId = reqRes.data.data._id;
+  const panes = reqRes.data.data.panes;
+  const paneNumbers = panes.map(p => p.paneNumber);
+
+  const ordRes = await api('POST', '/api/orders', token, {
+    customer: custId, material: matId, quantity: 3, request: reqId, paneCount: 3,
+    stations: routing,
+  });
+  const ordId = ordRes.data.data._id;
+
+  // ── batch scan_in at cutting ──
+  const r1 = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers, station: stns.cutting, action: 'scan_in',
+  });
+
+  // batch-scan uses MongoDB transactions which require a replica set.
+  // If the dev DB is standalone, the call returns 500 (transaction infra error).
+  if (r1.status === 500) {
+    console.log('   SKIP  batch scan — MongoDB transactions not supported (standalone, no replica set)');
+    console.log('          All batch-scan tests skipped. Enable a replica set to run these.\n');
+
+    // Cleanup and return early
+    for (const p of panes) await api('DELETE', `/api/panes/${p._id}`, token);
+    await api('DELETE', `/api/orders/${ordId}`, token);
+    await api('DELETE', `/api/requests/${reqId}`, token);
+    await api('DELETE', `/api/materials/${matId}`, token);
+    await api('DELETE', `/api/customers/${custId}`, token);
+    return;
+  }
+
+  check('batch scan_in status', r1.status, 200);
+  check('batch scan_in updatedCount', r1.data.data.updatedCount, 3);
+  check('batch scan_in returns panes array', Array.isArray(r1.data.data.panes), true);
+  check('batch scan_in panes length', r1.data.data.panes.length, 3);
+
+  for (const p of r1.data.data.panes) {
+    check(`  pane ${p.paneNumber} status`, p.currentStatus, 'in_progress');
+  }
+
+  // ── batch complete at cutting ──
+  const r2 = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers, station: stns.cutting, action: 'complete',
+  });
+  check('batch complete status', r2.status, 200);
+  check('batch complete updatedCount', r2.data.data.updatedCount, 3);
+
+  for (const p of r2.data.data.panes) {
+    check(`  pane ${p.paneNumber} awaiting_scan_out`, p.currentStatus, 'awaiting_scan_out');
+  }
+
+  // ── batch scan with invalid action (scan_out not allowed) ──
+  const r3 = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers, station: stns.cutting, action: 'scan_out',
+  });
+  check('batch scan_out rejected (not supported)', r3.status, 400);
+
+  // ── batch scan with empty paneNumbers ──
+  const r4 = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers: [], station: stns.cutting, action: 'scan_in',
+  });
+  check('batch scan empty paneNumbers rejected', r4.status, 400);
+
+  // ── batch scan with non-existent panes ──
+  const r5 = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers: ['PNE-NONEXIST-001'], station: stns.cutting, action: 'scan_in',
+  });
+  check('batch scan non-existent panes', r5.status, 500);
+
+  // ── batch complete at wrong station ──
+  for (const pn of paneNumbers) {
+    await api('POST', `/api/panes/${pn}/scan`, token, { station: stns.cutting, action: 'scan_out' });
+  }
+
+  const r6 = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers, station: stns.cutting, action: 'complete',
+  });
+  check('batch complete at wrong station fails', r6.status, 500);
+
+  // ── batch scan_in at edging (correct station) ──
+  const r7 = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers, station: stns.edging, action: 'scan_in',
+  });
+  check('batch scan_in at edging', r7.status, 200);
+
+  // ── cleanup ──
+  const logs = await api('GET', '/api/production-logs?limit=100', token);
+  const scanLogs = logs.data.data.filter((l) =>
+    panes.map(p => p._id).includes(l.pane?._id || l.pane)
+  );
+  if (scanLogs.length > 0) {
+    await api('DELETE', '/api/production-logs', token, { ids: scanLogs.map((l) => l._id) });
+  }
+
+  const notifs = await api('GET', '/api/notifications?limit=100', token);
+  const scanNotifs = notifs.data.data.filter((n) => n.type === 'pane_arrived');
+  if (scanNotifs.length > 0) {
+    await api('DELETE', '/api/notifications', token, { ids: scanNotifs.map((n) => n._id) });
+  }
+
+  for (const p of panes) await api('DELETE', `/api/panes/${p._id}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 8. LAMINATE PANE CREATION VIA POST /panes (was 7)
 // ──────────────────────────────────────────────
 
 async function testLaminateCreateViaPanes(token) {
@@ -890,7 +1019,7 @@ async function testLaminateCreateViaPanes(token) {
 }
 
 // ──────────────────────────────────────────────
-// 8. LAMINATE SPLIT VIA PATCH /panes/:id
+// 9. LAMINATE SPLIT VIA PATCH /panes/:id (was 8)
 // ──────────────────────────────────────────────
 
 async function testLaminateSplitViaPatch(token) {
@@ -989,6 +1118,7 @@ async function main() {
     await testNotifications(token, stns);
     await testScanOutEdgeCases(token, stns);
     await testMaterialBackfill(token, stns);
+    await testBatchScan(token, stns);
     await testLaminateCreateViaPanes(token);
     await testLaminateSplitViaPatch(token);
   } finally {

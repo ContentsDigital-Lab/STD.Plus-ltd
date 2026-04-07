@@ -314,7 +314,7 @@ async function testClaimApprovalCreateRemake(token, stns) {
   // Verify MaterialLog was created
   const matLogs = await api('GET', '/api/material-logs?limit=100', token);
   const remakeLogs = matLogs.data.data.filter((l) =>
-    l.actionType === 'remake' && String(l.pane?._id || l.pane) === String(remadePaneId)
+    l.actionType === 'remake' && (l.panes || []).some(p => String(p._id || p) === String(remadePaneId))
   );
   check('MaterialLog remake entry exists', remakeLogs.length >= 1, true);
 

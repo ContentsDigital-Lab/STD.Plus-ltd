@@ -662,7 +662,7 @@
         "properties": {
           "_id": { "type": "string" },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
-          "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
+          "panes": { "type": "array", "items": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Pane" }] }, "description": "Array of Pane references associated with this log entry" },
           "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "nullable": true },
           "referenceType": { "type": "string", "enum": ["claim", "withdrawal"], "nullable": true },
@@ -681,7 +681,7 @@
         "required": ["material", "actionType", "quantityChanged"],
         "properties": {
           "material": { "type": "string", "minLength": 1 },
-          "pane": { "type": "string", "minLength": 1 },
+          "panes": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Array of Pane ObjectIds" },
           "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "minLength": 1 },
           "referenceType": { "type": "string", "enum": ["claim", "withdrawal"] },
@@ -697,7 +697,7 @@
         "type": "object",
         "properties": {
           "material": { "type": "string", "minLength": 1 },
-          "pane": { "type": "string", "minLength": 1 },
+          "panes": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Array of Pane ObjectIds" },
           "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "minLength": 1 },
           "referenceType": { "type": "string", "enum": ["claim", "withdrawal"] },
@@ -2911,6 +2911,72 @@
           "400": { "description": "Validation error — wrong station, already completed, or invalid operator", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
           "401": { "$ref": "#/components/responses/401" },
           "404": { "description": "Pane not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/panes/batch-scan": {
+      "post": {
+        "tags": ["QR Scanning"],
+        "summary": "Batch scan multiple panes",
+        "description": "Performs the same scan action on multiple panes at once within a single transaction. Useful for scanning a group of panes at the same station simultaneously.\n\n**Supported actions:** `scan_in`, `start`, `complete`. The `scan_out` and `laminate` actions are **not** supported in batch mode — use the single-pane scan endpoint for those.\n\n**Behavior:**\n- All panes are updated atomically in a MongoDB transaction. If any pane fails validation (e.g. wrong station, already completed), the entire batch is rolled back.\n- For `scan_in`/`start`: Sets `currentStation` and `currentStatus` to `in_progress`. Sets `startedAt` if not already set.\n- For `complete`: Validates the pane is at the specified station. Sets `currentStatus` to `awaiting_scan_out`.\n- Creates a `PaneLog` entry for each pane.\n- If a pane has no `material` but has an `order`, the order's material is backfilled.\n- After commit, emits `pane:updated` and `log:updated` WebSocket events for each pane.\n\nRequires `panes:scan` permission.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["paneNumbers", "station", "action"],
+                "properties": {
+                  "paneNumbers": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 },
+                    "minItems": 1,
+                    "description": "Array of pane numbers to scan (e.g. [\"PNE-0001\", \"PNE-0002\"])"
+                  },
+                  "station": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Station ObjectId where the scan is performed"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": ["scan_in", "start", "complete"],
+                    "description": "Action to perform on all panes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch scan processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "updatedCount": { "type": "integer", "description": "Number of panes updated" },
+                            "panes": { "type": "array", "items": { "$ref": "#/components/schemas/Pane" }, "description": "Array of updated pane objects (populated)" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error — unsupported action, empty pane list, or invalid data", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "500": { "description": "Transaction failed — wrong station, pane already completed, or no valid panes found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },

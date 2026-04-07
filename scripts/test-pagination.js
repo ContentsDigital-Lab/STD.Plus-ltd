@@ -176,6 +176,8 @@ async function main() {
     '/api/notifications',
     '/api/production-logs',
     '/api/sticker-templates',
+    '/api/roles',
+    '/api/job-types',
   ];
 
   for (const ep of endpoints) {
