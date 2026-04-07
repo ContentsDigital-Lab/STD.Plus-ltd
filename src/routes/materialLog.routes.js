@@ -10,7 +10,7 @@ const router = Router();
 const createSchema = z.object({
   body: z.object({
     material: z.string().min(1),
-    pane: z.string().min(1).optional(),
+    panes: z.array(z.string().min(1)).optional(),
     actionType: z.enum(['withdraw', 'claim', 'import', 'cut', 'remake']),
     referenceId: z.string().min(1).optional(),
     referenceType: z.enum(['claim', 'withdrawal']).optional(),
@@ -26,7 +26,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   body: z.object({
     material: z.string().min(1).optional(),
-    pane: z.string().min(1).optional(),
+    panes: z.array(z.string().min(1)).optional(),
     actionType: z.enum(['withdraw', 'claim', 'import', 'cut', 'remake']).optional(),
     referenceId: z.string().min(1).optional(),
     referenceType: z.enum(['claim', 'withdrawal']).optional(),

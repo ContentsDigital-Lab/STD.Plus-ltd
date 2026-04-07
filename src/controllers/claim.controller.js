@@ -142,7 +142,7 @@ const createRemakePane = async (claim, remakeStationId, req) => {
 
   await MaterialLog.create({
     material: claim.material._id || claim.material,
-    pane: remadePane._id,
+    panes: [remadePane._id],
     actionType: 'remake',
     quantityChanged: 0,
     referenceId: claim._id,

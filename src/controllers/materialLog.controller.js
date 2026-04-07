@@ -7,7 +7,7 @@ const emit = require('../utils/emitEvent');
 const { verifyReferences, cascadeDeleteReferenced, cascadeDeleteManyReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['material', 'pane', 'order', 'parentLog', 'worker'];
+const POPULATE_FIELDS = ['material', 'panes', 'order', 'parentLog', 'worker'];
 
 const LOG_DEPENDENTS = [
   { model: MaterialLog, field: 'parentLog' },
@@ -43,13 +43,14 @@ exports.getById = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { material, order, parentLog, pane } = req.validated.body;
-    await verifyReferences([
+    const { material, order, parentLog, panes } = req.validated.body;
+    const refs = [
       { model: Material, id: material, label: 'Material' },
       { model: Order, id: order, label: 'Order' },
       { model: MaterialLog, id: parentLog, label: 'Parent log' },
-      { model: Pane, id: pane, label: 'Pane' },
-    ]);
+    ];
+    if (panes) panes.forEach(id => refs.push({ model: Pane, id, label: 'Pane' }));
+    await verifyReferences(refs);
 
     const log = await MaterialLog.create(req.validated.body);
     const populated = await log.populate(POPULATE_FIELDS);
@@ -62,13 +63,14 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
-    const { material, order, parentLog, pane } = req.validated.body;
-    await verifyReferences([
+    const { material, order, parentLog, panes } = req.validated.body;
+    const refs = [
       { model: Material, id: material, label: 'Material' },
       { model: Order, id: order, label: 'Order' },
       { model: MaterialLog, id: parentLog, label: 'Parent log' },
-      { model: Pane, id: pane, label: 'Pane' },
-    ]);
+    ];
+    if (panes) panes.forEach(id => refs.push({ model: Pane, id, label: 'Pane' }));
+    await verifyReferences(refs);
 
     const log = await MaterialLog.findByIdAndUpdate(req.params.id, req.validated.body, {
       returnDocument: 'after',
