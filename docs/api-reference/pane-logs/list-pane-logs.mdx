@@ -4,6 +4,10 @@ description: Filter pane scan history by station, action (including qc_pass and 
 openapi: get /api/pane-logs
 ---
 
+## Permission
+
+Requires **`pane_logs:view`**. The default **worker** role includes it (along with admin and manager), so station and production UIs can read history. Custom roles need this key explicitly.
+
 ## Query parameter `action`
 
 Supported values include `scan_in`, `start`, `complete`, `scan_out`, `laminate_start`, `laminate_complete`, **`qc_pass`**, and **`qc_fail`**. Example:

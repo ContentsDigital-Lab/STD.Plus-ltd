@@ -1,3 +1,16 @@
 ---
+title: List all panes
+description: Filter panes by order, station, status, laminate role; merged_into rows excluded unless includeMerged=true.
 openapi: get /api/panes
 ---
+
+## Query: `includeMerged`
+
+By default, panes with **`currentStatus: merged_into`** (retired laminate sheets/parent rows) are **omitted** so production views only show scannable work. Pass **`includeMerged=true`** to include them for audit or admin screens.
+
+This only applies when you are **not** also sending **`status`** or **`status_ne`** (those filters take precedence over the default exclusion).
+
+## Related
+
+- [Scan a pane](/api-reference/scanning/scan-a-pane) — laminate survivor and **`MERGED_INTO`** errors
+- [QR Scanning overview](/scanning/overview) — laminate merge behavior

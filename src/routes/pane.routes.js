@@ -7,7 +7,7 @@ const paneController = require('../controllers/pane.controller');
 
 const router = Router();
 
-const PANE_STATUS = ['pending', 'in_progress', 'awaiting_scan_out', 'completed', 'claimed', 'defected'];
+const PANE_STATUS = ['pending', 'in_progress', 'awaiting_scan_out', 'completed', 'claimed', 'defected', 'merged_into'];
 const EDGE_STATUS = ['pending', 'in_progress', 'completed'];
 
 const dimensionsSchema = z.object({
@@ -136,6 +136,7 @@ const scanSchema = z.object({
       reason: QC_DEFECT_REASON.optional(),
       description: z.string().optional(),
       remakeStationId: z.string().min(1).optional(),
+      laminateSurvivorPaneNumber: z.string().min(1).optional(),
     })
     .superRefine((val, ctx) => {
       if (val.action === 'qc_fail' && val.reason === undefined) {

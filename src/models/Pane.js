@@ -41,7 +41,12 @@ const paneSchema = new mongoose.Schema({
   inventory:  { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory',  default: null },
 
   currentStation: { type: mongoose.Schema.Types.ObjectId, ref: 'Station', default: null },
-  currentStatus:  { type: String, enum: ['pending', 'in_progress', 'awaiting_scan_out', 'completed', 'claimed', 'defected'], default: 'pending' },
+  currentStatus:  { type: String, enum: ['pending', 'in_progress', 'awaiting_scan_out', 'completed', 'claimed', 'defected', 'merged_into'], default: 'pending' },
+
+  /** Set when this pane was merged away (non-survivor sheet or dormant parent); use mergedInto for the live pane. */
+  mergedInto:     { type: mongoose.Schema.Types.ObjectId, ref: 'Pane', default: null },
+  /** Survivor after laminate merge; first scan_out from lam uses parent routing[0] (routing has no lam station). */
+  laminateMergedAt: { type: Date, default: null },
 
   routing:      { type: [mongoose.Schema.Types.ObjectId], ref: 'Station', default: [] },
   customRouting:{ type: Boolean, default: false },

@@ -32,6 +32,7 @@ const POPULATE_FIELDS = [
   { path: 'parentPane',     select: 'paneNumber laminateRole' },
   { path: 'childPanes',     select: 'paneNumber sheetLabel currentStatus currentStation laminateRole' },
   { path: 'laminateStation', select: 'name' },
+  { path: 'mergedInto', select: 'paneNumber currentStatus laminateRole' },
 ];
 
 const restoreInventory = async (materialId, stockType, quantity) => {
@@ -66,6 +67,10 @@ exports.getAll = async (req, res, next) => {
     if (req.query.status_ne) filter.currentStatus = { $ne: req.query.status_ne };
     if (req.query.laminateRole) filter.laminateRole = req.query.laminateRole;
     if (req.query.parentPane)   filter.parentPane   = req.query.parentPane;
+
+    if (!req.query.status && !req.query.status_ne && req.query.includeMerged !== 'true') {
+      filter.currentStatus = { $ne: 'merged_into' };
+    }
 
     // Filter for withdrawal status
     if (req.query.isWithdrawn === 'true') {
@@ -377,7 +382,7 @@ exports.scan = async (req, res, next) => {
   try {
     const body = req.validated?.body ?? req.body;
     const { paneNumber } = req.params;
-    const { station, action, reason, description, remakeStationId } = body;
+    const { station, action, reason, description, remakeStationId, laminateSurvivorPaneNumber } = body;
 
     if (!station) return fail(res, 'station is required', 400);
     if (!['scan_in', 'start', 'complete', 'scan_out', 'laminate', 'qc_pass', 'qc_fail'].includes(action)) {
@@ -387,63 +392,139 @@ exports.scan = async (req, res, next) => {
     const pane = await Pane.findOne({ paneNumber: paneNumber.toUpperCase() });
     if (!pane) return fail(res, `ไม่พบกระจก ${paneNumber}`, 404);
 
-    // ── LAMINATE action — merge child sheets into parent ──
+    if (pane.currentStatus === 'merged_into') {
+      const sid = pane.mergedInto;
+      const mergedSurvivor = sid
+        ? await Pane.findById(sid).select('paneNumber').lean()
+        : null;
+      return fail(
+        res,
+        mergedSurvivor?.paneNumber
+          ? `กระจกรวมแล้ว — ใช้ QR ${mergedSurvivor.paneNumber}`
+          : 'กระจกนี้ถูกรวมเข้าแผ่นอื่นแล้ว',
+        400,
+        {
+          code: 'MERGED_INTO',
+          survivorPaneNumber: mergedSurvivor?.paneNumber ?? null,
+        },
+      );
+    }
+
+    // ── LAMINATE action — one sheet keeps its QR; others + parent → merged_into ──
     if (action === 'laminate') {
-      if (pane.laminateRole !== 'parent') {
-        return fail(res, 'Only parent panes can be laminated', 400);
+      let parentDoc;
+      const contextPane = pane;
+
+      if (pane.laminateRole === 'sheet') {
+        if (!pane.parentPane) {
+          return fail(res, 'Sheet pane has no parent', 400);
+        }
+        parentDoc = await Pane.findById(pane.parentPane);
+        if (!parentDoc) return fail(res, 'Parent pane not found', 400);
+      } else if (pane.laminateRole === 'parent') {
+        parentDoc = pane;
+        if (!laminateSurvivorPaneNumber) {
+          return fail(res, 'laminateSurvivorPaneNumber is required when merging via parent pane', 400);
+        }
+      } else {
+        return fail(res, 'Laminate merge must use a sheet pane (QR) or the dormant parent pane', 400);
       }
 
       const activeSheets = await Pane.find({
-        parentPane: pane._id,
-        currentStatus: { $ne: 'claimed' },
+        parentPane: parentDoc._id,
+        currentStatus: { $nin: ['claimed', 'merged_into'] },
       });
 
       if (activeSheets.length === 0) {
         return fail(res, 'No active child sheets found', 400);
       }
 
-      const lamStationStr = pane.laminateStation ? pane.laminateStation.toString() : station;
-      const allPresent = activeSheets.every(s => {
+      const lamStationStr = parentDoc.laminateStation ? parentDoc.laminateStation.toString() : station;
+      const allPresent = activeSheets.every((s) => {
         const sStation = s.currentStation ? s.currentStation.toString() : null;
         return sStation === lamStationStr && ['in_progress', 'awaiting_scan_out'].includes(s.currentStatus);
       });
       if (!allPresent) {
-        const arrived = activeSheets.filter(s => {
+        const arrived = activeSheets.filter((s) => {
           const sStation = s.currentStation ? s.currentStation.toString() : null;
           return sStation === lamStationStr && ['in_progress', 'awaiting_scan_out'].includes(s.currentStatus);
         }).length;
         return fail(res, `Not all sheets present at lamination station (${arrived}/${activeSheets.length})`, 400);
       }
 
+      const survivorNum = (laminateSurvivorPaneNumber || contextPane.paneNumber).toUpperCase();
+      const survivor = activeSheets.find((s) => s.paneNumber === survivorNum);
+      if (!survivor) {
+        return fail(
+          res,
+          `Survivor sheet ${survivorNum} is not an active sheet in this laminate group`,
+          400,
+        );
+      }
+
+      const parentRouting = Array.isArray(parentDoc.routing)
+        ? parentDoc.routing.map((r) => r)
+        : [];
       const now = new Date();
+      const retiredPaneNumbers = [];
 
       for (const sheet of activeSheets) {
+        if (sheet._id.equals(survivor._id)) continue;
         sheet.currentStation = null;
-        sheet.currentStatus = 'completed';
-        sheet.completedAt = now;
+        sheet.currentStatus = 'merged_into';
+        sheet.mergedInto = survivor._id;
+        sheet.completedAt = null;
         await sheet.save();
+        retiredPaneNumbers.push(sheet.paneNumber);
         await PaneLog.create({
-          pane: sheet._id, order: sheet.order ?? pane.order ?? null,
-          material: sheet.material ?? pane.material ?? null,
-          worker: req.user?._id ?? null, station: lamStationStr,
-          action: 'laminate_complete', completedAt: now,
+          pane: sheet._id,
+          order: sheet.order ?? parentDoc.order ?? null,
+          material: sheet.material ?? parentDoc.material ?? null,
+          worker: req.user?._id ?? null,
+          station: lamStationStr,
+          action: 'laminate_complete',
+          completedAt: now,
         });
       }
 
-      pane.currentStation = lamStationStr;
-      pane.currentStatus = 'awaiting_scan_out';
-      if (!pane.startedAt) pane.startedAt = now;
-      await pane.save();
+      parentDoc.currentStation = null;
+      parentDoc.currentStatus = 'merged_into';
+      parentDoc.mergedInto = survivor._id;
+      await parentDoc.save();
+      retiredPaneNumbers.push(parentDoc.paneNumber);
 
       await PaneLog.create({
-        pane: pane._id, order: pane.order ?? null,
-        material: pane.material ?? null,
-        worker: req.user?._id ?? null, station: lamStationStr,
-        action: 'laminate_start', completedAt: null,
+        pane: parentDoc._id,
+        order: parentDoc.order ?? null,
+        material: parentDoc.material ?? null,
+        worker: req.user?._id ?? null,
+        station: lamStationStr,
+        action: 'laminate_complete',
+        completedAt: now,
       });
 
-      if (pane.order) {
-        const order = await Order.findById(pane.order);
+      survivor.laminateRole = 'single';
+      survivor.routing = parentRouting;
+      survivor.parentPane = null;
+      survivor.currentStation = lamStationStr;
+      survivor.currentStatus = 'awaiting_scan_out';
+      survivor.laminateMergedAt = now;
+      survivor.laminateStation = parentDoc.laminateStation;
+      if (!survivor.startedAt) survivor.startedAt = now;
+      await survivor.save();
+
+      await PaneLog.create({
+        pane: survivor._id,
+        order: survivor.order ?? parentDoc.order ?? null,
+        material: survivor.material ?? parentDoc.material ?? null,
+        worker: req.user?._id ?? null,
+        station: lamStationStr,
+        action: 'laminate_start',
+        completedAt: null,
+      });
+
+      if (parentDoc.order) {
+        const order = await Order.findById(parentDoc.order);
         if (order) {
           const breakdown = order.stationBreakdown instanceof Map
             ? order.stationBreakdown
@@ -451,21 +532,28 @@ exports.scan = async (req, res, next) => {
           const lamCount = breakdown.get(lamStationStr) || 0;
           if (lamCount > 0) breakdown.set(lamStationStr, Math.max(0, lamCount - activeSheets.length));
           breakdown.set(lamStationStr, (breakdown.get(lamStationStr) || 0) + 1);
-
           order.stationBreakdown = breakdown;
           await order.save();
         }
       }
 
-      const populated = await pane.populate(POPULATE_FIELDS);
+      const populated = await Pane.findById(survivor._id).populate(POPULATE_FIELDS);
+      const surv = populated.toObject ? populated.toObject() : populated;
+
       emit(req, 'pane:laminated', {
-        parent: populated,
-        sheets: activeSheets.map(s => s.paneNumber),
+        survivor: surv,
+        parent: surv,
+        sheets: activeSheets.map((s) => s.paneNumber),
+        retiredPaneNumbers,
+        parentPaneNumber: parentDoc.paneNumber,
       }, ['dashboard', 'pane', 'production', `station:${lamStationStr}`]);
 
       return success(res, {
-        pane: populated.toObject ? populated.toObject() : populated,
+        pane: surv,
         mergedSheets: activeSheets.length,
+        survivorPaneNumber: survivor.paneNumber,
+        retiredPaneNumbers,
+        parentRetired: true,
       });
     }
 
@@ -589,13 +677,12 @@ exports.scan = async (req, res, next) => {
         return fail(res, 'กระจกยังไม่เสร็จสิ้น ต้องกด "เสร็จสิ้น" ก่อน scan out / QC pass', 400);
       }
 
-      const route = Array.isArray(pane.routing) ? pane.routing.map(r => r.toString()) : [];
-      const isParentAtLamStation = pane.laminateRole === 'parent'
-        && pane.laminateStation
-        && pane.laminateStation.toString() === station;
+      const route = Array.isArray(pane.routing) ? pane.routing.map((r) => r.toString()) : [];
+      const lamStr = pane.laminateStation ? pane.laminateStation.toString() : null;
+      const atLamAfterMerge = Boolean(pane.laminateMergedAt && lamStr && lamStr === station);
 
       let nextRouteId;
-      if (isParentAtLamStation) {
+      if (atLamAfterMerge) {
         nextRouteId = route.length > 0 ? route[0] : null;
       } else {
         const idx = route.indexOf(station);
@@ -610,6 +697,10 @@ exports.scan = async (req, res, next) => {
         pane.currentStation = null;
         pane.currentStatus  = 'completed';
         pane.completedAt    = now;
+      }
+
+      if (atLamAfterMerge) {
+        pane.laminateMergedAt = null;
       }
     }
 
@@ -641,7 +732,7 @@ exports.scan = async (req, res, next) => {
       const parentPane = await Pane.findById(pane.parentPane);
       const lamStationStr = parentPane?.laminateStation?.toString() ?? null;
       if (lamStationStr && lamStationStr === station) {
-        const siblings = await Pane.find({ parentPane: pane.parentPane, currentStatus: { $ne: 'claimed' } });
+        const siblings = await Pane.find({ parentPane: pane.parentPane, currentStatus: { $nin: ['claimed', 'merged_into'] } });
         const arrived = siblings.filter(s => {
           const sStation = s.currentStation ? s.currentStation.toString() : null;
           return sStation === lamStationStr && ['in_progress', 'awaiting_scan_out'].includes(s.currentStatus);
@@ -759,6 +850,9 @@ exports.batchScan = async (req, res, next) => {
     const logs = [];
 
     for (const pane of panes) {
+      if (pane.currentStatus === 'merged_into') {
+        throw new Error(`Pane ${pane.paneNumber} was merged into another pane`);
+      }
       if (pane.currentStatus === 'completed') {
         throw new Error(`Pane ${pane.paneNumber} is already completed`);
       }

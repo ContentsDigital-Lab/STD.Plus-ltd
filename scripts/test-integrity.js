@@ -49,6 +49,13 @@ function stationRefId(station) {
   return String(station._id != null ? station._id : station);
 }
 
+/** ObjectId or populated subdoc from API */
+function docRefId(ref) {
+  if (ref == null) return null;
+  if (typeof ref === 'object' && ref._id != null) return String(ref._id);
+  return String(ref);
+}
+
 async function createStations(token) {
   const tmpl = await api('POST', '/api/station-templates', token, {
     name: 'Integrity Test Template',
@@ -2207,50 +2214,73 @@ async function testLaminateScanFlow(token) {
   // Scan sheet A into laminate station
   await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: lamStation, action: 'scan_in' });
 
-  // Try laminate before all sheets present — should fail
-  const earlyLam = await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
+  // Try laminate before all sheets present — should fail (only A scanned in at lam)
+  const earlyLam = await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
   check('laminate fails before all sheets present', earlyLam.status, 400);
+
+  // Parent path without survivor number should fail
+  const parentNoSurvivor = await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
+  check('laminate via parent requires laminateSurvivorPaneNumber', parentNoSurvivor.status, 400);
 
   // Scan sheet B into laminate station
   await api('POST', `/api/panes/${sheetB.paneNumber}/scan`, token, { station: lamStation, action: 'scan_in' });
 
-  // Now laminate — all sheets present
-  const lamRes = await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
-  check('LAMINATE action succeeds', lamRes.status, 200);
-  check('mergedSheets count', lamRes.data.data.mergedSheets, 2);
+  const badSurvivor = await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, {
+    station: lamStation, action: 'laminate', laminateSurvivorPaneNumber: 'PNE-NOT-A-SHEET-999',
+  });
+  check('laminate invalid laminateSurvivorPaneNumber → 400', badSurvivor.status, 400);
 
-  // Verify sheets are completed
+  const survParentNum = await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, {
+    station: lamStation, action: 'laminate', laminateSurvivorPaneNumber: parent.paneNumber,
+  });
+  check('laminate survivor cannot be parent pane number', survParentNum.status, 400);
+
+  const parentPathOk = await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, {
+    station: lamStation, action: 'laminate', laminateSurvivorPaneNumber: sheetA.paneNumber,
+  });
+  check('laminate via parent path + laminateSurvivorPaneNumber → 200', parentPathOk.status, 200);
+  check('mergedSheets count', parentPathOk.data.data.mergedSheets, 2);
+  check('response survivorPaneNumber is sheet A', parentPathOk.data.data.survivorPaneNumber, sheetA.paneNumber);
+
   const sheetAAfter = await api('GET', `/api/panes/${sheetA._id}`, token);
-  check('sheet A completed after merge', sheetAAfter.data.data.currentStatus, 'completed');
-  check('sheet A station null after merge', sheetAAfter.data.data.currentStation, null);
+  check('sheet A survivor: awaiting_scan_out at lam', sheetAAfter.data.data.currentStatus, 'awaiting_scan_out');
+  check('sheet A laminateRole single', sheetAAfter.data.data.laminateRole, 'single');
+  check('sheet A at laminate station', sheetAAfter.data.data.currentStation?._id || sheetAAfter.data.data.currentStation, lamStation);
 
   const sheetBAfter = await api('GET', `/api/panes/${sheetB._id}`, token);
-  check('sheet B completed after merge', sheetBAfter.data.data.currentStatus, 'completed');
+  check('sheet B merged_into', sheetBAfter.data.data.currentStatus, 'merged_into');
+  check('sheet B points to survivor', docRefId(sheetBAfter.data.data.mergedInto), String(sheetA._id));
 
-  // Verify parent awaiting scan_out at laminate station (not auto-advanced)
   const parentAfter = await api('GET', `/api/panes/${parent._id}`, token);
-  check('parent awaiting_scan_out at laminate station', parentAfter.data.data.currentStatus, 'awaiting_scan_out');
-  check('parent at laminate station', parentAfter.data.data.currentStation?._id || parentAfter.data.data.currentStation, lamStation);
+  check('parent merged_into', parentAfter.data.data.currentStatus, 'merged_into');
+  check('parent points to survivor', docRefId(parentAfter.data.data.mergedInto), String(sheetA._id));
 
-  // Scan out parent from laminate station → should advance to QC
-  const lamScanOut = await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: lamStation, action: 'scan_out' });
-  check('parent scan_out from laminate succeeds', lamScanOut.status, 200);
-  check('parent advanced to qc', lamScanOut.data.data.pane.currentStation?._id, qcStation);
-  check('parent status pending at qc', lamScanOut.data.data.pane.currentStatus, 'pending');
+  const listDefault = await api('GET', `/api/panes?order=${ordId}&limit=100`, token);
+  check('default pane list hides merged_into (1 row)', listDefault.data.data.length, 1);
 
-  // Scan parent through QC to complete
-  await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: qcStation, action: 'scan_in' });
-  await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: qcStation, action: 'complete' });
-  await api('POST', `/api/panes/${parent.paneNumber}/scan`, token, { station: qcStation, action: 'scan_out' });
+  const listInc = await api('GET', `/api/panes?order=${ordId}&includeMerged=true&limit=100`, token);
+  check('includeMerged=true returns all 3 rows', listInc.data.data.length, 3);
 
-  const parentFinal = await api('GET', `/api/panes/${parent._id}`, token);
-  check('parent completed after QC', parentFinal.data.data.currentStatus, 'completed');
+  const mergedScan = await api('POST', `/api/panes/${sheetB.paneNumber}/scan`, token, { station: lamStation, action: 'scan_in' });
+  check('scan merged_into returns 400', mergedScan.status, 400);
+  check('MERGED_INTO code', mergedScan.data.errors?.code, 'MERGED_INTO');
 
-  // Verify PaneLogs contain laminate actions
+  const lamScanOut = await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: lamStation, action: 'scan_out' });
+  check('survivor scan_out from laminate succeeds', lamScanOut.status, 200);
+  check('survivor advanced to qc', lamScanOut.data.data.pane.currentStation?._id, qcStation);
+  check('survivor status pending at qc', lamScanOut.data.data.pane.currentStatus, 'pending');
+
+  await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: qcStation, action: 'scan_in' });
+  await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: qcStation, action: 'complete' });
+  await api('POST', `/api/panes/${sheetA.paneNumber}/scan`, token, { station: qcStation, action: 'scan_out' });
+
+  const survivorFinal = await api('GET', `/api/panes/${sheetA._id}`, token);
+  check('survivor completed after QC', survivorFinal.data.data.currentStatus, 'completed');
+
   const paneLogs = await api('GET', '/api/pane-logs', token);
   const lamCompleteLogs = paneLogs.data.data.filter(l => l.action === 'laminate_complete');
   const lamStartLogs = paneLogs.data.data.filter(l => l.action === 'laminate_start');
-  check('laminate_complete logs exist', lamCompleteLogs.length >= 2, true);
+  check('laminate_complete logs (2 sheets + parent)', lamCompleteLogs.length >= 3, true);
   check('laminate_start log exists', lamStartLogs.length >= 1, true);
 
   // Cleanup

@@ -1,6 +1,6 @@
 ---
 title: Scan a pane
-description: QR scan endpoint — scan_in, scan_out, qc_pass, qc_fail, laminate, and optional auto-remake on QC failure.
+description: QR scan endpoint — scan_in, scan_out, qc_pass, qc_fail, laminate survivor merge, and optional auto-remake on QC failure.
 openapi: post /api/panes/{paneNumber}/scan
 ---
 
@@ -14,7 +14,7 @@ openapi: post /api/panes/{paneNumber}/scan
 | `scan_out` | Hand off after `complete` (`awaiting_scan_out` → next station or `completed`) |
 | `qc_pass` | Same as `scan_out`, but logs **`qc_pass`** on `PaneLog` for QC audit |
 | `qc_fail` | Mark pane **`defected`**, log **`reason`** / **`description`**, return **`remadePane`** (auto remake) |
-| `laminate` | Merge child sheets into parent (parent pane number only) |
+| `laminate` | Merge sheets at lamination; **sheet QR in path** recommended; optional **`laminateSurvivorPaneNumber`**; parent path requires that field |
 
 ## QC fail body
 
@@ -30,6 +30,40 @@ openapi: post /api/panes/{paneNumber}/scan
 
 **`reason`** (required): `broken` \| `chipped` \| `dimension_wrong` \| `scratch` \| `stain` \| `other`.
 
+## Laminate merge body
+
+Use a **sheet** pane number in the path (recommended). Optional **`laminateSurvivorPaneNumber`** selects which sheet survives if it differs from the URL pane. If the path is the **dormant parent** pane number, **`laminateSurvivorPaneNumber` is required** (must match an active sheet at the lam station).
+
+```json
+{
+  "station": "<lamination-station-id>",
+  "action": "laminate",
+  "laminateSurvivorPaneNumber": "PNE-0100-B"
+}
+```
+
+Omit **`laminateSurvivorPaneNumber`** when the survivor is the same as the pane in the URL.
+
+### Dormant parent in the path
+
+If the worker scans the **parent** row’s number (e.g. for an admin flow), **`laminateSurvivorPaneNumber` is required** and must be an **active sheet** at the lamination station:
+
+```json
+{
+  "station": "<lamination-station-id>",
+  "action": "laminate",
+  "laminateSurvivorPaneNumber": "PNE-0100-A"
+}
+```
+
+## Response (laminate)
+
+On success, **`data`** includes:
+
+- **`pane`** — the **survivor** pane (`laminateRole: "single"`, post-lam **`routing`**, `awaiting_scan_out` at lamination, **`laminateMergedAt`** set)
+- **`mergedSheets`** — count of sheets in the merge
+- **`survivorPaneNumber`**, **`retiredPaneNumbers`**, **`parentRetired`**
+
 ## Response (QC fail)
 
 On success, **`data`** includes:
@@ -39,3 +73,7 @@ On success, **`data`** includes:
 - **`remadePane`** — the new pane queued for production (`remakeOf` points at the defected pane)
 
 For other actions, the shape matches the OpenAPI **ScanResult** schema (`nextStation` after `scan_out` / `qc_pass` when applicable).
+
+## Scan errors (`merged_into`)
+
+If a worker scans a pane that was **retired** by laminate merge (`currentStatus: merged_into`), the API returns **400** with **`errors.code`: `MERGED_INTO`**, **`errors.survivorPaneNumber`**, and a Thai message pointing at the survivor QR. The [List all panes](/api-reference/panes/list-all-panes) endpoint omits **`merged_into`** rows by default so station UIs stay clean.

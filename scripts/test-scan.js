@@ -74,6 +74,13 @@ function checkIncludes(label, str, substring) {
   }
 }
 
+/** ObjectId or populated subdoc from API */
+function docRefId(ref) {
+  if (ref == null) return null;
+  if (typeof ref === 'object' && ref._id != null) return String(ref._id);
+  return String(ref);
+}
+
 function connectSocket(token) {
   return new Promise((resolve, reject) => {
     const socket = io(API, { path: '/api/socket-entry', auth: { token } });
@@ -1309,6 +1316,116 @@ async function testQcPassFailRemake(token, stns) {
 }
 
 // ──────────────────────────────────────────────
+// 9b. LAMINATE MERGE — SURVIVOR (sheet path, body override, parent path)
+// ──────────────────────────────────────────────
+
+async function testLaminateMergeSurvivorScan(token) {
+  console.log('\n=== Laminate merge — survivor scan API ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'LamSurv Scan Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: 'LamSurv Scan Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const tmpl = await api('POST', '/api/station-templates', token, { name: `LamSurv Tmpl ${Date.now()}` });
+  const tmplId = tmpl.data.data._id;
+  const cutting = (await api('POST', '/api/stations', token, { name: 'lms_cut', templateId: tmplId })).data.data._id;
+  const lamStation = (await api('POST', '/api/stations', token, { name: 'lms_lam', templateId: tmplId, isLaminateStation: true })).data.data._id;
+  const qcStation = (await api('POST', '/api/stations', token, { name: 'lms_qc', templateId: tmplId })).data.data._id;
+  const routing = [cutting, lamStation, qcStation];
+
+  async function scanThroughCuttingToLam(paneNumber) {
+    await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: cutting, action: 'scan_in' });
+    await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: cutting, action: 'complete' });
+    await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: cutting, action: 'scan_out' });
+    await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: lamStation, action: 'scan_in' });
+  }
+
+  async function createLamOrder() {
+    const reqRes = await api('POST', '/api/requests', token, {
+      customer: custId,
+      details: { type: 'laminated', quantity: 1 },
+      panes: [{
+        routing,
+        dimensions: { width: 800, height: 600, thickness: 5 },
+        rawGlass: { glassType: 'Clear', sheetsPerPane: 2 },
+      }],
+    });
+    check('  laminate request created', reqRes.status, 201);
+    const reqId = reqRes.data.data._id;
+    const allPanes = reqRes.data.data.panes;
+    const parent = allPanes.find((p) => p.laminateRole === 'parent');
+    const sheetA = allPanes.find((p) => p.sheetLabel === 'A');
+    const sheetB = allPanes.find((p) => p.sheetLabel === 'B');
+    const ordRes = await api('POST', '/api/orders', token, {
+      customer: custId, material: matId, quantity: 1, request: reqId, paneCount: 1,
+    });
+    const ordId = ordRes.data.data._id;
+    return { reqId, ordId, allPanes, parent, sheetA, sheetB };
+  }
+
+  async function cleanupFlow(ctx) {
+    for (const p of ctx.allPanes) await api('DELETE', `/api/panes/${p._id}`, token);
+    await api('DELETE', `/api/orders/${ctx.ordId}`, token);
+    await api('DELETE', `/api/requests/${ctx.reqId}`, token);
+  }
+
+  // ── Flow 1: default survivor = pane in URL (sheet B path) ──
+  let ctx = await createLamOrder();
+  await scanThroughCuttingToLam(ctx.sheetA.paneNumber);
+  const early = await api('POST', `/api/panes/${ctx.sheetA.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
+  check('laminate fails when second sheet not at lam', early.status, 400);
+  await scanThroughCuttingToLam(ctx.sheetB.paneNumber);
+
+  const lamDefaultB = await api('POST', `/api/panes/${ctx.sheetB.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
+  check('laminate via sheet B path → B survives', lamDefaultB.status, 200);
+  check('survivorPaneNumber is B', lamDefaultB.data.data.survivorPaneNumber, ctx.sheetB.paneNumber);
+
+  const aMerged1 = await api('GET', `/api/panes/${ctx.sheetA._id}`, token);
+  check('sheet A merged_into (B survived)', aMerged1.data.data.currentStatus, 'merged_into');
+  check('A mergedInto → B', docRefId(aMerged1.data.data.mergedInto), String(ctx.sheetB._id));
+
+  await cleanupFlow(ctx);
+
+  // ── Flow 2: sheet A URL + laminateSurvivorPaneNumber forces B ──
+  ctx = await createLamOrder();
+  await scanThroughCuttingToLam(ctx.sheetA.paneNumber);
+  await scanThroughCuttingToLam(ctx.sheetB.paneNumber);
+
+  const lamOverride = await api('POST', `/api/panes/${ctx.sheetA.paneNumber}/scan`, token, {
+    station: lamStation,
+    action: 'laminate',
+    laminateSurvivorPaneNumber: ctx.sheetB.paneNumber,
+  });
+  check('laminate A path + survivor body B → 200', lamOverride.status, 200);
+  check('survivorPaneNumber B', lamOverride.data.data.survivorPaneNumber, ctx.sheetB.paneNumber);
+
+  const aMerged2 = await api('GET', `/api/panes/${ctx.sheetA._id}`, token);
+  check('A merged_into after body override', aMerged2.data.data.currentStatus, 'merged_into');
+  check('A mergedInto → B (override)', docRefId(aMerged2.data.data.mergedInto), String(ctx.sheetB._id));
+
+  await cleanupFlow(ctx);
+
+  // ── Flow 3: sheet path default A + scan_out to QC ──
+  ctx = await createLamOrder();
+  await scanThroughCuttingToLam(ctx.sheetA.paneNumber);
+  await scanThroughCuttingToLam(ctx.sheetB.paneNumber);
+
+  const lamA = await api('POST', `/api/panes/${ctx.sheetA.paneNumber}/scan`, token, { station: lamStation, action: 'laminate' });
+  check('laminate sheet A path → 200', lamA.status, 200);
+
+  const out = await api('POST', `/api/panes/${ctx.sheetA.paneNumber}/scan`, token, { station: lamStation, action: 'scan_out' });
+  check('survivor scan_out from lam → QC', out.status, 200);
+  check('next station is QC', out.data.data.pane.currentStation?._id, qcStation);
+
+  await cleanupFlow(ctx);
+
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/station-templates/${tmplId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -1331,6 +1448,7 @@ async function main() {
     await testBatchScan(token, stns);
     await testLaminateCreateViaPanes(token);
     await testLaminateSplitViaPatch(token);
+    await testLaminateMergeSurvivorScan(token);
     await testQcPassFailRemake(token, stns);
   } finally {
     await cleanupStations(token, stns).catch(() => {});

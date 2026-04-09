@@ -27,7 +27,7 @@ When the frontend scans this, it should **strip the `STDPLUS:` prefix** and use 
 └─────────┘    └─────────┘    └─────────┘    └───────┘
 ```
 
-1. Panes start at their **first routing station** (e.g. `cutting`) with status `pending`. If a pane has no routing, it starts at `ready` and is immediately `completed`.
+1. Panes start at their **first routing station** (e.g. `cutting`) with status `pending`. If **`routing` is empty** (`[]`), `currentStation` is `null` and the pane is already **`completed`** (nothing to scan).
 2. At each station, workers can perform these actions (see [Scan a pane](/api-reference/scanning/scan-a-pane) for the full request body):
    - **scan_in** — Sets `currentStation` to the station, `currentStatus` to `in_progress`, and `startedAt` (if not already set).
    - **start** — Sets `currentStation` to the station and `currentStatus` to `in_progress`.
@@ -49,20 +49,20 @@ Request (sheetsPerPane: 2)
 ```
 
 The routing is split at the **lamination station** (a station with `isLaminateStation: true`):
-- **Child sheets** get `cutting → edging → lamination` (pre-laminate + lamination station)
-- **Parent pane** gets `qc → delivery` (post-lamination stations only, stays dormant with `currentStation: null` until merge)
+- **Child sheets** get the **pre-laminate** segment of routing (up to and including the lamination station)
+- **Parent pane** row holds **post-lamination** routing only (`qc`, `delivery`, …); it stays **dormant** (`currentStation: null`, not printed on a shop QR) until merge retires it
 
 ```
-Sheet A:  cutting → edging → lamination ─┐
-                                          ├─ merge → Parent: lamination (awaiting_scan_out) → scan_out → qc → delivery
-Sheet B:  cutting → edging → lamination ─┘
+Sheet A:  cutting → … → lamination ─┐
+                                      ├─ laminate → one survivor (e.g. PNE-0100-A): lamination (awaiting_scan_out) → scan_out / qc_pass → qc → …
+Sheet B:  cutting → … → lamination ─┘   (other sheet + parent row → merged_into; scan survivor’s QR only)
 ```
 
 Sheets travel independently through their routing. When they arrive at the lamination station:
-- The system checks if all **active** siblings (not claimed) are present
+- The system checks if all **active** siblings (**not** `claimed`, **not** `merged_into`) are present
 - Emits `laminate:ready` when all sheets are at the station, or `laminate:waiting` with a progress count
 
-A seventh scan action, **laminate**, merges the sheets into the parent. After merging, the parent stays at the lamination station with status `awaiting_scan_out` — the worker must then **scan_out** (or **qc_pass** at a QC step) to advance it to the next station (see below).
+The **`laminate`** action merges sheets so **one sheet keeps its pane number / QR** as the physical unit going forward. After merge, that **survivor** is `awaiting_scan_out` at the lamination station — the worker **scan_out** / **qc_pass** using the **survivor’s** pane number (see [Laminate Merge](#laminate-merge)).
 
 ### Two-Step Completion Flow
 
@@ -125,33 +125,34 @@ Batch scan supports `scan_in`, `start`, and `complete` actions only. It runs in 
 
 ## Laminate Merge
 
-The `laminate` action is called on the **parent** pane number (e.g. `PNE-0100`) once all child sheets have arrived at the lamination station.
+Call `laminate` once **every active sheet** is at the lamination station (`in_progress` or `awaiting_scan_out`). **Recommended:** use a **sheet** QR in the path (e.g. `PNE-0100-A`) so workers only scan printed labels.
 
 ```
-POST /api/panes/PNE-0100/scan
+POST /api/panes/PNE-0100-A/scan
 {
   "station": "<lamination-station-id>",
   "action": "laminate"
 }
 ```
 
+Optional **`laminateSurvivorPaneNumber`** picks which sheet keeps its QR (defaults to the pane in the URL when the URL is a sheet). If you use the **dormant parent** number in the path instead, **`laminateSurvivorPaneNumber` is required** (must match an active sheet).
+
 **What happens:**
 
-1. Validates that all **active** child sheets (`currentStatus !== 'claimed'`) are at the lamination station
-2. Marks all active child sheets as `completed` with `completedAt`
-3. Sets the parent pane to `awaiting_scan_out` **at the lamination station** — it does not advance automatically
-4. Creates `PaneLog` entries: `laminate_complete` for each sheet, `laminate_start` for the parent
-5. Updates `order.stationBreakdown` — decrements lamination station count (for sheets), adds 1 for the parent at the lamination station
-6. Emits `pane:laminated` WebSocket event
-
-The worker then performs a **scan_out** (or **qc_pass** at a QC step) on the parent pane at the lamination station, which advances it to the first post-lamination station (e.g. `qc`). This follows the same two-step `complete → scan_out` pattern used at every other station.
+1. Validates all **active** sheets (`!= claimed`, `!= merged_into`) are present at the lamination station
+2. **Survivor** — one sheet stays active: `laminateRole` becomes `single`, `routing` becomes the post-lamination route, `awaiting_scan_out` at the lam station, `laminateMergedAt` set; same `paneNumber` / QR as that sheet
+3. **Retired** — other sheets and the dormant **parent** row → `currentStatus: merged_into`, `mergedInto` → survivor
+4. First **scan_out** / **qc_pass** from lamination uses **survivor** routing (lam station is not in that array) → moves to first post-lam station (e.g. QC). The survivor’s **`laminateMergedAt`** flag is used for that handoff only, then cleared so later stations use normal routing index rules.
+5. `PaneLog`: `laminate_complete` on retired sheets and parent, `laminate_start` on the survivor
+6. `order.stationBreakdown` updated (sheets at lam consolidated to one unit)
+7. Emits `pane:laminated` (payload includes `survivor`, `parent` alias, `retiredPaneNumbers`, `sheets`, `parentPaneNumber`)
 
 **Response** includes:
-- `pane` — the parent pane (at the lamination station, status `awaiting_scan_out`)
-- `mergedSheets` — number of sheets merged (e.g. `2`)
+- `pane` — the **survivor** pane
+- `mergedSheets`, `survivorPaneNumber`, `retiredPaneNumbers`, `parentRetired`
 
 <Note>
-  `panesCompleted` and `progressPercent` on the order are **not** updated during the merge. They only update when the parent pane itself completes its final station via `scan_out` or `qc_pass`.
+  `panesCompleted` and `progressPercent` on the order are **not** updated during the merge. They update when the **survivor** pane (the sheet that kept its QR) completes its **final** post-lamination station via `scan_out` or `qc_pass`.
 </Note>
 
 ## Side Effects
@@ -167,7 +168,7 @@ Every scan triggers several side effects:
 | **Notification** | On `scan_out` / `qc_pass` | If the order has an `assignedTo` worker, a notification is created and sent via WebSocket |
 | **QC fail** | On `qc_fail` | Pane → `defected`; `stationBreakdown` decremented at QC station; auto **remake** pane; optional **`paneCount`** bump; **`MaterialLog`** `qc_remake`; notifications for assigned worker / station |
 | **Laminate Check** | On `scan_in` at lamination station | If the scanned pane is a sheet arriving at its lamination station, checks siblings and emits `laminate:ready` or `laminate:waiting` |
-| **Sheet Merge** | On `laminate` action | All active child sheets are completed, parent pane is set to `awaiting_scan_out` at the lamination station, `stationBreakdown` is updated |
+| **Sheet Merge** | On `laminate` action | One sheet survives as `single` at lamination; others + parent → `merged_into`; `stationBreakdown` updated |
 
 ## WebSocket Events
 
@@ -183,7 +184,7 @@ After a scan, the server emits these events to connected clients:
 | `notification` | `station:<nextStation>` | On `scan_out` / `qc_pass` (pane arrival); on remake, station alert for the queue station |
 | `laminate:ready` | `dashboard`, `pane`, `production`, `station:<id>` | On `scan_in` when all active sheets have arrived at the lamination station |
 | `laminate:waiting` | `station:<id>` | On `scan_in` when some sheets are still missing at the lamination station |
-| `pane:laminated` | `dashboard`, `pane`, `production`, `station:<id>` | On `laminate` action — sheets merged into parent |
+| `pane:laminated` | `dashboard`, `pane`, `production`, `station:<id>` | On `laminate` — survivor + retired sheet numbers (`parent` in payload = survivor for compatibility) |
 
 ### Listening for Scan Events
 
@@ -223,8 +224,9 @@ socket.on('laminate:waiting', ({ parentPaneNumber, sheetsPresent, sheetsTotal })
   console.log(`${sheetsPresent}/${sheetsTotal} sheets arrived for ${parentPaneNumber}`);
 });
 
-socket.on('pane:laminated', ({ parent, sheets }) => {
-  console.log(`Merged ${sheets.join(', ')} into ${parent.paneNumber}`);
+socket.on('pane:laminated', ({ survivor, parent, sheets, retiredPaneNumbers }) => {
+  const live = survivor || parent;
+  console.log(`Survivor ${live.paneNumber}; retired: ${(retiredPaneNumbers || []).join(', ')}; sheets: ${(sheets || []).join(', ')}`);
 });
 ```
 
@@ -241,5 +243,8 @@ socket.on('pane:laminated', ({ parent, sheets }) => {
 | `400` | Invalid action value | `Invalid action` |
 | `400` | **`qc_fail` but pane cannot change state** | e.g. already `defected` / `completed` / `claimed` |
 | `400` | **`qc_fail` without material** | Cannot create remake if pane has no material (and order cannot supply it) |
-| `400` | `laminate` on a non-parent pane | `Only parent panes can be laminated` |
-| `400` | `laminate` when not all sheets are present | `Not all active sheets are at the lamination station (1/2 present)` |
+| `400` | `laminate` on wrong pane type | Not a sheet / parent in a laminate group |
+| `400` | `laminate` when not all sheets are present | `Not all sheets present at lamination station (1/2 present)` |
+| `400` | `laminate` via **parent** path without **`laminateSurvivorPaneNumber`** | Validation / clear API message |
+| `400` | **`laminateSurvivorPaneNumber`** not an active sheet (wrong number, or parent’s own number) | API error — must match a sheet at lamination |
+| `400` | Scan on **`merged_into`** pane | `errors.code`: **`MERGED_INTO`**, **`survivorPaneNumber`** in `errors` |

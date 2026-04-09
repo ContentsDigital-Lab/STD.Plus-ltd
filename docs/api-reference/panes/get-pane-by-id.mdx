@@ -1,3 +1,13 @@
 ---
+title: Get pane by id
+description: Fetch one pane by MongoDB id or pane number (case-insensitive); mergedInto may be populated as a subdocument.
 openapi: get /api/panes/{id}
 ---
+
+## Pane number in the path
+
+The `{id}` parameter can be a MongoDB ObjectId or a **pane number** (e.g. `PNE-0001`). Pane numbers are resolved **case-insensitively** (`pne-0001` matches `PNE-0001`), consistent with QR parsing that strips the `STDPLUS:` prefix.
+
+## `mergedInto` shape
+
+After a **laminate** merge, retired panes reference the survivor via **`mergedInto`**. On GET, that field may be returned either as an **ObjectId string** or as a **small populated object** (e.g. `{ _id, paneNumber, currentStatus }`) depending on populate settings — clients should read **`mergedInto._id`** when `mergedInto` is an object.

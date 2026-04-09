@@ -5,5 +5,5 @@ openapi: post /api/panes/batch-scan
 ---
 
 <Note>
-  **`scan_out`**, **`qc_pass`**, **`qc_fail`**, and **`laminate`** are **not** supported here. Use [Scan a pane](/api-reference/scanning/scan-a-pane) for each pane when you need handoff, QC, or laminate merge.
+  **`scan_out`**, **`qc_pass`**, **`qc_fail`**, and **`laminate`** are **not** supported here. Use [Scan a pane](/api-reference/scanning/scan-a-pane) for each pane when you need handoff, QC, or laminate merge. **`merged_into`** panes are rejected in batch operations.
 </Note>

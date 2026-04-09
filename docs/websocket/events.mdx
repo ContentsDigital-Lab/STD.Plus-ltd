@@ -169,7 +169,7 @@ socket.on('order:updated', (payload) => {
 | `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | QR scan with `scan_out` or `qc_pass` (pane advances); remake queue (`isRemake: true`) |
 | `laminate:ready` | INBOUND | `dashboard`, `pane`, `production`, `station:<id>` | Sheet `scan_in` at lamination station (all sheets present) |
 | `laminate:waiting` | INBOUND | `station:<id>` | Sheet `scan_in` at lamination station (sheets still missing) |
-| `pane:laminated` | INBOUND | `dashboard`, `pane`, `production`, `station:<id>` | `laminate` scan action on parent pane |
+| `pane:laminated` | INBOUND | `dashboard`, `pane`, `production`, `station:<id>` | `laminate` scan — survivor pane + retired sheet numbers |
 
 **Payload format:**
 
@@ -294,7 +294,7 @@ socket.on('notification', (payload) => {
 
 ### Laminate Pairing Events
 
-Emitted during the [laminate pairing flow](/scanning/overview#laminate-panes) when child sheets arrive at a lamination station and when they are merged into a parent pane.
+Emitted during the [laminate flow](/scanning/overview#laminate-panes) when child sheets arrive at a lamination station and when **`laminate`** runs (one **survivor** sheet keeps its QR; see [Laminate Merge](/scanning/overview#laminate-merge)).
 
 #### `laminate:ready`
 
@@ -339,11 +339,11 @@ socket.on('laminate:waiting', (payload) => {
 
 #### `pane:laminated`
 
-Emitted when the `laminate` scan action merges child sheets into a parent pane.
+Emitted when the `laminate` scan merges sheets: **one sheet survives** with the same QR; the dormant parent and other sheets are retired (`merged_into`).
 
 ```javascript
 socket.on('pane:laminated', (payload) => {
-  console.log(payload.parent.paneNumber); // "PNE-0100"
+  console.log((payload.survivor || payload.parent).paneNumber); // survivor QR
   console.log(payload.sheets);            // ["PNE-0100-A", "PNE-0100-B"]
 });
 ```
@@ -356,7 +356,9 @@ socket.on('pane:laminated', (payload) => {
 
 | Field | Description |
 |---|---|
-| `parent` | The fully populated parent pane object (at the lamination station with status `awaiting_scan_out`) |
+| `survivor` | The surviving pane (populated), `awaiting_scan_out` at lamination, `laminateRole: "single"` |
+| `parent` | Alias of **`survivor`** (backwards compatibility) |
+| `retiredPaneNumbers` | Pane numbers retired to `merged_into` (non-survivor sheets **and** the dormant parent’s number) |
 | `sheets` | Array of merged sheet pane numbers (e.g. `["PNE-0100-A", "PNE-0100-B"]`) |
 
 ### Pricing Updated

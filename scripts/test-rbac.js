@@ -349,6 +349,19 @@ async function testClaims(tokens, customerId, materialId, workerId, adminId) {
   if (ordId) await api('DELETE', `/api/orders/${ordId}`, tokens.admin);
 }
 
+async function testPaneLogs(tokens) {
+  console.log('\n=== Pane Logs (all roles — pane_logs:view) ===\n');
+
+  const r1 = await api('GET', '/api/pane-logs?limit=5', tokens.admin);
+  check('GET    /pane-logs           (admin)', r1.status, 200);
+
+  const r2 = await api('GET', '/api/pane-logs?limit=5', tokens.manager);
+  check('GET    /pane-logs           (manager)', r2.status, 200);
+
+  const r3 = await api('GET', '/api/pane-logs?limit=5', tokens.worker);
+  check('GET    /pane-logs           (worker)', r3.status, 200);
+}
+
 async function testMaterialLogs(tokens, materialId) {
   console.log('\n=== Material Logs (admin+manager CUD) ===\n');
   const path = '/api/material-logs';
@@ -947,6 +960,7 @@ async function main() {
 
     // Test resources with ownership
     await testMaterialLogs(tokens, matId);
+    await testPaneLogs(tokens);
     await testOrders(tokens, custId, matId, workerId, stns);
     await testRequests(tokens, custId);
     await testWithdrawals(tokens, matId, workerId);

@@ -164,6 +164,7 @@ async function createRemakeFromSource({ originalPane, req, remakeStationId, mode
     { path: 'parentPane', select: 'paneNumber laminateRole' },
     { path: 'childPanes', select: 'paneNumber sheetLabel currentStatus currentStation laminateRole' },
     { path: 'laminateStation', select: 'name' },
+    { path: 'mergedInto', select: 'paneNumber currentStatus' },
   ];
 
   const populatedRemade = await remadePane.populate(POPULATE_FIELDS);

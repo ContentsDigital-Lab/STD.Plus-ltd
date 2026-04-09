@@ -1,3 +1,13 @@
 ---
+title: Get material timeline
+description: Merged MaterialLog and PaneLog timeline for one material; requires pane_logs:view and materialId query param.
 openapi: get /api/pane-logs/timeline
 ---
+
+## Permission
+
+Requires **`pane_logs:view`**, same as [List pane logs](/api-reference/pane-logs/list-pane-logs).
+
+## Query
+
+`materialId` is **required**. Omitting it returns **400** (`materialId is required`).

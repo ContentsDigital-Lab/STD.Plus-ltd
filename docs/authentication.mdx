@@ -27,7 +27,7 @@ Three system roles are pre-seeded. They cannot be deleted, but their permissions
 |---|---|---|
 | **Admin** | `admin` | `*` (wildcard — full access to everything) |
 | **Manager** | `manager` | All permissions except `workers:manage` and `roles:manage` |
-| **Worker** | `worker` | View-only for most resources, plus `claims:create`, `panes:scan`, `production_logs:create`, `inventory:move`, `withdrawals:create` |
+| **Worker** | `worker` | View-only for most resources, plus `claims:create`, `panes:scan`, `pane_logs:view`, `production_logs:create`, `inventory:move`, `withdrawals:create` |
 
 You can create additional custom roles (e.g. "หัวหน้าช่าง", "พนักงานสต๊อก") via `POST /api/roles`.
 
