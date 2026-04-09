@@ -6,7 +6,9 @@ const paneLogSchema = new mongoose.Schema({
   material: { type: mongoose.Schema.Types.ObjectId, ref: 'Material', default: null },
   worker:   { type: mongoose.Schema.Types.ObjectId, ref: 'Worker',   default: null },
   station:  { type: mongoose.Schema.Types.ObjectId, ref: 'Station', required: true },
-  action:   { type: String, enum: ['scan_in', 'start', 'complete', 'scan_out', 'laminate_start', 'laminate_complete'],  required: true },
+  action:   { type: String, enum: ['scan_in', 'start', 'complete', 'scan_out', 'laminate_start', 'laminate_complete', 'qc_pass', 'qc_fail'], required: true },
+  reason:      { type: String, default: null, trim: true },
+  description: { type: String, default: '', trim: true },
   completedAt: { type: Date, default: null },
 }, { timestamps: true });
 

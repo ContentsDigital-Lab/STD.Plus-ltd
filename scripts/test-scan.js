@@ -208,13 +208,14 @@ async function testBasicScanFlow(token, stns) {
   check('SCAN_OUT pane 1 at edging', r5.status, 200);
   check('  pane moved to qc', r5.data.data.pane.currentStation?._id, stns.qc);
 
-  // ── complete + scan_out at qc (last station) → completed ──
+  // ── complete + qc_pass at qc (last station) → completed (same behavior as scan_out) ──
   await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.qc, action: 'scan_in' });
   await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.qc, action: 'complete' });
   const r6 = await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, {
-    station: stns.qc, action: 'scan_out',
+    station: stns.qc, action: 'qc_pass',
   });
-  check('SCAN_OUT pane 1 at qc (last)', r6.status, 200);
+  check('QC_PASS pane 1 at qc (last)', r6.status, 200);
+  check('  log action is qc_pass', r6.data.data.log.action, 'qc_pass');
   check('  completed pane currentStation is null', r6.data.data.pane.currentStation, null);
   check('  status is completed', r6.data.data.pane.currentStatus, 'completed');
   check('  completedAt is set', !!r6.data.data.pane.completedAt, true);
@@ -239,8 +240,9 @@ async function testBasicScanFlow(token, stns) {
   await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: stns.edging, action: 'complete' });
   await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: stns.edging, action: 'scan_out' });
   await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: stns.qc, action: 'complete' });
-  const r7 = await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: stns.qc, action: 'scan_out' });
-  check('SCAN_OUT pane 2 through all stations', r7.status, 200);
+  const r7 = await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: stns.qc, action: 'qc_pass' });
+  check('QC_PASS pane 2 through all stations', r7.status, 200);
+  check('  log action is qc_pass', r7.data.data.log.action, 'qc_pass');
   check('  pane 2 completed', r7.data.data.pane.currentStatus, 'completed');
 
   // ── verify order fully completed ──
@@ -320,6 +322,17 @@ async function testErrorCases(token, stns) {
   });
   check('scan_out without complete first', r2b.status, 400);
   checkIncludes('  message says must complete first', r2b.data.message, 'เสร็จสิ้น');
+
+  const r2c = await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, {
+    station: stns.cutting, action: 'qc_pass',
+  });
+  check('qc_pass without complete first', r2c.status, 400);
+  checkIncludes('  qc_pass message says must complete first', r2c.data.message, 'เสร็จสิ้น');
+
+  const r2d = await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, {
+    station: stns.cutting, action: 'qc_fail',
+  });
+  check('qc_fail without reason (validation)', r2d.status, 400);
 
   // ── complete + scan_out through all stations, then try again ──
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
@@ -479,17 +492,17 @@ async function testWebSocketEvents(token, stns) {
   checkIncludes('  notification message has pane number', notifEvent.message, pane.paneNumber);
   checkIncludes('  notification message (next station)', notifEvent.message, 'arrived at next station');
 
-  // ── complete + scan_out qc (last) → completed, expect order:updated ──
+  // ── complete + qc_pass qc (last) → completed, expect order:updated ──
   paneEventPromise = waitForEvent(socket, 'pane:updated');
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.qc, action: 'complete' });
   await paneEventPromise;
 
   paneEventPromise = waitForEvent(socket, 'pane:updated');
   const orderEventPromise = waitForEvent(socket, 'order:updated');
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.qc, action: 'scan_out' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.qc, action: 'qc_pass' });
 
   const finalPaneEvent = await paneEventPromise;
-  check('WS pane:updated on final scan_out', finalPaneEvent.action, 'scanned');
+  check('WS pane:updated on final qc_pass', finalPaneEvent.action, 'scanned');
 
   const orderEvent = await orderEventPromise;
   check('WS order:updated fired', orderEvent.action, 'updated');
@@ -554,7 +567,7 @@ async function testNotifications(token, stns) {
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_out' });
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.qc, action: 'complete' });
-  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.qc, action: 'scan_out' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.qc, action: 'qc_pass' });
 
   // Check notifications were created
   const notifs = await api('GET', '/api/notifications?limit=100', token);
@@ -664,6 +677,12 @@ async function testScanOutEdgeCases(token, stns) {
   check('scan_out at wrong station', r1.status, 400);
   checkIncludes('  message mentions actual station', r1.data.message, stns.cutting);
 
+  const r1b = await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, {
+    station: stns.edging, action: 'qc_pass',
+  });
+  check('qc_pass at wrong station', r1b.status, 400);
+  checkIncludes('  qc_pass wrong-station message', r1b.data.message, stns.cutting);
+
   // ── double complete is idempotent (stays awaiting_scan_out) ──
   const r2 = await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, {
     station: stns.cutting, action: 'complete',
@@ -696,9 +715,10 @@ async function testScanOutEdgeCases(token, stns) {
   await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_in' });
   await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
   const r6 = await api('POST', `/api/panes/${pane2.paneNumber}/scan`, token, {
-    station: stns.cutting, action: 'scan_out',
+    station: stns.cutting, action: 'qc_pass',
   });
-  check('single-station pane scan_out completes', r6.status, 200);
+  check('single-station pane qc_pass completes', r6.status, 200);
+  check('  log action qc_pass', r6.data.data.log.action, 'qc_pass');
   check('  status is completed', r6.data.data.pane.currentStatus, 'completed');
   check('  completedAt is set', !!r6.data.data.pane.completedAt, true);
   check('  no nextStation', r6.data.data.nextStation, undefined);
@@ -730,7 +750,7 @@ async function testScanOutEdgeCases(token, stns) {
   // ── complete remaining panes and verify full order completion ──
   await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.qc, action: 'scan_in' });
   await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.qc, action: 'complete' });
-  await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.qc, action: 'scan_out' });
+  await api('POST', `/api/panes/${pane1.paneNumber}/scan`, token, { station: stns.qc, action: 'qc_pass' });
 
   await api('POST', `/api/panes/${pane3.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
   await api('POST', `/api/panes/${pane3.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_out' });
@@ -749,6 +769,7 @@ async function testScanOutEdgeCases(token, stns) {
   check('pane logs have scan_in', actionTypes.includes('scan_in'), true);
   check('pane logs have complete', actionTypes.includes('complete'), true);
   check('pane logs have scan_out', actionTypes.includes('scan_out'), true);
+  check('pane logs have qc_pass', actionTypes.includes('qc_pass'), true);
 
   // ── notifications created for scan_out advances ──
   const notifs = await api('GET', '/api/notifications?limit=100', token);
@@ -1099,6 +1120,195 @@ async function testLaminateSplitViaPatch(token) {
 }
 
 // ──────────────────────────────────────────────
+// QC PASS / QC FAIL + AUTO-REMAKE
+// ──────────────────────────────────────────────
+
+async function advancePaneToQcAwaiting(token, paneNumber, stns) {
+  await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_in' });
+  await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
+  await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_out' });
+  await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: stns.edging, action: 'scan_in' });
+  await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: stns.edging, action: 'complete' });
+  await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: stns.edging, action: 'scan_out' });
+  await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: stns.qc, action: 'scan_in' });
+  await api('POST', `/api/panes/${paneNumber}/scan`, token, { station: stns.qc, action: 'complete' });
+}
+
+async function testQcPassFailRemake(token, stns) {
+  console.log('\n=== QC Pass / QC Fail + Remake ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const cust = await api('POST', '/api/customers', token, { name: `QC Flow Cust ${Date.now()}` });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, { name: `QC Flow Mat ${Date.now()}`, unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+
+  const routing = [stns.cutting, stns.edging, stns.qc];
+
+  // ── Part A: qc_pass at last station (same outcome as scan_out) ──
+  const reqA = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'clear', quantity: 1 },
+    panes: [{ routing, dimensions: { width: 500, height: 400, thickness: 5 }, jobType: 'QC-Pass-Test' }],
+  });
+  check('QC A: create request', reqA.status, 201);
+  const reqAId = reqA.data.data._id;
+  const paneA = reqA.data.data.panes[0];
+
+  const ordA = await api('POST', '/api/orders', token, {
+    customer: custId,
+    material: matId,
+    quantity: 1,
+    request: reqAId,
+    paneCount: 1,
+    assignedTo: workerId,
+    stations: routing,
+  });
+  check('QC A: create order', ordA.status, 201);
+  const ordAId = ordA.data.data._id;
+
+  await advancePaneToQcAwaiting(token, paneA.paneNumber, stns);
+
+  const qcPassRes = await api('POST', `/api/panes/${paneA.paneNumber}/scan`, token, {
+    station: stns.qc,
+    action: 'qc_pass',
+  });
+  check('QC_PASS at last station → 200', qcPassRes.status, 200);
+  check('  log.action is qc_pass', qcPassRes.data.data.log.action, 'qc_pass');
+  check('  pane completed', qcPassRes.data.data.pane.currentStatus, 'completed');
+  check('  currentStation null', qcPassRes.data.data.pane.currentStation, null);
+
+  const ordA2 = await api('GET', `/api/orders/${ordAId}`, token);
+  check('  order panesCompleted 1', ordA2.data.data.panesCompleted, 1);
+
+  // ── Part B: qc_fail → defected + remade pane + MaterialLog qc_remake ──
+  const reqB = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'clear', quantity: 1 },
+    panes: [{ routing, jobType: 'QC-Fail-Test' }],
+  });
+  check('QC B: create request', reqB.status, 201);
+  const reqBId = reqB.data.data._id;
+  const paneB = reqB.data.data.panes[0];
+  const defectedId = paneB._id;
+
+  const ordB = await api('POST', '/api/orders', token, {
+    customer: custId,
+    material: matId,
+    quantity: 1,
+    request: reqBId,
+    paneCount: 1,
+    assignedTo: workerId,
+    stations: routing,
+  });
+  check('QC B: create order', ordB.status, 201);
+  const ordBId = ordB.data.data._id;
+
+  await advancePaneToQcAwaiting(token, paneB.paneNumber, stns);
+
+  const qcFailRes = await api('POST', `/api/panes/${paneB.paneNumber}/scan`, token, {
+    station: stns.qc,
+    action: 'qc_fail',
+    reason: 'scratch',
+    description: 'integration test qc_fail',
+  });
+  check('QC_FAIL → 200', qcFailRes.status, 200);
+  check('  original pane defected', qcFailRes.data.data.pane.currentStatus, 'defected');
+  check('  log.action qc_fail', qcFailRes.data.data.log.action, 'qc_fail');
+  check('  log.reason scratch', qcFailRes.data.data.log.reason, 'scratch');
+  check('  log.description', qcFailRes.data.data.log.description.includes('integration'), true);
+  check('  remadePane present', !!qcFailRes.data.data.remadePane, true);
+  check(
+    '  remakeOf → defected pane',
+    String(qcFailRes.data.data.remadePane.remakeOf?._id || qcFailRes.data.data.remadePane.remakeOf),
+    String(defectedId),
+  );
+  check('  remade pending', qcFailRes.data.data.remadePane.currentStatus, 'pending');
+  check(
+    '  remade at first routing station (cutting)',
+    String(qcFailRes.data.data.remadePane.currentStation?._id || qcFailRes.data.data.remadePane.currentStation),
+    stns.cutting,
+  );
+  check('  remade jobType copied', qcFailRes.data.data.remadePane.jobType, 'QC-Fail-Test');
+  check('  remade linked to same order', String(qcFailRes.data.data.remadePane.order?._id || qcFailRes.data.data.remadePane.order), String(ordBId));
+
+  const ordB2 = await api('GET', `/api/orders/${ordBId}`, token);
+  check('  order paneCount bumped to 2', ordB2.data.data.paneCount, 2);
+
+  const matLogs = await api('GET', '/api/material-logs?limit=100', token);
+  const qcRemakeLog = matLogs.data.data.find(
+    (l) => l.referenceType === 'qc_remake' && String(l.referenceId) === String(defectedId),
+  );
+  check('MaterialLog qc_remake for defected pane', !!qcRemakeLog, true);
+
+  // ── Part C: optional remakeStationId ──
+  const reqC = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'clear', quantity: 1 },
+    panes: [{ routing, jobType: 'QC-RemakeStation' }],
+  });
+  check('QC C: create request', reqC.status, 201);
+  const paneC = reqC.data.data.panes[0];
+  const ordCRes = await api('POST', '/api/orders', token, {
+    customer: custId,
+    material: matId,
+    quantity: 1,
+    request: reqC.data.data._id,
+    paneCount: 1,
+    assignedTo: workerId,
+    stations: routing,
+  });
+  check('QC C: create order', ordCRes.status, 201);
+  const ordCId = ordCRes.data.data._id;
+  await advancePaneToQcAwaiting(token, paneC.paneNumber, stns);
+
+  const qcFailC = await api('POST', `/api/panes/${paneC.paneNumber}/scan`, token, {
+    station: stns.qc,
+    action: 'qc_fail',
+    reason: 'stain',
+    remakeStationId: stns.edging,
+  });
+  check('QC_FAIL with remakeStationId → 200', qcFailC.status, 200);
+  check(
+    '  remade queued at edging',
+    String(qcFailC.data.data.remadePane.currentStation?._id || qcFailC.data.data.remadePane.currentStation),
+    stns.edging,
+  );
+
+  // ── cleanup ──
+  const notifs = await api('GET', '/api/notifications?limit=100', token);
+  const extraNotifs = notifs.data.data.filter((n) =>
+    ['pane_arrived', 'qc_remake'].includes(n.type) &&
+    (n.message?.includes(paneA.paneNumber) ||
+      n.message?.includes(paneB.paneNumber) ||
+      n.message?.includes(paneC.paneNumber)),
+  );
+  if (extraNotifs.length > 0) {
+    await api('DELETE', '/api/notifications', token, { ids: extraNotifs.map((n) => n._id) });
+  }
+
+  const allMatLogs = await api('GET', '/api/material-logs?limit=100', token);
+  const remakeLogIds = allMatLogs.data.data
+    .filter((l) => l.referenceType === 'qc_remake' && [defectedId, paneC._id].map(String).includes(String(l.referenceId)))
+    .map((l) => l._id);
+  if (remakeLogIds.length > 0) {
+    await api('DELETE', '/api/material-logs', token, { ids: remakeLogIds });
+  }
+
+  await api('DELETE', `/api/orders/${ordAId}`, token);
+  await api('DELETE', `/api/orders/${ordBId}`, token);
+  await api('DELETE', `/api/orders/${ordCId}`, token);
+
+  await api('DELETE', `/api/requests/${reqAId}`, token);
+  await api('DELETE', `/api/requests/${reqBId}`, token);
+  await api('DELETE', `/api/requests/${reqC.data.data._id}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -1121,6 +1331,7 @@ async function main() {
     await testBatchScan(token, stns);
     await testLaminateCreateViaPanes(token);
     await testLaminateSplitViaPatch(token);
+    await testQcPassFailRemake(token, stns);
   } finally {
     await cleanupStations(token, stns).catch(() => {});
     await sweepCreatedData(API, token, snapshot);

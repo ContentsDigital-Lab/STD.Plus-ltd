@@ -33,7 +33,7 @@ const claimSchema = new mongoose.Schema({
   },
   defectCode: {
     type: String,
-    enum: ['broken', 'chipped', 'dimension_wrong', 'scratch', 'other'],
+    enum: ['broken', 'chipped', 'dimension_wrong', 'scratch', 'stain', 'other'],
     default: null,
   },
   defectStation: {

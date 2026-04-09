@@ -1525,6 +1525,10 @@ async function testPaneLogs(token, stns) {
   // Scan pane to create pane logs via the scan endpoint
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_in' });
   await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'complete' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.cutting, action: 'scan_out' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.qc, action: 'scan_in' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.qc, action: 'complete' });
+  await api('POST', `/api/panes/${pane.paneNumber}/scan`, token, { station: stns.qc, action: 'qc_pass' });
 
   // GET /pane-logs — should have logs
   const r1 = await api('GET', '/api/pane-logs', token);
@@ -1540,6 +1544,14 @@ async function testPaneLogs(token, stns) {
 
   const r3 = await api('GET', '/api/pane-logs?action=scan_in', token);
   check('GET /pane-logs?action=scan_in', r3.status, 200);
+
+  const r3b = await api('GET', '/api/pane-logs?action=qc_pass', token);
+  check('GET /pane-logs?action=qc_pass', r3b.status, 200);
+  check(
+    '  qc_pass log for this pane',
+    r3b.data.data.some((l) => String(l.pane?._id || l.pane) === String(pane._id) && l.action === 'qc_pass'),
+    true,
+  );
 
   // Create a material log for timeline
   const matLog = await api('POST', '/api/material-logs', token, {

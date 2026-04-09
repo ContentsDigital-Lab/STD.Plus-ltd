@@ -10,6 +10,7 @@ const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences, cascadeDeleteReferenced, cascadeDeleteManyReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
+const { createRemakeFromSource } = require('../services/remakePane');
 
 const Claim = require('../models/Claim');
 const MaterialLog = require('../models/MaterialLog');
@@ -374,11 +375,14 @@ exports.deleteMany = async (req, res, next) => {
 // ── POST /panes/:paneNumber/scan ──────────────────────────────────────────────
 exports.scan = async (req, res, next) => {
   try {
+    const body = req.validated?.body ?? req.body;
     const { paneNumber } = req.params;
-    const { station, action } = req.body;
+    const { station, action, reason, description, remakeStationId } = body;
 
     if (!station) return fail(res, 'station is required', 400);
-    if (!['scan_in', 'start', 'complete', 'scan_out', 'laminate'].includes(action)) return fail(res, 'Invalid action', 400);
+    if (!['scan_in', 'start', 'complete', 'scan_out', 'laminate', 'qc_pass', 'qc_fail'].includes(action)) {
+      return fail(res, 'Invalid action', 400);
+    }
 
     const pane = await Pane.findOne({ paneNumber: paneNumber.toUpperCase() });
     if (!pane) return fail(res, `ไม่พบกระจก ${paneNumber}`, 404);
@@ -465,14 +469,99 @@ exports.scan = async (req, res, next) => {
       });
     }
 
+    // ── QC fail: mark defected, log, auto-remake ──
+    if (action === 'qc_fail') {
+      if (['defected', 'completed', 'claimed'].includes(pane.currentStatus)) {
+        return fail(res, `กระจก ${pane.paneNumber} cannot be QC failed in its current state`, 400);
+      }
+
+      const qcStationStr = pane.currentStation ? pane.currentStation.toString() : null;
+      if (qcStationStr !== station) {
+        return fail(res, `กระจกอยู่ที่สถานี ${qcStationStr} ไม่ใช่ ${station}`, 400);
+      }
+      if (pane.currentStatus !== 'awaiting_scan_out') {
+        return fail(res, 'กระจกต้องอยู่ในสถานะ awaiting_scan_out (กดเสร็จสิ้นก่อน) ก่อน QC fail', 400);
+      }
+
+      const now = new Date();
+
+      if (pane.order) {
+        const orderForBreakdown = await Order.findById(pane.order);
+        if (orderForBreakdown) {
+          const breakdown = orderForBreakdown.stationBreakdown instanceof Map
+            ? orderForBreakdown.stationBreakdown
+            : new Map(Object.entries(orderForBreakdown.stationBreakdown || {}));
+          const prevCount = breakdown.get(station) || 0;
+          if (prevCount > 0) breakdown.set(station, prevCount - 1);
+          orderForBreakdown.stationBreakdown = breakdown;
+          await orderForBreakdown.save();
+        }
+      }
+
+      pane.currentStation = null;
+      pane.currentStatus = 'defected';
+      await pane.save();
+
+      let materialId = pane.material ?? null;
+      if (!materialId && pane.order) {
+        const ord = await Order.findById(pane.order).select('material').lean();
+        materialId = ord?.material ?? null;
+        if (materialId) await Pane.updateOne({ _id: pane._id }, { material: materialId });
+      }
+      if (!materialId) {
+        return fail(res, 'Cannot create remake: pane has no material (link an order with material)', 400);
+      }
+
+      const log = await PaneLog.create({
+        pane: pane._id,
+        order: pane.order ?? null,
+        material: materialId,
+        worker: req.user?._id ?? null,
+        station,
+        action: 'qc_fail',
+        reason,
+        description: description ?? '',
+        completedAt: now,
+      });
+
+      const originalForRemake = await Pane.findById(pane._id);
+      const remadePane = await createRemakeFromSource({
+        originalPane: originalForRemake,
+        req,
+        remakeStationId: remakeStationId || undefined,
+        mode: 'qc_fail',
+        claim: null,
+        materialId,
+      });
+
+      const populatedDefected = await Pane.findById(pane._id).populate(POPULATE_FIELDS);
+      emit(req, 'pane:updated', { action: 'qc_failed', data: populatedDefected }, ['dashboard', 'pane', 'production']);
+      emit(req, 'log:updated', { action: 'pane_scanned', data: { paneLog: log, material: materialId } }, ['log']);
+
+      if (pane.order) {
+        const orderFresh = await Order.findById(pane.order).populate([
+          'request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo',
+        ]);
+        if (orderFresh) {
+          emit(req, 'order:updated', { action: 'updated', data: orderFresh }, ['dashboard', 'order']);
+        }
+      }
+
+      return success(res, {
+        pane: populatedDefected.toObject ? populatedDefected.toObject() : populatedDefected,
+        log: log.toObject(),
+        remadePane: remadePane.toObject ? remadePane.toObject() : remadePane,
+      });
+    }
+
     // ── Normal scan actions ──
-    if (pane.currentStatus === 'completed') {
-      return fail(res, `กระจก ${pane.paneNumber} already completed`, 400);
+    if (pane.currentStatus === 'completed' || pane.currentStatus === 'defected') {
+      return fail(res, `กระจก ${pane.paneNumber} already completed or defected`, 400);
     }
 
     const currentStationStr = pane.currentStation ? pane.currentStation.toString() : null;
 
-    if (['complete', 'scan_out'].includes(action) && currentStationStr !== station) {
+    if (['complete', 'scan_out', 'qc_pass'].includes(action) && currentStationStr !== station) {
       return fail(res, `กระจกอยู่ที่สถานี ${currentStationStr} ไม่ใช่ ${station}`, 400);
     }
 
@@ -495,9 +584,9 @@ exports.scan = async (req, res, next) => {
       pane.currentStatus  = 'awaiting_scan_out';
     }
 
-    if (action === 'scan_out') {
+    if (action === 'scan_out' || action === 'qc_pass') {
       if (pane.currentStatus !== 'awaiting_scan_out') {
-        return fail(res, 'กระจกยังไม่เสร็จสิ้น ต้องกด "เสร็จสิ้น" ก่อน scan out', 400);
+        return fail(res, 'กระจกยังไม่เสร็จสิ้น ต้องกด "เสร็จสิ้น" ก่อน scan out / QC pass', 400);
       }
 
       const route = Array.isArray(pane.routing) ? pane.routing.map(r => r.toString()) : [];
@@ -541,7 +630,7 @@ exports.scan = async (req, res, next) => {
       worker:      req.user?._id ?? null,
       station,
       action,
-      completedAt: action === 'scan_out' ? now : null,
+      completedAt: action === 'scan_out' || action === 'qc_pass' ? now : null,
     });
 
     emit(req, 'pane:updated', { action: 'scanned', data: populated });
@@ -575,7 +664,7 @@ exports.scan = async (req, res, next) => {
       }
     }
 
-    if (action === 'scan_out') {
+    if (action === 'scan_out' || action === 'qc_pass') {
       const isLastStation = !nextStation;
 
       if (pane.order) {

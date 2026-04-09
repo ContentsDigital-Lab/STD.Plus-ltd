@@ -1,3 +1,15 @@
 ---
+title: List pane logs
+description: Filter pane scan history by station, action (including qc_pass and qc_fail), order, pane, or material.
 openapi: get /api/pane-logs
 ---
+
+## Query parameter `action`
+
+Supported values include `scan_in`, `start`, `complete`, `scan_out`, `laminate_start`, `laminate_complete`, **`qc_pass`**, and **`qc_fail`**. Example:
+
+```
+GET /api/pane-logs?action=qc_fail&limit=100
+```
+
+QC fail logs include **`reason`** and **`description`** when present on the stored document.

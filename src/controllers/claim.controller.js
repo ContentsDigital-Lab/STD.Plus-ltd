@@ -4,12 +4,10 @@ const Order = require('../models/Order');
 const Material = require('../models/Material');
 const Worker = require('../models/Worker');
 const Pane = require('../models/Pane');
-const Station = require('../models/Station');
-const MaterialLog = require('../models/MaterialLog');
-const Notification = require('../models/Notification');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
+const { createRemakeFromSource } = require('../services/remakePane');
 const paginate = require('../utils/paginate');
 const { hasPermission } = require('../config/permissions');
 
@@ -60,139 +58,17 @@ const pullPaneFromStation = async (paneId, req) => {
 const createRemakePane = async (claim, remakeStationId, req) => {
   const originalPane = await Pane.findById(claim.pane);
   if (!originalPane) return null;
-
   const originalOrder = await Order.findById(claim.order);
   if (!originalOrder) return null;
-
-  const routing = originalPane.routing?.length > 0
-    ? [...originalPane.routing]
-    : (originalOrder.stations?.length > 0 ? [...originalOrder.stations] : []);
-
-  let finalRemakeStationId = remakeStationId;
-  if (!finalRemakeStationId) {
-    const orderRelessStation = await Station.findOne({ 
-      name: { $regex: /order\s*rele[a]?[s]?[s]?/i } 
-    });
-    if (orderRelessStation) {
-      finalRemakeStationId = orderRelessStation._id;
-    } else if (routing.length > 0) {
-      finalRemakeStationId = routing[0];
-    }
-  }
-
-  const paneNumber = await Counter.getNext('pane', 'PNE');
-  const qrCode = `STDPLUS:${paneNumber}`;
-
-  const isSheet = originalPane.laminateRole === 'sheet';
-
-  let remakeSheetLabel = '';
-  if (isSheet) {
-    const baseLabel = (originalPane.sheetLabel || 'A').replace(/\d+$/, '');
-    const existingSiblings = await Pane.find({ parentPane: originalPane.parentPane, laminateRole: 'sheet' }).lean();
-    const suffix = existingSiblings.length > 0 ? existingSiblings.length : 2;
-    remakeSheetLabel = `${baseLabel}${suffix}`;
-  }
-
-  const remadePane = await Pane.create({
-    paneNumber,
-    qrCode,
-    order: null,
-    request: originalOrder.request,
-    material: claim.material._id || claim.material,
-    remakeOf: originalPane._id,
-    currentStation: finalRemakeStationId || null,
-    currentStatus: 'pending',
-    routing,
-    customRouting: originalPane.customRouting,
-    dimensions: {
-      width: originalPane.dimensions?.width || 0,
-      height: originalPane.dimensions?.height || 0,
-      thickness: originalPane.dimensions?.thickness || 0,
-    },
-    jobType: originalPane.jobType || '',
-    rawGlass: {
-      glassType: originalPane.rawGlass?.glassType || '',
-      color: originalPane.rawGlass?.color || '',
-      thickness: originalPane.rawGlass?.thickness || 0,
-      sheetsPerPane: originalPane.rawGlass?.sheetsPerPane || 1,
-    },
-    glassType: originalPane.glassType || '',
-    glassTypeLabel: originalPane.glassTypeLabel || '',
-    cornerSpec: originalPane.cornerSpec || '',
-    dimensionTolerance: originalPane.dimensionTolerance || '',
-    holes: originalPane.holes?.length ? originalPane.holes.map(h => h.toObject ? h.toObject() : { ...h }) : [],
-    notches: originalPane.notches?.length ? originalPane.notches.map(n => n.toObject ? n.toObject() : { ...n }) : [],
-    processes: originalPane.processes ? [...originalPane.processes] : [],
-    edgeTasks: originalPane.edgeTasks
-      ? originalPane.edgeTasks.map(t => ({ side: t.side, edgeProfile: t.edgeProfile, machineType: t.machineType, status: 'pending' }))
-      : [],
-    laminateRole: isSheet ? 'sheet' : originalPane.laminateRole || 'single',
-    parentPane: isSheet ? originalPane.parentPane : null,
-    sheetLabel: remakeSheetLabel,
-    laminateStation: isSheet ? originalPane.laminateStation : null,
+  return createRemakeFromSource({
+    originalPane,
+    req,
+    remakeStationId,
+    mode: 'claim',
+    claim,
+    materialId: claim.material._id || claim.material,
+    orderIdForLookup: claim.order,
   });
-
-  if (isSheet && originalPane.parentPane) {
-    await Pane.findByIdAndUpdate(originalPane.parentPane, {
-      $push: { childPanes: remadePane._id },
-    });
-  }
-
-  await Claim.findByIdAndUpdate(claim._id, { remadePane: remadePane._id });
-
-  await MaterialLog.create({
-    material: claim.material._id || claim.material,
-    panes: [remadePane._id],
-    actionType: 'remake',
-    quantityChanged: 0,
-    referenceId: claim._id,
-    referenceType: 'claim',
-    order: null,
-    worker: req.user._id,
-  }).catch(err => console.error('[claim.approve] MaterialLog remake failed:', err));
-
-  emit(req, 'pane:updated', { action: 'created', data: remadePane }, ['dashboard', 'pane', 'production']);
-  emit(req, 'log:updated', { action: 'created' }, ['log']);
-
-  if (finalRemakeStationId) {
-    const stationIdStr = finalRemakeStationId.toString();
-    emit(req, 'station:pane_arrived', {
-      paneNumber: remadePane.paneNumber,
-      paneId: remadePane._id,
-      fromStation: null,
-      toStation: stationIdStr,
-      isRemake: true,
-    }, [`station:${stationIdStr}`, 'station']);
-
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`station:${stationIdStr}`).emit('notification', {
-        type: 'pane_arrived',
-        title: 'มีกระจกรีเมคเข้าสถานี',
-        message: `กระจกรีเมค ${remadePane.paneNumber} (แทน ${originalPane.paneNumber}) arrived`,
-        referenceId: remadePane._id,
-        referenceType: 'Pane',
-        priority: 'high',
-        readStatus: false,
-      });
-    }
-  }
-
-  const recipientId = originalOrder.assignedTo?._id || originalOrder.assignedTo;
-  if (recipientId) {
-    const notification = await Notification.create({
-      recipient: recipientId,
-      type: 'claim_approved',
-      title: 'เคลมอนุมัติ — สร้างกระจกรีเมคแล้ว',
-      message: `เคลม ${claim.claimNumber}: กระจก ${originalPane.paneNumber} → รีเมค ${remadePane.paneNumber}`,
-      referenceId: claim._id,
-      referenceType: 'Claim',
-      priority: 'high',
-    });
-    emit(req, 'notification', notification, [`user:${recipientId}`]);
-  }
-
-  return remadePane;
 };
 
 exports.getAll = async (req, res, next) => {

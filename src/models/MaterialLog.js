@@ -21,7 +21,7 @@ const materialLogSchema = new mongoose.Schema({
   },
   referenceType: {
     type: String,
-    enum: ['claim', 'withdrawal'],
+    enum: ['claim', 'withdrawal', 'qc_remake'],
     default: null,
   },
   quantityChanged: {

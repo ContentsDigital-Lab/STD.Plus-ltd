@@ -153,7 +153,7 @@ socket.on('order:updated', (payload) => {
 |---|---|---|---|
 | `material:updated` | INBOUND | `dashboard`, `inventory` | Material create / update / delete |
 | `inventory:updated` | INBOUND | `dashboard`, `inventory` | Inventory create / update / delete / move; Withdrawal approve / reject |
-| `order:updated` | INBOUND | `dashboard`, `order` | Order create / update / delete; QR scan `scan_out` |
+| `order:updated` | INBOUND | `dashboard`, `order` | Order create / update / delete; QR scan `scan_out` or `qc_pass`; `qc_fail` remake / `paneCount` |
 | `log:updated` | INBOUND | `dashboard`, `log` | Material log create / update / delete; QR scan (all actions) |
 | `request:updated` | INBOUND | `dashboard`, `request` | Request create / update / delete |
 | `withdrawal:updated` | INBOUND | `dashboard`, `withdrawal` | Withdrawal create / update / delete |
@@ -166,7 +166,7 @@ socket.on('order:updated', (payload) => {
 | `jobType:updated` | INBOUND | `dashboard` | Job type create / update / delete |
 | `pricing:updated` | INBOUND | `pricing` | Pricing settings update |
 | `station:check_in` | INBOUND | `station:<stationId>` | Order update with station changes |
-| `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | QR scan with `scan_out` action |
+| `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | QR scan with `scan_out` or `qc_pass` (pane advances); remake queue (`isRemake: true`) |
 | `laminate:ready` | INBOUND | `dashboard`, `pane`, `production`, `station:<id>` | Sheet `scan_in` at lamination station (all sheets present) |
 | `laminate:waiting` | INBOUND | `station:<id>` | Sheet `scan_in` at lamination station (sheets still missing) |
 | `pane:laminated` | INBOUND | `dashboard`, `pane`, `production`, `station:<id>` | `laminate` scan action on parent pane |
@@ -189,7 +189,9 @@ Most events use `created`, `updated`, or `deleted`. Some events have additional 
 
 | Event | Extra actions | Description |
 |---|---|---|
-| `pane:updated` | `scanned` | Emitted on every QR scan action (`scan_in`, `start`, `complete`, `scan_out`, `laminate`) |
+| `pane:updated` | `scanned` | Emitted on every QR scan action (`scan_in`, `start`, `complete`, `scan_out`, `qc_pass`, `laminate`) |
+| `pane:updated` | `qc_failed` | Emitted on **`qc_fail`** with the **defected** pane payload |
+| `pane:updated` | `created` | Emitted when a **remake** pane is created (`qc_fail` auto-remake or claim-approved remake) |
 | `inventory:updated` | `adjusted` | Emitted when a withdrawal is approved/rejected (inventory quantity changes) |
 | `inventory:updated` | `moved` | Emitted on inventory move/split. Payload: `{ action: "moved", data: { source, target, quantity } }` |
 | `log:updated` | `pane_scanned` | Emitted on every QR scan. Payload: `{ action: "pane_scanned", data: { paneLog, material } }` |
@@ -228,7 +230,7 @@ socket.on('station:check_in', (payload) => {
 
 ### Pane Arrived (QR Scan)
 
-Emitted when a pane is scanned with the `scan_out` action and advances to the next station. Sent to the next station's room and the general `station` room.
+Emitted when a pane is scanned with **`scan_out`** or **`qc_pass`** and advances to the next station. Also emitted when a **remake** pane is queued at a station (payload may include `isRemake: true`). Sent to the next station's room and the general `station` room.
 
 ```javascript
 socket.on('station:pane_arrived', (payload) => {
@@ -241,7 +243,7 @@ socket.on('station:pane_arrived', (payload) => {
 
 | Event | Direction | Emitted to | Triggered by |
 |---|---|---|---|
-| `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | POST `/api/panes/{paneNumber}/scan` with `action: "scan_out"` |
+| `station:pane_arrived` | INBOUND | `station:<nextStation>`, `station` | POST `/api/panes/{paneNumber}/scan` with `action: "scan_out"` or `"qc_pass"`; remake arrival |
 
 **Payload:**
 
@@ -265,7 +267,7 @@ socket.on('station:pane_arrived', (payload) => {
 
 ### Pane Arrived (Station Notification)
 
-In addition to `station:pane_arrived`, the scan endpoint also emits a `notification` event directly to the next station's room when a pane moves via `scan_out`. This allows station screens to show an alert.
+In addition to `station:pane_arrived`, the scan endpoint also emits a `notification` event directly to the next station's room when a pane moves via **`scan_out`** or **`qc_pass`**, and when a **QC remake** pane arrives at a station. This allows station screens to show an alert.
 
 ```javascript
 socket.on('notification', (payload) => {
@@ -278,7 +280,7 @@ socket.on('notification', (payload) => {
 
 | Event | Direction | Emitted to | Triggered by |
 |---|---|---|---|
-| `notification` | INBOUND | `station:<nextStation>` | QR scan `scan_out` (pane moves to next station) |
+| `notification` | INBOUND | `station:<nextStation>` | QR scan `scan_out` / `qc_pass` (pane moves); QC remake arrival |
 
 **Payload:**
 
@@ -432,7 +434,7 @@ socket.on('notification', (notification) => {
 
 | Event | Direction | Emitted to | Triggered by |
 |---|---|---|---|
-| `notification` | INBOUND | `user:<recipientId>` | POST `/api/notifications`, QR scan `scan_out` action |
+| `notification` | INBOUND | `user:<recipientId>` | POST `/api/notifications`; QR scan `scan_out` / `qc_pass`; **`qc_remake`** after `qc_fail` when the order has `assignedTo` |
 
 **Payload:** The full populated notification object.
 

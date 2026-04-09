@@ -121,8 +121,8 @@ async function testClaimPullsPaneFromStation(token, stns) {
   const claimRes = await api('POST', '/api/claims/from-pane', token, {
     paneNumber: pane1.paneNumber,
     source: 'worker',
-    description: 'Scratch found on pane 1',
-    defectCode: 'scratch',
+    description: 'Stain / bubble defect on pane 1',
+    defectCode: 'stain',
     defectStation: stns.edging,
     reportedBy: workerId,
   });

@@ -1,3 +1,9 @@
 ---
+title: Batch scan panes
+description: Transactional batch scan_in / start / complete only — not scan_out, qc_pass, qc_fail, or laminate.
 openapi: post /api/panes/batch-scan
 ---
+
+<Note>
+  **`scan_out`**, **`qc_pass`**, **`qc_fail`**, and **`laminate`** are **not** supported here. Use [Scan a pane](/api-reference/scanning/scan-a-pane) for each pane when you need handoff, QC, or laminate merge.
+</Note>

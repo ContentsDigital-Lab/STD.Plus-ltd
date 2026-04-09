@@ -7,7 +7,7 @@ const paneController = require('../controllers/pane.controller');
 
 const router = Router();
 
-const PANE_STATUS = ['pending', 'in_progress', 'awaiting_scan_out', 'completed'];
+const PANE_STATUS = ['pending', 'in_progress', 'awaiting_scan_out', 'completed', 'claimed', 'defected'];
 const EDGE_STATUS = ['pending', 'in_progress', 'completed'];
 
 const dimensionsSchema = z.object({
@@ -125,12 +125,23 @@ const deleteManySchema = z.object({
   }),
 });
 
+const QC_DEFECT_REASON = z.enum(['broken', 'chipped', 'dimension_wrong', 'scratch', 'stain', 'other']);
+
 const scanSchema = z.object({
-  body: z.object({
-    station: z.string().min(1),
-    action: z.enum(['scan_in', 'start', 'complete', 'scan_out', 'laminate']),
-    operator: z.string().min(1).optional(),
-  }),
+  body: z
+    .object({
+      station: z.string().min(1),
+      action: z.enum(['scan_in', 'start', 'complete', 'scan_out', 'laminate', 'qc_pass', 'qc_fail']),
+      operator: z.string().min(1).optional(),
+      reason: QC_DEFECT_REASON.optional(),
+      description: z.string().optional(),
+      remakeStationId: z.string().min(1).optional(),
+    })
+    .superRefine((val, ctx) => {
+      if (val.action === 'qc_fail' && val.reason === undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'reason is required when action is qc_fail', path: ['reason'] });
+      }
+    }),
 });
 
 const batchScanSchema = z.object({

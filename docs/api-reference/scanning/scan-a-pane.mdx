@@ -1,3 +1,41 @@
 ---
+title: Scan a pane
+description: QR scan endpoint — scan_in, scan_out, qc_pass, qc_fail, laminate, and optional auto-remake on QC failure.
 openapi: post /api/panes/{paneNumber}/scan
 ---
+
+## Summary
+
+`POST /api/panes/{paneNumber}/scan` drives the production line. Send the **station** ObjectId and **action**. The pane number in the path is the code from the QR label (without the `STDPLUS:` prefix).
+
+| Action | Typical use |
+|--------|-------------|
+| `scan_in`, `start`, `complete` | Normal station workflow |
+| `scan_out` | Hand off after `complete` (`awaiting_scan_out` → next station or `completed`) |
+| `qc_pass` | Same as `scan_out`, but logs **`qc_pass`** on `PaneLog` for QC audit |
+| `qc_fail` | Mark pane **`defected`**, log **`reason`** / **`description`**, return **`remadePane`** (auto remake) |
+| `laminate` | Merge child sheets into parent (parent pane number only) |
+
+## QC fail body
+
+```json
+{
+  "station": "<qc-station-id>",
+  "action": "qc_fail",
+  "reason": "scratch",
+  "description": "Optional free text",
+  "remakeStationId": "<optional-station-id>"
+}
+```
+
+**`reason`** (required): `broken` \| `chipped` \| `dimension_wrong` \| `scratch` \| `stain` \| `other`.
+
+## Response (QC fail)
+
+On success, **`data`** includes:
+
+- **`pane`** — the defected pane (`currentStatus: "defected"`)
+- **`log`** — the new `PaneLog` (`action: "qc_fail"`, `reason`, `description`)
+- **`remadePane`** — the new pane queued for production (`remakeOf` points at the defected pane)
+
+For other actions, the shape matches the OpenAPI **ScanResult** schema (`nextStation` after `scan_out` / `qc_pass` when applicable).

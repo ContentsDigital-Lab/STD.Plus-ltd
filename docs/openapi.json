@@ -497,7 +497,7 @@
           "source": { "type": "string", "enum": ["customer", "worker"] },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
           "description": { "type": "string" },
-          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "other"], "nullable": true },
+          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "stain", "other"], "nullable": true },
           "defectStation": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Station" }], "nullable": true, "description": "Station where defect was found (populated with _id, name)" },
           "decision": { "type": "string", "enum": ["destroy", "keep"], "nullable": true },
           "reportedBy": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
@@ -518,7 +518,7 @@
           "material": { "type": "string", "minLength": 1 },
           "pane": { "type": "string", "minLength": 1 },
           "description": { "type": "string", "minLength": 1 },
-          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "other"] },
+          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "stain", "other"] },
           "defectStation": { "type": "string", "description": "Station ObjectId where defect was found" },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "decision": { "type": "string", "enum": ["destroy", "keep"] },
@@ -536,7 +536,7 @@
           "paneNumber": { "type": "string", "minLength": 1, "description": "Pane number (e.g. PNE-0001). The endpoint auto-resolves the order and material from the pane.", "example": "PNE-0001" },
           "source": { "type": "string", "enum": ["customer", "worker"] },
           "description": { "type": "string", "minLength": 1 },
-          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "other"] },
+          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "stain", "other"] },
           "defectStation": { "type": "string", "description": "Station ObjectId where defect was found" },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "decision": { "type": "string", "enum": ["destroy", "keep"] },
@@ -554,7 +554,7 @@
           "material": { "type": "string", "minLength": 1 },
           "pane": { "type": "string", "minLength": 1 },
           "description": { "type": "string", "minLength": 1 },
-          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "other"] },
+          "defectCode": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "stain", "other"] },
           "defectStation": { "type": "string", "description": "Station ObjectId where defect was found" },
           "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
           "decision": { "type": "string", "enum": ["destroy", "keep"] },
@@ -665,7 +665,7 @@
           "panes": { "type": "array", "items": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Pane" }] }, "description": "Array of Pane references associated with this log entry" },
           "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "nullable": true },
-          "referenceType": { "type": "string", "enum": ["claim", "withdrawal"], "nullable": true },
+          "referenceType": { "type": "string", "enum": ["claim", "withdrawal", "qc_remake"], "nullable": true },
           "quantityChanged": { "type": "number" },
           "totalPrice": { "type": "number" },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"], "nullable": true },
@@ -684,7 +684,7 @@
           "panes": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Array of Pane ObjectIds" },
           "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "minLength": 1 },
-          "referenceType": { "type": "string", "enum": ["claim", "withdrawal"] },
+          "referenceType": { "type": "string", "enum": ["claim", "withdrawal", "qc_remake"] },
           "quantityChanged": { "type": "number" },
           "totalPrice": { "type": "number", "minimum": 0 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
@@ -700,7 +700,7 @@
           "panes": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Array of Pane ObjectIds" },
           "actionType": { "type": "string", "enum": ["withdraw", "claim", "import", "cut", "remake"] },
           "referenceId": { "type": "string", "minLength": 1 },
-          "referenceType": { "type": "string", "enum": ["claim", "withdrawal"] },
+          "referenceType": { "type": "string", "enum": ["claim", "withdrawal", "qc_remake"] },
           "quantityChanged": { "type": "number" },
           "totalPrice": { "type": "number", "minimum": 0 },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
@@ -810,7 +810,7 @@
           "material": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Material" }], "description": "Populated when an order is created from the request (inherited from the order's material)" },
           "inventory": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Inventory" }], "description": "Inventory slot this pane was cut from (if any)" },
           "currentStation": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Station" }], "nullable": true, "description": "Populated Station object (with _id, name) — null for virtual states (queued, completed, claimed)" },
-          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed", "claimed"], "default": "pending" },
+          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed", "claimed", "defected"], "default": "pending" },
           "routing": { "type": "array", "items": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Station" }] }, "description": "Array of Station objects (populated with _id, name)" },
           "customRouting": { "type": "boolean", "default": false },
           "dimensions": { "$ref": "#/components/schemas/Dimensions" },
@@ -847,7 +847,7 @@
           "material": { "type": "string", "minLength": 1, "description": "Material ID (optional, auto-filled from the order's material when order is created from request)" },
           "inventory": { "type": "string", "minLength": 1, "description": "Inventory slot ID. If provided, a 'cut' MaterialLog is auto-created for traceability." },
           "currentStation": { "type": "string", "minLength": 1, "description": "Station ObjectId" },
-          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed", "claimed"] },
+          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed", "claimed", "defected"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Array of Station ObjectIds" },
           "customRouting": { "type": "boolean" },
           "dimensions": { "$ref": "#/components/schemas/Dimensions" },
@@ -879,8 +879,11 @@
         "required": ["station", "action"],
         "properties": {
           "station": { "type": "string", "minLength": 1, "description": "Station ObjectId where the scan is happening (must match the pane's currentStation)" },
-          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "laminate"], "description": "`scan_in` — acknowledge arrival, `start` — begin work, `complete` — mark work done (pane stays at station with `awaiting_scan_out` status), `scan_out` — handoff pane to next station (or mark completed if last station), `laminate` — merge child sheets into parent pane (call on parent paneNumber, all active sheets must be at the lamination station)" },
-          "operator": { "type": "string", "minLength": 1, "description": "Worker ID. Accepted by validation but currently unused — the authenticated user (`req.user._id`) is always recorded as the worker in the PaneLog." }
+          "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "laminate", "qc_pass", "qc_fail"], "description": "`scan_in` — acknowledge arrival, `start` — begin work, `complete` — mark work done (`awaiting_scan_out`), `scan_out` / `qc_pass` — advance to next routing station or complete if last (same rules; QC pass logs `qc_pass`), `qc_fail` — mark pane `defected`, log reason/description, auto-create remake pane (requires `reason`), `laminate` — merge child sheets into parent" },
+          "operator": { "type": "string", "minLength": 1, "description": "Worker ID. Accepted by validation but currently unused — the authenticated user (`req.user._id`) is always recorded as the worker in the PaneLog." },
+          "reason": { "type": "string", "enum": ["broken", "chipped", "dimension_wrong", "scratch", "stain", "other"], "description": "Required when `action` is `qc_fail`" },
+          "description": { "type": "string", "description": "Optional extra detail for `qc_fail`" },
+          "remakeStationId": { "type": "string", "minLength": 1, "description": "Optional station ObjectId to queue the auto-created remake pane; defaults to first station in routing" }
         }
       },
       "ScanResult": {
@@ -897,14 +900,17 @@
               "material": { "type": "string", "nullable": true },
               "worker": { "type": "string", "nullable": true },
               "station": { "type": "string", "description": "Station ObjectId" },
-              "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out"] },
+              "action": { "type": "string", "enum": ["scan_in", "start", "complete", "scan_out", "laminate_start", "laminate_complete", "qc_pass", "qc_fail"] },
+              "reason": { "type": "string", "nullable": true },
+              "description": { "type": "string", "nullable": true },
               "completedAt": { "type": "string", "format": "date-time", "nullable": true },
               "createdAt": { "type": "string", "format": "date-time" },
               "updatedAt": { "type": "string", "format": "date-time" }
             }
           },
-          "nextStation": { "type": "string", "nullable": true, "description": "Station ObjectId the pane moved to (only present on `scan_out` action, null if last station)" },
-          "mergedSheets": { "type": "integer", "description": "Number of child sheets merged (only present on `laminate` action)" }
+          "nextStation": { "type": "string", "nullable": true, "description": "Station ObjectId after `scan_out` or `qc_pass` (null if last station / completed)" },
+          "mergedSheets": { "type": "integer", "description": "Number of child sheets merged (only present on `laminate` action)" },
+          "remadePane": { "$ref": "#/components/schemas/Pane", "description": "New remake pane (only when `action` was `qc_fail`)" }
         }
       },
       "PaneUpdateBody": {
@@ -914,7 +920,7 @@
           "order": { "type": "string", "minLength": 1 },
           "material": { "type": "string", "minLength": 1 },
           "currentStation": { "type": "string", "minLength": 1, "description": "Station ObjectId" },
-          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed", "claimed"] },
+          "currentStatus": { "type": "string", "enum": ["pending", "in_progress", "awaiting_scan_out", "completed", "claimed", "defected"] },
           "routing": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Array of Station ObjectIds" },
           "customRouting": { "type": "boolean" },
           "dimensions": { "$ref": "#/components/schemas/Dimensions" },
@@ -2869,7 +2875,7 @@
       "post": {
         "tags": ["QR Scanning"],
         "summary": "Scan a pane (QR scan endpoint)",
-        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Actions:**\n- `scan_in` — Sets `currentStation` to the station, `currentStatus` to `in_progress`, and `startedAt` (if not already set). For sheet panes at a laminate station, emits `laminate:ready` or `laminate:waiting` WebSocket events.\n- `start` — Sets `currentStation` to the station and `currentStatus` to `in_progress`.\n- `complete` — Sets `currentStation` to the station and `currentStatus` to `awaiting_scan_out`.\n- `scan_out` — Requires status `awaiting_scan_out`. Advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set. Sheet panes do not update `panesCompleted`/`progressPercent`.\n- `laminate` — **Must be called on a parent pane**. Validates all active child sheets (status != claimed) are present at the lamination station. Marks all active child sheets as `completed`, sets the parent pane to `awaiting_scan_out` at the lamination station (does not auto-advance). The worker must then `scan_out` the parent from the lamination station to advance it to the first post-lamination station. Creates `laminate_complete` PaneLogs for children and `laminate_start` for the parent. Updates `order.stationBreakdown`. Returns `mergedSheets` count.\n\n**Side effects (every action):**\n- Creates a `PaneLog` entry.\n- Emits `pane:updated` with `action: \"scanned\"` to `dashboard`, `pane`, `production`, `station:<name>`.\n- Emits `log:updated` with `action: \"pane_scanned\"` to `log`.\n- If the pane has no `material` but has an `order`, the order's material is backfilled onto the pane.\n\n**Additional side effects (scan_out only):**\n- Updates associated `Order` progress (`panesCompleted`, `progressPercent`, `stationBreakdown`) and order `status`.\n- Emits `order:updated`, `station:pane_arrived`, and `notification` WebSocket events.\n- Creates a `Notification` for the order's assigned worker (if any).\n- Emits a station-room `notification` event to `station:<nextStation>` for the pane arrival.\n\n**Validations:**\n- `complete` and `scan_out` must be performed at the pane's `currentStation`.\n- `scan_out` requires pane status to be `awaiting_scan_out` (i.e. `complete` must be called first).\n- Scanning a pane that is already `completed` returns 400.\n- `laminate` can only be called on parent panes; all active child sheets must be at the lamination station.\n\nRequires `panes:scan` permission.",
+        "description": "Core endpoint for the QR scanning workflow. Accepts a pane number (from the QR code) and an action to perform at a given station.\n\n**QR codes** contain values like `STDPLUS:PNE-0001`. The frontend should strip the `STDPLUS:` prefix and send only `PNE-0001` as the `paneNumber` path parameter.\n\n**Actions:**\n- `scan_in` — Sets `currentStation` to the station, `currentStatus` to `in_progress`, and `startedAt` (if not already set). For sheet panes at a laminate station, emits `laminate:ready` or `laminate:waiting` WebSocket events.\n- `start` — Sets `currentStation` to the station and `currentStatus` to `in_progress`.\n- `complete` — Sets `currentStation` to the station and `currentStatus` to `awaiting_scan_out`.\n- `scan_out` — Requires status `awaiting_scan_out`. Advances the pane to the next station in its routing with status `pending`. If it's the last station, pane status becomes `completed` and `completedAt` is set. Sheet panes do not update `panesCompleted`/`progressPercent`.\n- `qc_pass` — Same rules as `scan_out`. PaneLog records `qc_pass` for QC audit; routing and order progress match `scan_out`.\n- `qc_fail` — Requires `awaiting_scan_out`. Marks the pane `defected`, logs `qc_fail` with required `reason` and optional `description`, and auto-creates a remake pane (returned as `remadePane`). Optional `remakeStationId` queues the remake at that station; otherwise the first routing station is used.\n- `laminate` — **Must be called on a parent pane**. Validates all active child sheets (status != claimed) are present at the lamination station. Marks all active child sheets as `completed`, sets the parent pane to `awaiting_scan_out` at the lamination station (does not auto-advance). The worker must then `scan_out` or `qc_pass` the parent from the lamination station to advance it to the first post-lamination station. Creates `laminate_complete` PaneLogs for children and `laminate_start` for the parent. Updates `order.stationBreakdown`. Returns `mergedSheets` count.\n\n**Side effects (every action):**\n- Creates a `PaneLog` entry.\n- Emits `pane:updated` with `action: \"scanned\"` to `dashboard`, `pane`, `production`, `station:<name>` (on `qc_fail`, also `qc_failed` for the defected pane and `created` for the remake).\n- Emits `log:updated` with `action: \"pane_scanned\"` to `log`.\n- If the pane has no `material` but has an `order`, the order's material is backfilled onto the pane.\n\n**Additional side effects (`scan_out` / `qc_pass`):**\n- Updates associated `Order` progress (`panesCompleted`, `progressPercent`, `stationBreakdown`) and order `status`.\n- Emits `order:updated`, `station:pane_arrived`, and `notification` WebSocket events.\n- Creates a `Notification` for the order's assigned worker (if any).\n- Emits a station-room `notification` event to `station:<nextStation>` for the pane arrival.\n\n**Additional side effects (`qc_fail`):**\n- Decrements `stationBreakdown` at the QC station; may bump `order.paneCount` for non-sheet panes.\n- May create a `MaterialLog` with `referenceType: \"qc_remake\"`.\n- Emits `order:updated`, remake queue `station:pane_arrived` / station notifications, and user `notification` (`qc_remake`) when applicable.\n\n**Validations:**\n- `complete`, `scan_out`, `qc_pass`, and `qc_fail` must be performed at the pane's `currentStation` when that applies.\n- `scan_out` and `qc_pass` require pane status `awaiting_scan_out` (i.e. `complete` must be called first).\n- `qc_fail` requires `reason`; pane must be eligible to fail (e.g. not already `defected` / `completed` / `claimed`).\n- Scanning a pane that is already `completed` (for non-QC-fail paths) returns 400.\n- `laminate` can only be called on parent panes; all active child sheets must be at the lamination station.\n\nRequires `panes:scan` permission.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -2918,7 +2924,7 @@
       "post": {
         "tags": ["QR Scanning"],
         "summary": "Batch scan multiple panes",
-        "description": "Performs the same scan action on multiple panes at once within a single transaction. Useful for scanning a group of panes at the same station simultaneously.\n\n**Supported actions:** `scan_in`, `start`, `complete`. The `scan_out` and `laminate` actions are **not** supported in batch mode — use the single-pane scan endpoint for those.\n\n**Behavior:**\n- All panes are updated atomically in a MongoDB transaction. If any pane fails validation (e.g. wrong station, already completed), the entire batch is rolled back.\n- For `scan_in`/`start`: Sets `currentStation` and `currentStatus` to `in_progress`. Sets `startedAt` if not already set.\n- For `complete`: Validates the pane is at the specified station. Sets `currentStatus` to `awaiting_scan_out`.\n- Creates a `PaneLog` entry for each pane.\n- If a pane has no `material` but has an `order`, the order's material is backfilled.\n- After commit, emits `pane:updated` and `log:updated` WebSocket events for each pane.\n\nRequires `panes:scan` permission.",
+        "description": "Performs the same scan action on multiple panes at once within a single transaction. Useful for scanning a group of panes at the same station simultaneously.\n\n**Supported actions:** `scan_in`, `start`, `complete`. **`scan_out`**, **`qc_pass`**, **`qc_fail`**, and **`laminate`** are **not** supported in batch mode — use the single-pane scan endpoint for those.\n\n**Behavior:**\n- All panes are updated atomically in a MongoDB transaction. If any pane fails validation (e.g. wrong station, already completed), the entire batch is rolled back.\n- For `scan_in`/`start`: Sets `currentStation` and `currentStatus` to `in_progress`. Sets `startedAt` if not already set.\n- For `complete`: Validates the pane is at the specified station. Sets `currentStatus` to `awaiting_scan_out`.\n- Creates a `PaneLog` entry for each pane.\n- If a pane has no `material` but has an `order`, the order's material is backfilled.\n- After commit, emits `pane:updated` and `log:updated` WebSocket events for each pane.\n\nRequires `panes:scan` permission.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
