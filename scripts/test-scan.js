@@ -880,21 +880,6 @@ async function testBatchScan(token, stns) {
     paneNumbers, station: stns.cutting, action: 'scan_in',
   });
 
-  // batch-scan uses MongoDB transactions which require a replica set.
-  // If the dev DB is standalone, the call returns 500 (transaction infra error).
-  if (r1.status === 500) {
-    console.log('   SKIP  batch scan — MongoDB transactions not supported (standalone, no replica set)');
-    console.log('          All batch-scan tests skipped. Enable a replica set to run these.\n');
-
-    // Cleanup and return early
-    for (const p of panes) await api('DELETE', `/api/panes/${p._id}`, token);
-    await api('DELETE', `/api/orders/${ordId}`, token);
-    await api('DELETE', `/api/requests/${reqId}`, token);
-    await api('DELETE', `/api/materials/${matId}`, token);
-    await api('DELETE', `/api/customers/${custId}`, token);
-    return;
-  }
-
   check('batch scan_in status', r1.status, 200);
   check('batch scan_in updatedCount', r1.data.data.updatedCount, 3);
   check('batch scan_in returns panes array', Array.isArray(r1.data.data.panes), true);
@@ -903,6 +888,23 @@ async function testBatchScan(token, stns) {
   for (const p of r1.data.data.panes) {
     check(`  pane ${p.paneNumber} status`, p.currentStatus, 'in_progress');
   }
+
+  // ── batch rollback: mid-batch failure restores earlier panes + removes logs ──
+  await api('PATCH', `/api/panes/${panes[2]._id}`, token, { currentStatus: 'completed' });
+  const rb = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers, station: stns.cutting, action: 'scan_in',
+  });
+  check('batch scan_in fails when any pane is completed', rb.status, 400);
+  const p0rb = await api('GET', `/api/panes/${panes[0]._id}`, token);
+  const p1rb = await api('GET', `/api/panes/${panes[1]._id}`, token);
+  check('rollback pane0 unchanged (in_progress)', p0rb.data.data.currentStatus, 'in_progress');
+  check('rollback pane1 unchanged (in_progress)', p1rb.data.data.currentStatus, 'in_progress');
+  const p2rb = await api('GET', `/api/panes/${panes[2]._id}`, token);
+  check('rollback pane2 still completed', p2rb.data.data.currentStatus, 'completed');
+  await api('PATCH', `/api/panes/${panes[2]._id}`, token, {
+    currentStatus: 'in_progress',
+    currentStation: stns.cutting,
+  });
 
   // ── batch complete at cutting ──
   const r2 = await api('POST', '/api/panes/batch-scan', token, {
@@ -931,7 +933,7 @@ async function testBatchScan(token, stns) {
   const r5 = await api('POST', '/api/panes/batch-scan', token, {
     paneNumbers: ['PNE-NONEXIST-001'], station: stns.cutting, action: 'scan_in',
   });
-  check('batch scan non-existent panes', r5.status, 500);
+  check('batch scan non-existent panes', r5.status, 400);
 
   // ── batch complete at wrong station ──
   for (const pn of paneNumbers) {
@@ -941,7 +943,7 @@ async function testBatchScan(token, stns) {
   const r6 = await api('POST', '/api/panes/batch-scan', token, {
     paneNumbers, station: stns.cutting, action: 'complete',
   });
-  check('batch complete at wrong station fails', r6.status, 500);
+  check('batch complete at wrong station fails', r6.status, 400);
 
   // ── batch scan_in at edging (correct station) ──
   const r7 = await api('POST', '/api/panes/batch-scan', token, {

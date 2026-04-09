@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run test:scan && npm run test:rbac && npm run test:integrity",
     "test:rbac": "node scripts/test-rbac.js",
     "test:integrity": "node scripts/test-integrity.js",
     "test:pagination": "node scripts/test-pagination.js",

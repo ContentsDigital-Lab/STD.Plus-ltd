@@ -2292,6 +2292,83 @@ async function testLaminateScanFlow(token) {
   await api('DELETE', `/api/customers/${custId}`, token);
 }
 
+// ──────────────────────────────────────────────
+// Batch scan (standalone Mongo — application rollback, no transactions)
+// ──────────────────────────────────────────────
+
+async function testBatchScanIntegrity(token, stns) {
+  console.log('\n=== Batch Scan (integrity) ===\n');
+
+  const cust = await api('POST', '/api/customers', token, { name: 'Integrity Batch Scan Cust' });
+  const custId = cust.data.data._id;
+  const mat = await api('POST', '/api/materials', token, {
+    name: 'Integrity Batch Scan Mat',
+    unit: 'sheet',
+    reorderPoint: 5,
+  });
+  const matId = mat.data.data._id;
+
+  const routing = [stns.cutting, stns.polishing, stns.qc];
+
+  const reqRes = await api('POST', '/api/requests', token, {
+    customer: custId,
+    details: { type: 'tempered', quantity: 3 },
+    panes: [
+      { routing, dimensions: { width: 800, height: 600, thickness: 5 }, glassType: 'tempered' },
+      { routing, dimensions: { width: 900, height: 700, thickness: 5 }, glassType: 'tempered' },
+      { routing, dimensions: { width: 1000, height: 800, thickness: 5 }, glassType: 'tempered' },
+    ],
+  });
+  const reqId = reqRes.data.data._id;
+  const panes = reqRes.data.data.panes;
+  const paneNumbers = panes.map(p => p.paneNumber);
+  const p0 = panes[0]._id;
+
+  const ordRes = await api('POST', '/api/orders', token, {
+    customer: custId,
+    material: matId,
+    quantity: 3,
+    request: reqId,
+    paneCount: 3,
+    stations: routing,
+  });
+  const ordId = ordRes.data.data._id;
+
+  const batch1 = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers,
+    station: stns.cutting,
+    action: 'scan_in',
+  });
+  check('POST /panes/batch-scan scan_in (integrity)', batch1.status, 200);
+  check('  updatedCount', batch1.data.data.updatedCount, 3);
+
+  const logsAfterOk = await api('GET', `/api/pane-logs?paneId=${p0}&limit=500`, token);
+  check('GET /pane-logs?paneId after batch', logsAfterOk.status, 200);
+  const n0 = Array.isArray(logsAfterOk.data.data) ? logsAfterOk.data.data.length : 0;
+  check('  pane0 has at least one pane log', n0 >= 1, true);
+
+  await api('PATCH', `/api/panes/${panes[2]._id}`, token, { currentStatus: 'completed' });
+  const batchFail = await api('POST', '/api/panes/batch-scan', token, {
+    paneNumbers,
+    station: stns.cutting,
+    action: 'scan_in',
+  });
+  check('batch-scan fails when one pane completed', batchFail.status, 400);
+
+  const logsAfterFail = await api('GET', `/api/pane-logs?paneId=${p0}&limit=500`, token);
+  const n1 = Array.isArray(logsAfterFail.data.data) ? logsAfterFail.data.data.length : 0;
+  check('rollback: pane0 pane-log count unchanged', n1, n0);
+
+  const p0get = await api('GET', `/api/panes/${p0}`, token);
+  check('rollback: pane0 still in_progress', p0get.data.data.currentStatus, 'in_progress');
+
+  for (const p of panes) await api('DELETE', `/api/panes/${p._id}`, token);
+  await api('DELETE', `/api/orders/${ordId}`, token);
+  await api('DELETE', `/api/requests/${reqId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
+  await api('DELETE', `/api/customers/${custId}`, token);
+}
+
 // MAIN
 // ──────────────────────────────────────────────
 
@@ -2331,6 +2408,7 @@ async function main() {
     await testStickerTemplateCrud(token);
     await testPricingSettings(token);
     await testPaneLogs(token, stns);
+    await testBatchScanIntegrity(token, stns);
     await testInventoryMove(token);
     await testHealthEndpoint();
     await testWorkerPasswordUpdate(token, roleIds);

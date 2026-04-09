@@ -776,29 +776,20 @@ async function testBatchScanRbac(tokens, stns) {
   });
   const ordId = ordRes.data.data._id;
 
-  // batch-scan uses MongoDB transactions which require a replica set.
-  // If the dev DB is standalone, all calls return 500 (transaction infra error).
-  // The RBAC check happens before the transaction, so we verify no role gets 403.
   const r1 = await api('POST', '/api/panes/batch-scan', tokens.worker, {
     paneNumbers: [paneNumbers[0]], station: stns.cutting, action: 'scan_in',
   });
-  check('POST   /panes/batch-scan   (worker) — not 403', r1.status !== 403, true);
+  check('POST   /panes/batch-scan   (worker)', r1.status, 200);
 
   const r2 = await api('POST', '/api/panes/batch-scan', tokens.manager, {
     paneNumbers: [paneNumbers[1]], station: stns.cutting, action: 'scan_in',
   });
-  check('POST   /panes/batch-scan   (manager) — not 403', r2.status !== 403, true);
+  check('POST   /panes/batch-scan   (manager)', r2.status, 200);
 
   const r3 = await api('POST', '/api/panes/batch-scan', tokens.admin, {
     paneNumbers: [paneNumbers[2]], station: stns.cutting, action: 'scan_in',
   });
-  check('POST   /panes/batch-scan   (admin) — not 403', r3.status !== 403, true);
-
-  if (r1.status === 200 && r2.status === 200 && r3.status === 200) {
-    console.log('          (all returned 200 — transactions supported)');
-  } else {
-    console.log('          (some returned 500 — likely standalone MongoDB without replica set)');
-  }
+  check('POST   /panes/batch-scan   (admin)', r3.status, 200);
 
   // Cleanup
   for (const id of paneIds) await api('DELETE', `/api/panes/${id}`, tokens.admin);

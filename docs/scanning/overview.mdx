@@ -110,7 +110,7 @@ The JSON response includes **`remadePane`** (the new pane). A **MaterialLog** wi
 
 ## Batch Scanning
 
-For scanning multiple panes at the same station simultaneously, use the batch scan endpoint:
+For scanning multiple panes at the same station in one request, use the batch endpoint (full contract: [Batch scan panes](/api-reference/scanning/batch-scan-panes)):
 
 ```
 POST /api/panes/batch-scan
@@ -121,7 +121,10 @@ POST /api/panes/batch-scan
 }
 ```
 
-Batch scan supports `scan_in`, `start`, and `complete` actions only. It runs in a single transaction — if any pane fails validation, the entire batch rolls back. **`scan_out`**, **`qc_pass`**, **`qc_fail`**, and **`laminate`** must be done individually via **`POST /api/panes/{paneNumber}/scan`**.
+- **Actions:** `scan_in`, `start`, and `complete` only — same semantics per pane as the single-pane scan API for those actions.
+- **Order:** Panes are processed in **`paneNumbers` order**. Unknown or duplicate numbers are skipped; if **none** match, the API returns **400**.
+- **Consistency:** If any pane in the batch fails validation partway through, the server **rolls back** earlier changes in that same request (pane fields restored, `PaneLog` rows from that batch removed). This uses **application-level** rollback, not MongoDB transactions, so it works on **standalone** MongoDB without a replica set.
+- **Not in batch:** **`scan_out`**, **`qc_pass`**, **`qc_fail`**, and **`laminate`** — call **`POST /api/panes/{paneNumber}/scan`** per pane for those.
 
 ## Laminate Merge
 

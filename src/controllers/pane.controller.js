@@ -832,73 +832,122 @@ exports.scan = async (req, res, next) => {
 };
 
 exports.batchScan = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
   try {
     const { paneNumbers, station, action } = req.validated.body;
     if (!['scan_in', 'start', 'complete'].includes(action)) {
-      throw new Error(`Action ${action} not supported in batch-scan`);
+      return fail(res, `Action ${action} not supported in batch-scan`, 400);
     }
 
-    const panes = await Pane.find({ paneNumber: { $in: paneNumbers.map(n => n.toUpperCase()) } }).session(session);
+    const upper = paneNumbers.map(n => String(n).toUpperCase());
+    const panes = await Pane.find({ paneNumber: { $in: upper } });
     if (panes.length === 0) {
-      throw new Error('No valid panes found for the given numbers');
+      return fail(res, 'No valid panes found for the given numbers', 400);
+    }
+
+    const orderIdx = new Map(upper.map((n, i) => [n, i]));
+    panes.sort((a, b) => (orderIdx.get(a.paneNumber) ?? 0) - (orderIdx.get(b.paneNumber) ?? 0));
+
+    const snapById = new Map();
+    for (const p of panes) {
+      snapById.set(p._id.toString(), {
+        currentStation: p.currentStation,
+        currentStatus: p.currentStatus,
+        startedAt: p.startedAt,
+        material: p.material,
+      });
     }
 
     const now = new Date();
     const results = [];
     const logs = [];
+    const createdLogIds = [];
+    const savedPaneIds = [];
 
-    for (const pane of panes) {
-      if (pane.currentStatus === 'merged_into') {
-        throw new Error(`Pane ${pane.paneNumber} was merged into another pane`);
+    const rollback = async () => {
+      if (createdLogIds.length) {
+        await PaneLog.deleteMany({ _id: { $in: createdLogIds } });
       }
-      if (pane.currentStatus === 'completed') {
-        throw new Error(`Pane ${pane.paneNumber} is already completed`);
+      for (const id of savedPaneIds) {
+        const snap = snapById.get(id.toString());
+        if (!snap) continue;
+        await Pane.updateOne(
+          { _id: id },
+          {
+            $set: {
+              currentStation: snap.currentStation,
+              currentStatus: snap.currentStatus,
+              startedAt: snap.startedAt,
+              material: snap.material,
+            },
+          }
+        );
       }
+    };
 
-      if (action === 'scan_in' || action === 'start') {
-        pane.currentStation = station;
-        pane.currentStatus = 'in_progress';
-        if (!pane.startedAt) pane.startedAt = now;
-      } else if (action === 'complete') {
-        const currentStationStr = pane.currentStation ? pane.currentStation.toString() : null;
-        if (currentStationStr !== station) {
-          throw new Error(`Pane ${pane.paneNumber} is at station ${currentStationStr}, cannot complete at ${station}`);
+    try {
+      for (const pane of panes) {
+        if (pane.currentStatus === 'merged_into') {
+          await rollback();
+          return fail(res, `Pane ${pane.paneNumber} was merged into another pane`, 400);
         }
-        pane.currentStatus = 'awaiting_scan_out';
-      }
-
-      await pane.save({ session });
-
-      let materialId = pane.material ?? null;
-      if (!materialId && pane.order) {
-        const ord = await Order.findById(pane.order).select('material').lean();
-        materialId = ord?.material ?? null;
-        if (materialId) {
-          await Pane.updateOne({ _id: pane._id }, { material: materialId }, { session });
+        if (pane.currentStatus === 'completed') {
+          await rollback();
+          return fail(res, `Pane ${pane.paneNumber} is already completed`, 400);
         }
+
+        if (action === 'scan_in' || action === 'start') {
+          pane.currentStation = station;
+          pane.currentStatus = 'in_progress';
+          if (!pane.startedAt) pane.startedAt = now;
+        } else if (action === 'complete') {
+          const currentStationStr = pane.currentStation ? pane.currentStation.toString() : null;
+          if (currentStationStr !== station) {
+            await rollback();
+            return fail(
+              res,
+              `Pane ${pane.paneNumber} is at station ${currentStationStr}, cannot complete at ${station}`,
+              400
+            );
+          }
+          pane.currentStatus = 'awaiting_scan_out';
+        }
+
+        await pane.save();
+        savedPaneIds.push(pane._id);
+
+        let materialId = pane.material ?? null;
+        if (!materialId && pane.order) {
+          const ord = await Order.findById(pane.order).select('material').lean();
+          materialId = ord?.material ?? null;
+          if (materialId) {
+            await Pane.updateOne({ _id: pane._id }, { material: materialId });
+            pane.material = materialId;
+          }
+        }
+
+        const log = await PaneLog.create({
+          pane: pane._id,
+          order: pane.order ?? null,
+          material: materialId,
+          worker: req.user?._id ?? null,
+          station,
+          action,
+          completedAt: null,
+        });
+        createdLogIds.push(log._id);
+
+        logs.push({ log, materialId, paneId: pane._id });
+        results.push(pane);
       }
-
-      const log = new PaneLog({
-        pane: pane._id,
-        order: pane.order ?? null,
-        material: materialId,
-        worker: req.user?._id ?? null,
-        station,
-        action,
-        completedAt: null,
-      });
-      await log.save({ session });
-
-      logs.push({ log, materialId, paneId: pane._id });
-      results.push(pane);
+    } catch (err) {
+      try {
+        await rollback();
+      } catch (rbErr) {
+        return next(rbErr);
+      }
+      return next(err);
     }
 
-    await session.commitTransaction();
-    session.endSession();
-
-    // After commit, populate and emit
     const populatedPanes = await Promise.all(results.map(p => p.populate(POPULATE_FIELDS)));
 
     for (let i = 0; i < populatedPanes.length; i++) {
@@ -913,8 +962,6 @@ exports.batchScan = async (req, res, next) => {
       panes: populatedPanes,
     });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
     next(err);
   }
 };

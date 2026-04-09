@@ -1,9 +1,21 @@
 ---
 title: Batch scan panes
-description: Transactional batch scan_in / start / complete only — not scan_out, qc_pass, qc_fail, or laminate.
+description: Batch scan_in, start, or complete for multiple panes — application rollback, no MongoDB replica set required.
 openapi: post /api/panes/batch-scan
 ---
+
+## How batch scan works
+
+- **Same actions as single-pane scan (subset):** `scan_in`, `start`, and `complete` only. Behavior for each pane matches [Scan a pane](/api-reference/scanning/scan-a-pane) for those actions (station, status, `startedAt`, optional material backfill from the order, `PaneLog` rows, WebSocket events after success).
+- **Processing order:** Panes are updated in the **order they appear** in `paneNumbers`. Only numbers that exist in the database are included; duplicates and unknown IDs are skipped. If **no** pane numbers resolve to documents, the API returns **400**.
+- **All-or-nothing (application rollback):** The endpoint does **not** use MongoDB multi-document transactions. If validation fails partway through (e.g. one pane is already `completed`, **`merged_into`**, or wrong station for `complete`), the server restores earlier panes from a snapshot and deletes `PaneLog` documents created in that request. That works on **standalone** MongoDB as well as replica sets.
 
 <Note>
   **`scan_out`**, **`qc_pass`**, **`qc_fail`**, and **`laminate`** are **not** supported here. Use [Scan a pane](/api-reference/scanning/scan-a-pane) for each pane when you need handoff, QC, or laminate merge. **`merged_into`** panes are rejected in batch operations.
 </Note>
+
+<Warning>
+  Rollback is **best-effort** in the application layer (not full ACID). Unusual failures (e.g. crash mid-request, or concurrent scans on the same pane) can leave data inconsistent. For the strongest guarantees, prefer single-pane scans or a MongoDB deployment with transactions if you adopt them elsewhere.
+</Warning>
+
+For a concise workflow-oriented summary, see [Batch scanning](/scanning/overview#batch-scanning) under **QR Scanning**.
