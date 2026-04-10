@@ -230,9 +230,12 @@ async function testDataEvents() {
   const meRes = await apiCall('GET', '/api/auth/me', token);
   const workerId = meRes.data._id;
   const wdPromise = waitForEvent(socket, 'withdrawal:updated');
-  await apiCall('POST', '/api/withdrawals', token, { withdrawnBy: workerId, material: matId, quantity: 2, stockType: 'Raw' });
+  const wdRes = await apiCall('POST', '/api/withdrawals', token, { withdrawnBy: workerId, material: matId, quantity: 2, stockType: 'Raw' });
   const wdEvent = await wdPromise;
-  console.log(`${n++}. PASS withdrawal:updated — action: ${wdEvent.action}`);
+  const wdNum = wdRes.data?.withdrawalNumber;
+  const evtNum = wdEvent.data?.withdrawalNumber;
+  const numOk = typeof wdNum === 'string' && wdNum.startsWith('WDW-') && wdNum === evtNum;
+  console.log(`${n++}. ${numOk ? 'PASS' : 'FAIL'} withdrawal:updated — action: ${wdEvent.action}, withdrawalNumber: ${wdNum}${numOk ? '' : ' (socket/API mismatch or missing)'}`);
 
   // 6. claim:updated
   const claimPromise = waitForEvent(socket, 'claim:updated');

@@ -436,6 +436,7 @@
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
+          "withdrawalNumber": { "type": "string", "description": "Auto-assigned on create (e.g. WDW-0001)" },
           "order": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Order" }] },
           "pane": { "oneOf": [{ "type": "string", "nullable": true }, { "$ref": "#/components/schemas/Pane" }] },
           "withdrawnBy": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Worker" }] },
@@ -2138,7 +2139,7 @@
       "post": {
         "tags": ["Withdrawals"],
         "summary": "Create a withdrawal",
-        "description": "Automatically deducts from matching inventory. Returns 400 if insufficient stock.",
+        "description": "Automatically deducts from matching inventory. Returns 400 if insufficient stock. The server assigns a unique **withdrawalNumber** (e.g. `WDW-0001`); do not send it in the request body.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WithdrawalCreateBody" } } } },
         "responses": {
@@ -2175,7 +2176,7 @@
       "patch": {
         "tags": ["Withdrawals"],
         "summary": "Update a withdrawal",
-        "description": "Requires `withdrawals:manage` permission.",
+        "description": "Requires `withdrawals:manage` permission. **withdrawalNumber** is assigned at create time and cannot be changed via this endpoint.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WithdrawalUpdateBody" } } } },

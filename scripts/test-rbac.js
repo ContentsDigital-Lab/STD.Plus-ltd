@@ -269,13 +269,16 @@ async function testWithdrawals(tokens, materialId, workerId) {
 
   const r1 = await api('POST', path, tokens.admin, body);
   check('POST   /withdrawals         (admin)', r1.status, 201);
+  check('  response has withdrawalNumber (WDW-)', r1.data.data?.withdrawalNumber?.startsWith('WDW-'), true);
   const wdId = r1.data.data?._id;
 
   const r2 = await api('POST', path, tokens.manager, body);
   check('POST   /withdrawals         (manager)', r2.status, 201);
+  check('  manager withdrawalNumber differs', r2.data.data?.withdrawalNumber !== r1.data.data?.withdrawalNumber, true);
 
   const r3 = await api('POST', path, tokens.worker, body);
   check('POST   /withdrawals         (worker)', r3.status, 201);
+  check('  worker withdrawalNumber differs', r3.data.data?.withdrawalNumber !== r2.data.data?.withdrawalNumber, true);
   const wdId3 = r3.data.data?._id;
 
   const r4 = await api('GET', path, tokens.admin);

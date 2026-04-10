@@ -1,3 +1,5 @@
 ---
 openapi: get /api/withdrawals
 ---
+
+Each item in `data` includes **`withdrawalNumber`** when present (always for newly created withdrawals; older rows may need `npm run backfill`).

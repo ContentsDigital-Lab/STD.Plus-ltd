@@ -26,43 +26,68 @@ http://localhost:3000
 
 All REST API routes are prefixed with `/api`.
 
+**Health:** `GET /api/health` (no auth) — see [Health check](/api-reference/health/health-check).
+
+## Documentation map
+
+Use the **Documentation** tab for prose guides and the **API Reference** tab for every HTTP endpoint (OpenAPI + playground).
+
+### Documentation tab
+
+| Section | Pages |
+|---|---|
+| **Getting Started** | [Introduction](/) · [Quickstart](/quickstart) (install, env, scripts, integration tests) · [Authentication](/authentication) (JWT, roles, permissions) |
+| **QR Scanning** | [QR Scanning](/scanning/overview) · [QR Check-in](/scanning/qr-checkin) |
+| **WebSocket** | [WebSocket overview](/websocket/overview) · [WebSocket events](/websocket/events) |
+
+### API Reference tab
+
+Endpoint groups match the server implementation (each group expands to list/create/update/delete and related routes where applicable):
+
+Health · Auth · Workers · Customers · Materials · Inventories · Material Logs · Requests · Withdrawals · Orders · Claims (including **from-pane**) · Panes · Pane Logs · **QR Scanning** (single-pane scan + batch scan) · Production Logs · Station Templates · Stations · Roles (including **list permissions**) · Notifications · Sticker Templates · Job Types · Pricing Settings
+
 ## Features
 
 <Columns cols={2}>
   <Card title="REST API" icon="server" href="/quickstart">
-    Full CRUD for core resources with Zod validation and JWT auth (see API Reference tab).
+    Install, environment, npm scripts, and how to run integration tests against a live server.
+  </Card>
+  <Card title="QR Scanning" icon="qrcode" href="/scanning/overview">
+    Pane routing, lamination, and station scan flow; links to scan API under API Reference.
   </Card>
   <Card title="Real-time WebSocket" icon="bolt" href="/websocket/overview">
-    Live data events via Socket.IO with room-based subscriptions.
+    Socket.IO path, rooms, and inbound events (`order:updated`, `pane:updated`, etc.).
   </Card>
   <Card title="Auth & RBAC" icon="lock" href="/authentication">
-    JWT authentication with role-based access control (admin, manager, worker).
+    JWT, system roles, permission keys, and ownership rules.
   </Card>
   <Card title="API Reference" icon="terminal" href="/api-reference/health/health-check">
-    OpenAPI-backed reference with an interactive playground (paths under `/api/...`).
+    Full OpenAPI spec: try requests with the playground (Bearer auth).
   </Card>
 </Columns>
 
 ## Resources
 
-The API manages the following resources:
+Domain resources exposed by the API (see **API Reference** for HTTP operations on each):
 
 | Resource | Description |
 |---|---|
 | **Workers** | Staff accounts with authentication |
+| **Roles** | Permission sets; system roles (`admin`, `manager`, `worker`) plus custom roles; `GET /api/roles/permissions` lists all permission keys |
 | **Customers** | Client records with discount tracking |
 | **Materials** | Material definitions with spec details |
-| **Inventories** | Stock levels by material and type |
+| **Inventories** | Stock levels by material and type (Raw / Reuse); **move** endpoint |
 | **Material Logs** | Audit trail for material movements |
-| **Requests** | Customer purchase requests |
-| **Withdrawals** | Material withdrawal records |
-| **Orders** | Production orders |
-| **Claims** | Defect/claim reports tied to orders |
-| **Panes** | Individual glass panes through production; laminate groups use **sheet** QRs after merge (**survivor**); list API hides **`merged_into`** unless **`includeMerged=true`** |
-| **Pane Logs** | Scan/action history and material timeline for panes (including **qc_pass** / **qc_fail** at QC) |
-| **Production Logs** | Action history for every pane at each station |
-| **Station Templates** | Configurable UI schemas for station types |
-| **Stations** | Work stations in the production line |
-| **Notifications** | Real-time alerts for workers |
-| **Sticker Templates** | Configurable sticker label layouts |
-| **Pricing Settings** | Singleton pricing configuration for glass types |
+| **Requests** | Customer purchase requests (auto **`requestNumber`**) |
+| **Withdrawals** | Material withdrawals (auto **`withdrawalNumber`** `WDW-…`) |
+| **Orders** | Production orders (auto **`orderNumber`**, stations, progress) |
+| **Claims** | Defect/claim reports (auto **`claimNumber`**); create by order or **from pane** |
+| **Panes** | Individual glass panes; laminate **parent/sheet/survivor**; list hides **`merged_into`** unless **`includeMerged=true`** |
+| **Pane Logs** | Scan/action timeline per pane; **material timeline** endpoint |
+| **Production Logs** | Legacy/action logs per pane and station |
+| **Station Templates** | Configurable UI schemas (`uiSchema`) for station types |
+| **Stations** | Work stations (`colorId`, optional laminate flag) |
+| **Notifications** | Worker alerts (reference id/type, priority) |
+| **Sticker Templates** | Label layouts (`elements`, dimensions) |
+| **Job Types** | Catalog (code, `sheetsPerPane`, default glass types) |
+| **Pricing Settings** | Singleton document: glass price maps, hole/notch pricing |

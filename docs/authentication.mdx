@@ -134,7 +134,7 @@ curl http://localhost:3000/api/workers \
 | Property | Value |
 |---|---|
 | Algorithm | HS256 |
-| Expiration | Configurable via `JWT_EXPIRES_IN` (default: `1d`) |
+| Expiration | Configurable via `JWT_EXPIRES_IN` (default: `7d` in `src/config/env.js`) |
 | Payload | `{ id: "<worker_id>" }` |
 
 ## Error Responses

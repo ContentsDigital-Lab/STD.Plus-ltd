@@ -1,4 +1,5 @@
 const Withdrawal = require('../models/Withdrawal');
+const Counter = require('../models/Counter');
 const Inventory = require('../models/Inventory');
 const Material = require('../models/Material');
 const Worker = require('../models/Worker');
@@ -107,7 +108,8 @@ exports.create = async (req, res, next) => {
 
     await deductInventory(material, stockType, quantity, req.validated.body.inventory);
 
-    const withdrawal = await Withdrawal.create(req.validated.body);
+    const withdrawalNumber = await Counter.getNext('withdrawal', 'WDW');
+    const withdrawal = await Withdrawal.create({ ...req.validated.body, withdrawalNumber });
     const populated = await withdrawal.populate(POPULATE_FIELDS);
 
     // Create MaterialLog for traceability

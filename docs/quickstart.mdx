@@ -3,6 +3,8 @@ title: Quickstart
 description: Get the STD Plus server running in minutes
 ---
 
+For a **full map** of guides (this tab) and every **API Reference** section, see [Introduction](/).
+
 ## Prerequisites
 
 - Node.js 18+
@@ -20,10 +22,10 @@ description: Get the STD Plus server running in minutes
   </Step>
   <Step title="Configure environment">
     ```bash
-    cp .env.example .env
+    cp .env.example .env   # if the repo provides it; otherwise create `.env` manually
     ```
 
-    Edit `.env` with your values:
+    Required variables are validated at startup (`src/config/env.js`). Set at least:
 
     | Variable | Default | Description |
     |---|---|---|
@@ -32,7 +34,7 @@ description: Get the STD Plus server running in minutes
     | `CORS_ORIGIN` | `*` | Allowed CORS origin |
     | `MONGODB_URI` | — | MongoDB connection string |
     | `JWT_SECRET` | — | Secret key for signing JWTs |
-    | `JWT_EXPIRES_IN` | `1d` | JWT expiration time |
+    | `JWT_EXPIRES_IN` | `7d` | JWT expiration time (see `src/config/env.js`) |
   </Step>
   <Step title="Seed the database">
     ```bash
@@ -82,7 +84,7 @@ npm run reset
 # Seed the admin user and system roles
 npm run seed
 
-# Backfill auto-generated numbers for existing documents
+# Backfill auto-generated numbers for existing documents (requests, orders, claims, panes, withdrawals)
 npm run backfill
 
 # Migrate station references (string names → ObjectIds)
@@ -90,6 +92,9 @@ npm run migrate:stations
 
 # Migrate worker roles (string → ObjectId) and seed system roles
 npm run migrate:roles
+
+# Default CI-style suite: scan → RBAC → integrity (requires API running)
+npm test
 
 # Test RBAC and permissions (includes pane logs, scan, orders, etc.)
 npm run test:rbac
@@ -112,3 +117,15 @@ npm run test:pagination
 # Run Mintlify docs locally
 npm run docs
 ```
+
+## Integration tests
+
+**`npm test`** runs **`test:scan`**, then **`test:rbac`**, then **`test:integrity`** in that order. Other scripts (`test:socket`, `test:pagination`, `test:claim`) are separate.
+
+All of these call the **running HTTP API** (same host/port as `PORT` in `.env`, default `3000`). Start the server in another terminal before running them.
+
+<Note>
+  **`npm run test:integrity`** (and therefore **`npm test`**, which ends with it) issues many requests over several minutes. Keep **`npm run dev`** / **`npm start`** running for the whole run. If the server restarts or stops mid-suite (for example nodemon reload), you may see a **network error** or **“Suite aborted”** in the log; the integrity script still prints **PASSED / FAILED** totals and runs cleanup when possible.
+</Note>
+
+The suite generates **unique values** where the API enforces uniqueness (for example worker usernames), and it **sweeps** new documents after the run when it can. If you still see **409 Conflict** (duplicate username or similar), remove the conflicting document in MongoDB or run **`npm run reset`** on a database you are allowed to wipe — **`reset` drops all collections**.

@@ -1,3 +1,5 @@
 ---
 openapi: delete /api/withdrawals
 ---
+
+Bulk delete emits **`withdrawal:updated`** with action `deleted` and payload `{ ids }` (no per-document **`withdrawalNumber`** in that payload).

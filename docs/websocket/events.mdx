@@ -156,7 +156,7 @@ socket.on('order:updated', (payload) => {
 | `order:updated` | INBOUND | `dashboard`, `order` | Order create / update / delete; QR scan `scan_out` or `qc_pass`; `qc_fail` remake / `paneCount` |
 | `log:updated` | INBOUND | `dashboard`, `log` | Material log create / update / delete; QR scan (all actions) |
 | `request:updated` | INBOUND | `dashboard`, `request` | Request create / update / delete |
-| `withdrawal:updated` | INBOUND | `dashboard`, `withdrawal` | Withdrawal create / update / delete |
+| `withdrawal:updated` | INBOUND | `dashboard`, `withdrawal` | Withdrawal create / update / delete. Payload `data` is the withdrawal document (includes **`withdrawalNumber`**) |
 | `claim:updated` | INBOUND | `dashboard`, `claim` | Claim create / update / delete |
 | `station:updated` | INBOUND | `dashboard`, `station` | Station create / update / delete |
 | `pane:updated` | INBOUND | `dashboard`, `pane`, `production`, `station:<name>` | Pane create / update / delete; QR scan (all actions) |

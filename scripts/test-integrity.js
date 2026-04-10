@@ -12,8 +12,21 @@ async function api(method, path, token, body = null) {
   };
   if (token) opts.headers.Authorization = `Bearer ${token}`;
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${API}${path}`, opts);
-  return { status: res.status, data: await res.json() };
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, opts);
+  } catch (err) {
+    const detail = err.cause?.message || err.message || String(err);
+    throw new Error(`Network error (${method} ${path}): ${detail}`);
+  }
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`Non-JSON response ${method} ${path} (${res.status}): ${text.slice(0, 200)}`);
+  }
+  return { status: res.status, data };
 }
 
 async function login(username, password) {
@@ -287,6 +300,8 @@ async function testInventoryDeduction(token) {
   // Withdraw 30 — inventory should drop to 70
   const r1 = await api('POST', '/api/withdrawals', token, { withdrawnBy: workerId, material: matId, quantity: 30, stockType: 'Raw' });
   check('CREATE withdrawal (30 from 100)', r1.status, 201);
+  check('  withdrawalNumber on create (WDW-)', typeof r1.data.data.withdrawalNumber, 'string');
+  check('  withdrawalNumber prefix', r1.data.data.withdrawalNumber.startsWith('WDW-'), true);
 
   const inv1 = await api('GET', `/api/inventories/${invId}`, token);
   check('  inventory after withdrawal', inv1.data.data.quantity, 70);
@@ -295,6 +310,7 @@ async function testInventoryDeduction(token) {
   // Withdraw 50 more — inventory should drop to 20
   const r2 = await api('POST', '/api/withdrawals', token, { withdrawnBy: workerId, material: matId, quantity: 50, stockType: 'Raw' });
   check('CREATE withdrawal (50 from 70)', r2.status, 201);
+  check('  second withdrawalNumber differs', r1.data.data.withdrawalNumber !== r2.data.data.withdrawalNumber, true);
 
   const inv2 = await api('GET', `/api/inventories/${invId}`, token);
   check('  inventory after second withdrawal', inv2.data.data.quantity, 20);
@@ -337,6 +353,7 @@ async function testInventoryDeduction(token) {
 
   const r7 = await api('POST', '/api/withdrawals', token, { withdrawnBy: workerId, material: matId, quantity: 10, stockType: 'Reuse' });
   check('CREATE withdrawal (Reuse type)', r7.status, 201);
+  check('  Reuse withdrawal has withdrawalNumber', typeof r7.data.data.withdrawalNumber, 'string');
   const wdId3 = r7.data.data._id;
 
   const invRaw = await api('GET', `/api/inventories/${invId}`, token);
@@ -682,16 +699,21 @@ async function testWithdrawalNotes(token) {
   });
   check('CREATE withdrawal with notes', r1.status, 201);
   const wdId = r1.data.data._id;
+  const wdNum1 = r1.data.data.withdrawalNumber;
   check('  notes persisted', r1.data.data.notes, 'Needed for urgent repair job');
+  check('  withdrawalNumber assigned', typeof wdNum1, 'string');
+  check('  withdrawalNumber prefix WDW-', wdNum1.startsWith('WDW-'), true);
 
   // Update notes
   const r2 = await api('PATCH', `/api/withdrawals/${wdId}`, token, {
     notes: 'Updated: repair completed, leftover returned',
   });
   check('UPDATE withdrawal notes', r2.status, 200);
+  check('  PATCH preserves withdrawalNumber', r2.data.data.withdrawalNumber, wdNum1);
 
   const r3 = await api('GET', `/api/withdrawals/${wdId}`, token);
   check('  notes updated', r3.data.data.notes, 'Updated: repair completed, leftover returned');
+  check('  GET preserves withdrawalNumber', r3.data.data.withdrawalNumber, wdNum1);
 
   // Create withdrawal without notes — should default to empty
   const r4 = await api('POST', '/api/withdrawals', token, {
@@ -703,6 +725,7 @@ async function testWithdrawalNotes(token) {
   check('CREATE withdrawal without notes (default)', r4.status, 201);
   const wdId2 = r4.data.data._id;
   check('  default notes empty', r4.data.data.notes, '');
+  check('  second withdrawalNumber differs from first', r4.data.data.withdrawalNumber !== wdNum1, true);
 
   // Clean up
   await api('DELETE', `/api/withdrawals/${wdId}`, token);
@@ -860,6 +883,53 @@ async function testClaimNumbering(token) {
   await api('DELETE', `/api/orders/${ordId}`, token);
   await api('DELETE', `/api/materials/${matId}`, token);
   await api('DELETE', `/api/customers/${custId}`, token);
+}
+
+// ──────────────────────────────────────────────
+// 12a. WITHDRAWAL AUTO-NUMBERING
+// ──────────────────────────────────────────────
+
+async function testWithdrawalNumbering(token) {
+  console.log('\n=== Withdrawal Auto-Numbering ===\n');
+
+  const me = await api('GET', '/api/auth/me', token);
+  const workerId = me.data.data._id;
+
+  const mat = await api('POST', '/api/materials', token, { name: 'WdNum Mat', unit: 'sheet', reorderPoint: 5 });
+  const matId = mat.data.data._id;
+  const inv = await api('POST', '/api/inventories', token, { material: matId, stockType: 'Raw', quantity: 100, location: 'WH-WDNUM' });
+  const invId = inv.data.data._id;
+
+  const r1 = await api('POST', '/api/withdrawals', token, { withdrawnBy: workerId, material: matId, quantity: 1, stockType: 'Raw' });
+  check('CREATE withdrawal has withdrawalNumber', r1.status, 201);
+  const num1 = r1.data.data.withdrawalNumber;
+  check('  withdrawalNumber is a string', typeof num1, 'string');
+  check('  withdrawalNumber starts with WDW-', num1.startsWith('WDW-'), true);
+  console.log(`          got: ${num1}`);
+
+  const r2 = await api('POST', '/api/withdrawals', token, { withdrawnBy: workerId, material: matId, quantity: 1, stockType: 'Raw' });
+  check('CREATE second withdrawal has withdrawalNumber', r2.status, 201);
+  const num2 = r2.data.data.withdrawalNumber;
+  check('  withdrawalNumber is different from first', num1 !== num2, true);
+  console.log(`          got: ${num2}`);
+
+  const seq1 = parseInt(num1.split('-')[1], 10);
+  const seq2 = parseInt(num2.split('-')[1], 10);
+  check('  second number is sequential', seq2, seq1 + 1);
+
+  const r3 = await api('GET', `/api/withdrawals/${r1.data.data._id}`, token);
+  check('GET withdrawal includes withdrawalNumber', r3.data.data.withdrawalNumber, num1);
+
+  const r4 = await api('GET', '/api/withdrawals?limit=100', token);
+  const withNumbers = r4.data.data.filter((w) => w.withdrawalNumber);
+  check('GET all — created withdrawals have withdrawalNumber', withNumbers.length >= 2, true);
+
+  const r5 = await api('PATCH', `/api/withdrawals/${r1.data.data._id}`, token, { notes: 'WdNum note' });
+  check('UPDATE does not change withdrawalNumber', r5.data.data.withdrawalNumber, num1);
+
+  await api('DELETE', '/api/withdrawals', token, { ids: [r1.data.data._id, r2.data.data._id] });
+  await api('DELETE', `/api/inventories/${invId}`, token);
+  await api('DELETE', `/api/materials/${matId}`, token);
 }
 
 // ──────────────────────────────────────────────
@@ -1680,22 +1750,27 @@ async function testHealthEndpoint() {
 async function testWorkerPasswordUpdate(token, roleIds) {
   console.log('\n=== Worker Password Update ===\n');
 
+  const username = `pwd_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   const w = await api('POST', '/api/workers', token, {
-    name: 'PwdTest', username: 'pwd_test', password: 'original123', position: 'tester', role: roleIds.worker,
+    name: 'PwdTest', username, password: 'original123', position: 'tester', role: roleIds.worker,
   });
   check('CREATE worker for password test', w.status, 201);
+  if (w.status !== 201 || !w.data?.data?._id) {
+    console.log('   SKIP  remaining password-update steps — worker create failed');
+    return;
+  }
   const wId = w.data.data._id;
 
-  const r1 = await api('POST', '/api/auth/login', null, { username: 'pwd_test', password: 'original123' });
+  const r1 = await api('POST', '/api/auth/login', null, { username, password: 'original123' });
   check('LOGIN with original password', r1.status, 200);
 
   const r2 = await api('PATCH', `/api/workers/${wId}`, token, { password: 'newpass123' });
   check('UPDATE password via admin', r2.status, 200);
 
-  const r3 = await api('POST', '/api/auth/login', null, { username: 'pwd_test', password: 'original123' });
+  const r3 = await api('POST', '/api/auth/login', null, { username, password: 'original123' });
   check('LOGIN with old password fails', r3.status, 401);
 
-  const r4 = await api('POST', '/api/auth/login', null, { username: 'pwd_test', password: 'newpass123' });
+  const r4 = await api('POST', '/api/auth/login', null, { username, password: 'newpass123' });
   check('LOGIN with new password succeeds', r4.status, 200);
 
   await api('DELETE', `/api/workers/${wId}`, token);
@@ -1870,6 +1945,8 @@ async function testWithdrawalMaterialLog(token) {
     withdrawnBy: workerId, material: matId, quantity: 10, stockType: 'Raw',
   });
   check('CREATE withdrawal', wd.status, 201);
+  check('  withdrawalNumber on withdrawal', typeof wd.data.data.withdrawalNumber, 'string');
+  check('  withdrawalNumber prefix', wd.data.data.withdrawalNumber.startsWith('WDW-'), true);
   const wdId = wd.data.data._id;
 
   const logsAfter = await api('GET', `/api/material-logs?materialId=${matId}`, token);
@@ -2375,14 +2452,30 @@ async function testBatchScanIntegrity(token, stns) {
 async function main() {
   console.log('=== Data Integrity Test Suite ===');
 
-  const token = await login('admin', 'admin123');
-  console.log(`   Token: ...${token.slice(-10)}`);
+  let token;
+  let snapshot;
+  let roleIds;
+  let stns;
+  let suiteError = null;
 
-  const snapshot = await snapshotIds(API, token);
+  try {
+    token = await login('admin', 'admin123');
+    console.log(`   Token: ...${token.slice(-10)}`);
 
-  const roleIds = await getRoleIds(token);
+    snapshot = await snapshotIds(API, token);
 
-  const stns = await createStations(token);
+    roleIds = await getRoleIds(token);
+
+    stns = await createStations(token);
+  } catch (err) {
+    console.error(`\n   Fatal (setup): ${err.message}`);
+    console.log('\n========================================');
+    console.log(`   PASSED: ${passed}`);
+    console.log(`   FAILED: ${failed}`);
+    console.log(`   TOTAL:  ${passed + failed}`);
+    console.log('========================================\n');
+    process.exit(1);
+  }
 
   try {
     await testCascadeDeletes(token, roleIds);
@@ -2398,6 +2491,7 @@ async function main() {
     await testRequestNumbering(token);
     await testOrderNumbering(token);
     await testClaimNumbering(token);
+    await testWithdrawalNumbering(token);
     await testClaimFromPane(token);
     await testPaneNumbering(token, stns);
     await testPaneCascade(token, stns);
@@ -2422,18 +2516,26 @@ async function main() {
     await testNotificationReferences(token);
     await testLaminatePairing(token, stns);
     await testLaminateScanFlow(token);
+  } catch (err) {
+    suiteError = err;
+    console.error(`\n   Suite aborted: ${err.message}`);
   } finally {
     await cleanupStations(token, stns).catch(() => {});
-    await sweepCreatedData(API, token, snapshot);
+    await sweepCreatedData(API, token, snapshot).catch((e) => {
+      console.error(`   Sweep error: ${e.message}`);
+    });
   }
 
   console.log('\n========================================');
   console.log(`   PASSED: ${passed}`);
   console.log(`   FAILED: ${failed}`);
   console.log(`   TOTAL:  ${passed + failed}`);
+  if (suiteError) {
+    console.log(`   Suite did not finish: ${suiteError.message}`);
+  }
   console.log('========================================\n');
 
-  process.exit(failed > 0 ? 1 : 0);
+  process.exit(failed > 0 || suiteError ? 1 : 0);
 }
 
 main().catch((err) => {

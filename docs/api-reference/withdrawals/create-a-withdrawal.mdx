@@ -1,3 +1,7 @@
 ---
 openapi: post /api/withdrawals
 ---
+
+<Note>
+  On success, the created withdrawal includes **`withdrawalNumber`**, a unique human-readable id in the form **`WDW-0001`**, **`WDW-0002`**, … assigned by the server. It is not part of the request body. Existing documents without a number can be updated with `npm run backfill`.
+</Note>
