@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { snapshotIds, sweepCreatedData } = require('./test-helpers');
+const { snapshotIds, sweepCreatedData, cleanupStationTemplate } = require('./test-helpers');
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
@@ -907,12 +907,13 @@ async function main() {
 
   const adminToken = await login('admin', 'admin123');
   const snapshot = await snapshotIds(API, adminToken);
+  let stns;
 
   try {
     console.log('Setting up users...');
     const roleIds = await getRoleIds(adminToken);
     await setupUsers(adminToken, roleIds);
-    const stns = await setupStations(adminToken);
+    stns = await setupStations(adminToken);
 
     const managerToken = await login('manager1', 'manager123');
     const workerToken = await login('worker1', 'worker123');
@@ -972,7 +973,8 @@ async function main() {
     await testBatchScanRbac(tokens, stns);
     await testAuthEdgeCases(tokens);
   } finally {
-    await sweepCreatedData(API, adminToken, snapshot);
+    await cleanupStationTemplate(API, adminToken, stns).catch(() => {});
+    await sweepCreatedData(API, adminToken, snapshot).catch(() => {});
   }
 
   console.log('\n========================================');

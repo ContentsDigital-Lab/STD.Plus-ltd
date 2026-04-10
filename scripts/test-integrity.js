@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { snapshotIds, sweepCreatedData } = require('./test-helpers');
+const { snapshotIds, sweepCreatedData, cleanupStationTemplate } = require('./test-helpers');
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
@@ -92,11 +92,6 @@ async function createStations(token) {
   const qc = await mkStation('qc');
   const tempering = await mkStation('tempering');
   return { tmplId, cutting, polishing, inspection, qc, tempering };
-}
-
-async function cleanupStations(token, stns) {
-  if (!stns?.tmplId) return;
-  await api('DELETE', `/api/station-templates/${stns.tmplId}`, token);
 }
 
 async function getRoleIds(token) {
@@ -2520,7 +2515,7 @@ async function main() {
     suiteError = err;
     console.error(`\n   Suite aborted: ${err.message}`);
   } finally {
-    await cleanupStations(token, stns).catch(() => {});
+    await cleanupStationTemplate(API, token, stns).catch(() => {});
     await sweepCreatedData(API, token, snapshot).catch((e) => {
       console.error(`   Sweep error: ${e.message}`);
     });

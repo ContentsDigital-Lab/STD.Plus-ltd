@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { snapshotIds, sweepCreatedData } = require('./test-helpers');
+const { snapshotIds, sweepCreatedData, cleanupStationTemplate } = require('./test-helpers');
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
@@ -48,11 +48,6 @@ async function createStations(token) {
   const orderRelease = await createStation('order_release');
 
   return { tmplId, cutting, edging, qc, orderRelease };
-}
-
-async function cleanupStations(token, stns) {
-  if (!stns?.tmplId) return;
-  await api('DELETE', `/api/station-templates/${stns.tmplId}`, token);
 }
 
 function check(label, actual, expected) {
@@ -1015,7 +1010,7 @@ async function main() {
     await testPaneCountClaimRemakeRelease(token, stns);
     await testLaminateClaimRemake(token, stns);
   } finally {
-    await cleanupStations(token, stns).catch(() => {});
+    await cleanupStationTemplate(API, token, stns).catch(() => {});
     await sweepCreatedData(API, token, snapshot);
   }
 

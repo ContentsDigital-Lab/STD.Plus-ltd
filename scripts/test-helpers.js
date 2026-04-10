@@ -6,6 +6,7 @@
  * test threw midway. This guarantees zero leftover data.
  */
 
+/** Order matters: children before parents; workers before roles (roles cannot delete while assigned). */
 const CLEANUP_ENDPOINTS = [
   '/api/notifications',
   '/api/production-logs',
@@ -23,7 +24,10 @@ const CLEANUP_ENDPOINTS = [
   '/api/materials',
   '/api/customers',
   '/api/workers',
+  '/api/roles',
 ];
+
+const SWEEP_MAX_PASSES = 5;
 
 async function _fetch(apiBase, method, path, token, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -56,21 +60,38 @@ async function snapshotIds(apiBase, token) {
 }
 
 async function sweepCreatedData(apiBase, token, snapshot) {
+  if (!snapshot) {
+    console.log('\n   Sweep skipped — no snapshot.');
+    return;
+  }
   console.log('\n   Sweeping leftover test data...');
   let swept = 0;
-  for (const ep of CLEANUP_ENDPOINTS) {
-    try {
-      const current = await _getAllIds(apiBase, token, ep);
-      const newIds = [...current].filter((id) => !snapshot[ep].has(id));
-      for (const id of newIds) {
-        const r = await _fetch(apiBase, 'DELETE', `${ep}/${id}`, token).catch(() => ({}));
-        if (r?.status === 200) swept++;
+  for (let pass = 0; pass < SWEEP_MAX_PASSES; pass++) {
+    let passSwept = 0;
+    for (const ep of CLEANUP_ENDPOINTS) {
+      try {
+        const current = await _getAllIds(apiBase, token, ep);
+        const newIds = [...current].filter((id) => !snapshot[ep].has(id));
+        for (const id of newIds) {
+          const r = await _fetch(apiBase, 'DELETE', `${ep}/${id}`, token).catch(() => ({}));
+          if (r?.status === 200) {
+            passSwept++;
+            swept++;
+          }
+        }
+      } catch (e) {
+        /* ignore sweep errors for this endpoint */
       }
-    } catch (e) {
-      /* ignore sweep errors for this endpoint */
     }
+    if (passSwept === 0) break;
   }
   console.log(`   Sweep complete — removed ${swept} leftover document(s).`);
 }
 
-module.exports = { snapshotIds, sweepCreatedData };
+/** Deletes the shared station template (cascades stations). Pass `{ tmplId }` from test setup. */
+async function cleanupStationTemplate(apiBase, token, stns) {
+  if (!stns?.tmplId) return;
+  await _fetch(apiBase, 'DELETE', `/api/station-templates/${stns.tmplId}`, token).catch(() => {});
+}
+
+module.exports = { snapshotIds, sweepCreatedData, cleanupStationTemplate };

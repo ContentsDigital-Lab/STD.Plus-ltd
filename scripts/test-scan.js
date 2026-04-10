@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { io } = require('socket.io-client');
-const { snapshotIds, sweepCreatedData } = require('./test-helpers');
+const { snapshotIds, sweepCreatedData, cleanupStationTemplate } = require('./test-helpers');
 const API = `http://localhost:${process.env.PORT || 3000}`;
 
 let passed = 0;
@@ -47,11 +47,6 @@ async function createStations(token) {
   const edging = await mkStation('edging');
   const qc = await mkStation('qc');
   return { tmplId, cutting, edging, qc };
-}
-
-async function cleanupStations(token, stns) {
-  if (!stns?.tmplId) return;
-  await api('DELETE', `/api/station-templates/${stns.tmplId}`, token);
 }
 
 function check(label, actual, expected) {
@@ -1453,7 +1448,7 @@ async function main() {
     await testLaminateMergeSurvivorScan(token);
     await testQcPassFailRemake(token, stns);
   } finally {
-    await cleanupStations(token, stns).catch(() => {});
+    await cleanupStationTemplate(API, token, stns).catch(() => {});
     await sweepCreatedData(API, token, snapshot);
   }
 
