@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const Worker = require('../models/Worker');
 const AppError = require('../utils/AppError');
+const { populateWorkerRole } = require('../utils/rolePopulator');
 
 const auth = async (req, res, next) => {
   const header = req.headers.authorization;
@@ -15,8 +16,7 @@ const auth = async (req, res, next) => {
     const decoded = jwt.verify(token, env.JWT_SECRET);
     const worker = await Worker.findById(decoded.id).populate('role');
     if (!worker) return next(new AppError('User no longer exists', 401));
-    if (!worker.role) return next(new AppError('Worker has no assigned role', 403));
-    req.user = worker;
+    req.user = await populateWorkerRole(worker);
     next();
   } catch (err) {
     return next(new AppError('Invalid or expired token', 401));

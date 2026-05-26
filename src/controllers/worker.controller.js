@@ -29,9 +29,11 @@ const PANE_CASCADE = [
 
 const ORDER_CASCADE = [
   { model: Claim, field: 'order' },
-  { model: Withdrawal, field: 'order', beforeDelete: async (docs) => {
-    for (const w of docs) await restoreInventory(w.material, w.stockType, w.quantity);
-  }},
+  {
+    model: Withdrawal, field: 'order', beforeDelete: async (docs) => {
+      for (const w of docs) await restoreInventory(w.material, w.stockType, w.quantity);
+    }
+  },
   { model: MaterialLog, field: 'order' },
   { model: PaneLog, field: 'order' },
   { model: ProductionLog, field: 'order' },
@@ -46,12 +48,16 @@ const REQUEST_CASCADE = [
 const WORKER_DEPENDENTS = [
   { model: Order, field: 'assignedTo', cascade: ORDER_CASCADE },
   { model: Request, field: 'assignedTo', cascade: REQUEST_CASCADE },
-  { model: Withdrawal, field: 'withdrawnBy', beforeDelete: async (docs) => {
-    for (const w of docs) await restoreInventory(w.material, w.stockType, w.quantity);
-  }},
+  {
+    model: Withdrawal, field: 'withdrawnBy', beforeDelete: async (docs) => {
+      for (const w of docs) await restoreInventory(w.material, w.stockType, w.quantity);
+    }
+  },
   { model: Claim, field: 'reportedBy' },
   { model: Notification, field: 'recipient' },
 ];
+
+const { populateWorkerRole, populateWorkerRoles } = require('../utils/rolePopulator');
 
 exports.getAll = async (req, res, next) => {
   try {
@@ -61,7 +67,8 @@ exports.getAll = async (req, res, next) => {
       sort: req.query.sort,
       populate: 'role',
     });
-    success(res, data, 'Success', 200, pagination);
+    const populatedData = await populateWorkerRoles(data);
+    success(res, populatedData, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -71,7 +78,8 @@ exports.getById = async (req, res, next) => {
   try {
     const worker = await Worker.findById(req.params.id).populate('role');
     if (!worker) return fail(res, 'Worker not found', 404);
-    success(res, worker);
+    const populated = await populateWorkerRole(worker);
+    success(res, populated);
   } catch (err) {
     next(err);
   }
@@ -80,9 +88,9 @@ exports.getById = async (req, res, next) => {
 exports.create = async (req, res, next) => {
   try {
     const { name, username, password, position, role, notificationPreferences } = req.validated.body;
-    const created = await Worker.create({ name, username, password, position, role, notificationPreferences });
-    const worker = await Worker.findById(created._id).populate('role');
-    success(res, worker, 'Worker created', 201);
+    const worker = await Worker.create({ name, username, password, position, role, notificationPreferences });
+    const populated = await populateWorkerRole(worker);
+    success(res, populated, 'Worker created', 201);
   } catch (err) {
     if (err.code === 11000) {
       return fail(res, 'Username already exists', 409);
@@ -112,7 +120,8 @@ exports.update = async (req, res, next) => {
       runValidators: true,
     }).populate('role');
     if (!worker) return fail(res, 'Worker not found', 404);
-    success(res, worker, 'Worker updated');
+    const populated = await populateWorkerRole(worker);
+    success(res, populated, 'Worker updated');
   } catch (err) {
     if (err.code === 11000) {
       return fail(res, 'Username already exists', 409);

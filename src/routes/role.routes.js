@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const roleController = require('../controllers/role.controller');
 
 const router = Router();
@@ -10,8 +10,9 @@ const router = Router();
 const createSchema = z.object({
   body: z.object({
     name: z.string().min(1),
-    slug: z.string().min(1),
-    permissions: z.array(z.string().min(1)).default([]),
+    slug: z.string().min(1).optional(),
+    description: z.string().optional(),
+    permissions: z.array(z.string()).optional(),
   }),
 });
 
@@ -19,22 +20,16 @@ const updateSchema = z.object({
   body: z.object({
     name: z.string().min(1).optional(),
     slug: z.string().min(1).optional(),
-    permissions: z.array(z.string().min(1)).optional(),
+    description: z.string().optional(),
+    permissions: z.array(z.string()).optional(),
   }),
 });
 
-const deleteManySchema = z.object({
-  body: z.object({
-    ids: z.array(z.string().min(1)).min(1),
-  }),
-});
-
+router.get('/', auth, roleController.getAll);
 router.get('/permissions', auth, roleController.getPermissions);
-router.get('/', auth, requirePermission('roles:view'), roleController.getAll);
-router.get('/:id', auth, requirePermission('roles:view'), roleController.getById);
-router.post('/', auth, requirePermission('roles:manage'), validate(createSchema), roleController.create);
-router.patch('/:id', auth, requirePermission('roles:manage'), validate(updateSchema), roleController.update);
-router.delete('/', auth, requirePermission('roles:manage'), validate(deleteManySchema), roleController.deleteMany);
-router.delete('/:id', auth, requirePermission('roles:manage'), roleController.deleteOne);
+router.get('/:id', auth, roleController.getById);
+router.post('/', auth, authorize('admin'), validate(createSchema), roleController.create);
+router.patch('/:id', auth, authorize('admin'), validate(updateSchema), roleController.update);
+router.delete('/:id', auth, authorize('admin'), roleController.delete);
 
 module.exports = router;

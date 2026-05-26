@@ -24,7 +24,7 @@ const createSchema = z.object({
     username: z.string().min(1),
     password: z.string().min(6),
     position: z.string().min(1),
-    role: z.string().min(1),
+    role: z.string().optional(),
     notificationPreferences: notificationPreferencesSchema,
   }),
 });
@@ -35,7 +35,7 @@ const updateSchema = z.object({
     username: z.string().min(1).optional(),
     password: z.string().min(6).optional(),
     position: z.string().min(1).optional(),
-    role: z.string().min(1).optional(),
+    role: z.string().optional(),
     notificationPreferences: notificationPreferencesSchema,
   }),
 });

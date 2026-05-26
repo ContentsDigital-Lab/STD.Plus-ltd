@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const Worker = require('../models/Worker');
 const { success, fail } = require('../utils/response');
+const { populateWorkerRole } = require('../utils/rolePopulator');
 
 const signToken = (id) => {
   return jwt.sign({ id }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN });
@@ -17,8 +18,9 @@ exports.login = async (req, res, next) => {
     }
 
     const token = signToken(worker._id);
+    const populatedWorker = await populateWorkerRole(worker);
 
-    success(res, { token, worker }, 'Login successful');
+    success(res, { token, worker: populatedWorker }, 'Login successful');
   } catch (err) {
     next(err);
   }
@@ -48,9 +50,11 @@ exports.updateMe = async (req, res, next) => {
     const worker = await Worker.findByIdAndUpdate(req.user._id, updates, {
       new: true,
       runValidators: true,
-    }).populate('role');
+    });
+    if (!worker) return fail(res, 'Worker not found', 404);
 
-    success(res, worker, 'Profile updated');
+    const populatedWorker = await populateWorkerRole(worker);
+    success(res, populatedWorker, 'Profile updated');
   } catch (err) {
     next(err);
   }
