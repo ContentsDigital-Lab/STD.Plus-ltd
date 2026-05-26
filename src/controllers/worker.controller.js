@@ -53,6 +53,8 @@ const WORKER_DEPENDENTS = [
   { model: Notification, field: 'recipient' },
 ];
 
+const { populateWorkerRole, populateWorkerRoles } = require('../utils/rolePopulator');
+
 exports.getAll = async (req, res, next) => {
   try {
     const { data, pagination } = await paginate(Worker, {
@@ -60,7 +62,8 @@ exports.getAll = async (req, res, next) => {
       limit: req.query.limit,
       sort: req.query.sort,
     });
-    success(res, data, 'Success', 200, pagination);
+    const populatedData = await populateWorkerRoles(data);
+    success(res, populatedData, 'Success', 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -70,7 +73,8 @@ exports.getById = async (req, res, next) => {
   try {
     const worker = await Worker.findById(req.params.id);
     if (!worker) return fail(res, 'Worker not found', 404);
-    success(res, worker);
+    const populated = await populateWorkerRole(worker);
+    success(res, populated);
   } catch (err) {
     next(err);
   }
@@ -80,7 +84,8 @@ exports.create = async (req, res, next) => {
   try {
     const { name, username, password, position, role, notificationPreferences } = req.validated.body;
     const worker = await Worker.create({ name, username, password, position, role, notificationPreferences });
-    success(res, worker, 'Worker created', 201);
+    const populated = await populateWorkerRole(worker);
+    success(res, populated, 'Worker created', 201);
   } catch (err) {
     if (err.code === 11000) {
       return fail(res, 'Username already exists', 409);
@@ -110,7 +115,8 @@ exports.update = async (req, res, next) => {
       runValidators: true,
     });
     if (!worker) return fail(res, 'Worker not found', 404);
-    success(res, worker, 'Worker updated');
+    const populated = await populateWorkerRole(worker);
+    success(res, populated, 'Worker updated');
   } catch (err) {
     if (err.code === 11000) {
       return fail(res, 'Username already exists', 409);

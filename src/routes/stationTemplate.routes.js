@@ -29,9 +29,9 @@ const deleteManySchema = z.object({
 
 router.get('/', auth, stationTemplateController.getAll);
 router.get('/:id', auth, stationTemplateController.getById);
-router.post('/', auth, authorize('admin', 'manager'), validate(createSchema), stationTemplateController.create);
-router.patch('/:id', auth, authorize('admin', 'manager'), validate(updateSchema), stationTemplateController.update);
-router.delete('/', auth, authorize('admin'), validate(deleteManySchema), stationTemplateController.deleteMany);
-router.delete('/:id', auth, authorize('admin'), stationTemplateController.deleteOne);
+router.post('/', auth, authorize('admin', 'manager', 'stations:manage'), validate(createSchema), stationTemplateController.create);
+router.patch('/:id', auth, authorize('admin', 'manager', 'stations:manage'), validate(updateSchema), stationTemplateController.update);
+router.delete('/', auth, authorize('admin', 'stations:manage'), validate(deleteManySchema), stationTemplateController.deleteMany);
+router.delete('/:id', auth, authorize('admin', 'stations:manage'), stationTemplateController.deleteOne);
 
 module.exports = router;
