@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
-const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const stationTemplateController = require('../controllers/stationTemplate.controller');
 
 const router = Router();

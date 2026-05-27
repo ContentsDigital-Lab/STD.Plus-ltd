@@ -508,6 +508,16 @@ exports.scan = async (req, res, next) => {
       survivor.parentPane = null;
       survivor.currentStation = lamStationStr;
       survivor.currentStatus = 'awaiting_scan_out';
+
+      await PaneLog.create({
+        pane: survivor._id,
+        order: survivor.order ?? parentDoc.order ?? null,
+        material: survivor.material ?? parentDoc.material ?? null,
+        worker: req.user?._id ?? null,
+        station: lamStationStr,
+        action: 'laminate_complete',
+        completedAt: now,
+      });
       survivor.laminateMergedAt = now;
       survivor.laminateStation = parentDoc.laminateStation;
       if (!survivor.startedAt) survivor.startedAt = now;

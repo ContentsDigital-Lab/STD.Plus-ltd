@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
-    "test": "npm run test:scan && npm run test:rbac && npm run test:integrity",
+    "test": "npm run test:crud && npm run test:scan && npm run test:rbac && npm run test:integrity",
+    "test:crud": "node scripts/test-crud.js",
     "test:rbac": "node scripts/test-rbac.js",
     "test:integrity": "node scripts/test-integrity.js",
     "test:pagination": "node scripts/test-pagination.js",

@@ -2,6 +2,7 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const env = require('./config/env');
 const Worker = require('./models/Worker');
+const { populateWorkerRole } = require('./utils/populateWorkerRole');
 
 const setupSocket = (httpServer) => {
   const io = new Server(httpServer, {
@@ -20,7 +21,8 @@ const setupSocket = (httpServer) => {
 
     try {
       const decoded = jwt.verify(token, env.JWT_SECRET);
-      const worker = await Worker.findById(decoded.id).populate('role');
+      let worker = await Worker.findById(decoded.id);
+      worker = await populateWorkerRole(worker);
       if (!worker) return next(new Error('User no longer exists'));
       socket.user = worker;
       next();
