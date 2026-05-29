@@ -3,6 +3,7 @@ const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const inventoryController = require('../controllers/inventory.controller');
 
 const router = Router();
@@ -41,10 +42,10 @@ const moveSchema = z.object({
   }),
 });
 
-router.get('/', auth, requirePermission('inventory:view'), inventoryController.getAll);
-router.get('/:id', auth, requirePermission('inventory:view'), inventoryController.getById);
+router.get('/', auth, authorize('inventory:view', 'dashboard:view'), inventoryController.getAll);
+router.get('/:id', auth, authorize('inventory:view', 'dashboard:view'), inventoryController.getById);
 router.post('/', auth, requirePermission('inventory:manage'), validate(createSchema), inventoryController.create);
-router.post('/:id/move', auth, requirePermission('inventory:move'), validate(moveSchema), inventoryController.move);
+router.post('/:id/move', auth, requirePermission('inventory:manage'), validate(moveSchema), inventoryController.move);
 router.patch('/:id', auth, requirePermission('inventory:manage'), validate(updateSchema), inventoryController.update);
 router.delete('/', auth, requirePermission('inventory:manage'), validate(deleteManySchema), inventoryController.deleteMany);
 router.delete('/:id', auth, requirePermission('inventory:manage'), inventoryController.deleteOne);

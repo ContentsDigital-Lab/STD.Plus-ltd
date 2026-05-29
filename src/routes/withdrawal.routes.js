@@ -3,6 +3,7 @@ const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const withdrawalController = require('../controllers/withdrawal.controller');
 
 const router = Router();
@@ -53,11 +54,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, requirePermission('withdrawals:view'), withdrawalController.getAll);
-router.get('/:id', auth, requirePermission('withdrawals:view'), withdrawalController.getById);
-router.post('/', auth, requirePermission('withdrawals:create'), validate(createSchema), withdrawalController.create);
-router.patch('/:id', auth, requirePermission('withdrawals:manage'), validate(updateSchema), withdrawalController.update);
-router.delete('/', auth, requirePermission('withdrawals:manage'), validate(deleteManySchema), withdrawalController.deleteMany);
-router.delete('/:id', auth, requirePermission('withdrawals:manage'), withdrawalController.deleteOne);
+router.get('/', auth, authorize('inventory:view'), withdrawalController.getAll);
+router.get('/:id', auth, authorize('inventory:view'), withdrawalController.getById);
+router.post('/', auth, requirePermission('inventory:manage'), validate(createSchema), withdrawalController.create);
+router.patch('/:id', auth, requirePermission('inventory:manage'), validate(updateSchema), withdrawalController.update);
+router.delete('/', auth, requirePermission('inventory:manage'), validate(deleteManySchema), withdrawalController.deleteMany);
+router.delete('/:id', auth, requirePermission('inventory:manage'), withdrawalController.deleteOne);
 
 module.exports = router;

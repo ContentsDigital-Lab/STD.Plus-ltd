@@ -3,6 +3,7 @@ const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const workerController = require('../controllers/worker.controller');
 
 const router = Router();
@@ -46,11 +47,22 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, requirePermission('workers:view'), workerController.getAll);
-router.get('/:id', auth, requirePermission('workers:view'), workerController.getById);
-router.post('/', auth, requirePermission('workers:manage'), validate(createSchema), workerController.create);
-router.patch('/:id', auth, requirePermission('workers:manage'), validate(updateSchema), workerController.update);
-router.delete('/', auth, requirePermission('workers:manage'), validate(deleteManySchema), workerController.deleteMany);
-router.delete('/:id', auth, requirePermission('workers:manage'), workerController.deleteOne);
+const allowWorkerFetch = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalView = ['users:view', 'inventory:view', 'production:view', 'orders:view', 'orders:create'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  
+  if (isAdmin || hasGlobalView || hasAnyStationAccess) return next();
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+router.get('/', auth, allowWorkerFetch, workerController.getAll);
+router.get('/:id', auth, allowWorkerFetch, workerController.getById);
+router.post('/', auth, requirePermission('users:manage'), validate(createSchema), workerController.create);
+router.patch('/:id', auth, requirePermission('users:manage'), validate(updateSchema), workerController.update);
+router.delete('/', auth, requirePermission('users:manage'), validate(deleteManySchema), workerController.deleteMany);
+router.delete('/:id', auth, requirePermission('users:manage'), workerController.deleteOne);
 
 module.exports = router;

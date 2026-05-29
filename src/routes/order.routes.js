@@ -3,6 +3,7 @@ const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const orderController = require('../controllers/order.controller');
 const claimController = require('../controllers/claim.controller');
 
@@ -85,11 +86,24 @@ const createClaimSchema = z.object({
   }),
 });
 
-router.get('/', auth, requirePermission('orders:view'), orderController.getAll);
-router.get('/:id', auth, requirePermission('orders:view'), orderController.getById);
+const allowStationView = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalView = ['orders:view', 'production:view', 'inventory:view', 'dashboard:view'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  
+  if (isAdmin || hasGlobalView || hasAnyStationAccess) {
+    return next();
+  }
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+router.get('/', auth, allowStationView, orderController.getAll);
+router.get('/:id', auth, allowStationView, orderController.getById);
 router.post('/', auth, requirePermission('orders:create'), validate(createSchema), orderController.create);
-router.post('/:orderId/claims', auth, requirePermission('claims:create'), validate(createClaimSchema), claimController.create);
-router.patch('/:id', auth, requirePermission('orders:view'), validate(updateSchema), orderController.update);
+router.post('/:orderId/claims', auth, requirePermission('inventory:manage'), validate(createClaimSchema), claimController.create);
+router.patch('/:id', auth, authorize('orders:view', 'production:view', 'inventory:view'), validate(updateSchema), orderController.update);
 router.delete('/', auth, requirePermission('orders:manage'), validate(deleteManySchema), orderController.deleteMany);
 router.delete('/:id', auth, requirePermission('orders:manage'), orderController.deleteOne);
 

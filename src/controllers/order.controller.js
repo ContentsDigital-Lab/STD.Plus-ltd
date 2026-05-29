@@ -61,7 +61,7 @@ const buildRefs = (body) => [
 
 exports.getAll = async (req, res, next) => {
   try {
-    const filter = hasPermission(req.user, 'orders:manage') ? {} : { assignedTo: req.user._id };
+    const filter = (hasPermission(req.user, 'orders:manage') || hasPermission(req.user, 'production:view') || hasPermission(req.user, 'inventory:view')) ? {} : { assignedTo: req.user._id };
     // Filter orders that include a specific station in their route
     if (req.query.stationId) filter.stations = req.query.stationId;
     const { data, pagination } = await paginate(Order, {

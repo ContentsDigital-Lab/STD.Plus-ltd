@@ -3,6 +3,7 @@ const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const materialController = require('../controllers/material.controller');
 
 const router = Router();
@@ -39,11 +40,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, requirePermission('materials:view'), materialController.getAll);
-router.get('/:id', auth, requirePermission('materials:view'), materialController.getById);
-router.post('/', auth, requirePermission('materials:manage'), validate(createSchema), materialController.create);
-router.patch('/:id', auth, requirePermission('materials:manage'), validate(updateSchema), materialController.update);
-router.delete('/', auth, requirePermission('materials:manage'), validate(deleteManySchema), materialController.deleteMany);
-router.delete('/:id', auth, requirePermission('materials:manage'), materialController.deleteOne);
+router.get('/', auth, authorize('inventory:view', 'orders:view', 'orders:create', 'dashboard:view'), materialController.getAll);
+router.get('/:id', auth, authorize('inventory:view', 'orders:view', 'orders:create', 'dashboard:view'), materialController.getById);
+router.post('/', auth, requirePermission('inventory:manage'), validate(createSchema), materialController.create);
+router.patch('/:id', auth, requirePermission('inventory:manage'), validate(updateSchema), materialController.update);
+router.delete('/', auth, requirePermission('inventory:manage'), validate(deleteManySchema), materialController.deleteMany);
+router.delete('/:id', auth, requirePermission('inventory:manage'), materialController.deleteOne);
 
 module.exports = router;

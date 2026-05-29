@@ -33,9 +33,9 @@ const deleteManySchema = z.object({
 
 router.get('/', auth, stickerTemplateController.getAll);
 router.get('/:id', auth, stickerTemplateController.getById);
-router.post('/', auth, authorize('admin', 'manager', 'stickers:manage'), validate(createSchema), stickerTemplateController.create);
-router.patch('/:id', auth, authorize('admin', 'manager', 'stickers:manage'), validate(updateSchema), stickerTemplateController.update);
-router.delete('/', auth, authorize('admin', 'manager', 'stickers:manage'), validate(deleteManySchema), stickerTemplateController.deleteMany);
-router.delete('/:id', auth, authorize('admin', 'manager', 'stickers:manage'), stickerTemplateController.deleteOne);
+router.post('/', auth, authorize('admin', 'stickers:manage'), validate(createSchema), stickerTemplateController.create);
+router.patch('/:id', auth, authorize('admin', 'stickers:manage'), validate(updateSchema), stickerTemplateController.update);
+router.delete('/', auth, authorize('admin', 'stickers:manage'), validate(deleteManySchema), stickerTemplateController.deleteMany);
+router.delete('/:id', auth, authorize('admin', 'stickers:manage'), stickerTemplateController.deleteOne);
 
 module.exports = router;

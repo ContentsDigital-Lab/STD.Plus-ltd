@@ -3,6 +3,7 @@ const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const productionLogController = require('../controllers/productionLog.controller');
 
 const router = Router();
@@ -56,11 +57,22 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, requirePermission('production_logs:view'), productionLogController.getAll);
-router.get('/:id', auth, requirePermission('production_logs:view'), productionLogController.getById);
-router.post('/', auth, requirePermission('production_logs:create'), validate(createSchema), productionLogController.create);
-router.patch('/:id', auth, requirePermission('production_logs:manage'), validate(updateSchema), productionLogController.update);
-router.delete('/', auth, requirePermission('production_logs:manage'), validate(deleteManySchema), productionLogController.deleteMany);
-router.delete('/:id', auth, requirePermission('production_logs:manage'), productionLogController.deleteOne);
+const allowStationView = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalView = ['production:view', 'orders:view'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  
+  if (isAdmin || hasGlobalView || hasAnyStationAccess) return next();
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+router.get('/', auth, allowStationView, productionLogController.getAll);
+router.get('/:id', auth, allowStationView, productionLogController.getById);
+router.post('/', auth, requirePermission('production:manage'), validate(createSchema), productionLogController.create);
+router.patch('/:id', auth, requirePermission('production:manage'), validate(updateSchema), productionLogController.update);
+router.delete('/', auth, requirePermission('production:manage'), validate(deleteManySchema), productionLogController.deleteMany);
+router.delete('/:id', auth, requirePermission('production:manage'), productionLogController.deleteOne);
 
 module.exports = router;

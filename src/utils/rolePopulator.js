@@ -3,18 +3,7 @@ const Role = require('../models/Role');
 
 const SYSTEM_ROLE_PERMISSIONS = {
   admin: ['*'],
-  manager: [
-    'users:view',
-    'inventory:view',
-    'inventory:manage',
-    'production:view',
-    'production:manage',
-    'orders:view',
-    'orders:create',
-    'orders:manage',
-    'settings:view',
-    'dashboard:view',
-  ],
+  manager: [],
   worker: ['production:view'],
 };
 
@@ -29,6 +18,11 @@ async function populateWorkerRole(worker) {
 
   const workerObj = worker.toObject ? worker.toObject() : worker;
   const roleVal = workerObj.role;
+
+  if (roleVal && typeof roleVal === 'object' && roleVal._id && roleVal.permissions) {
+    // Already populated
+    return workerObj;
+  }
 
   if (roleVal && mongoose.Types.ObjectId.isValid(roleVal)) {
     const roleDoc = await Role.findById(roleVal);

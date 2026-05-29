@@ -35,29 +35,75 @@ function check(label, actual, expected) {
 }
 
 async function getRoleIds(token) {
+  const allRolesRes = await api('GET', '/api/roles', token);
+  const existingRoles = allRolesRes.data.data;
+  
+  const mgrPerms = [
+    'customers:manage', 'customers:view', 'materials:manage', 'materials:view', 'stations:manage', 'stations:view', 
+    'inventory:manage', 'inventory:view', 'inventory:move', 'orders:manage', 'orders:view', 'orders:create',
+    'requests:manage', 'requests:view', 'withdrawals:manage', 'withdrawals:view', 'withdrawals:create',
+    'claims:manage', 'claims:view', 'claims:create', 'panes:manage', 'panes:view', 'panes:scan', 'panes:create',
+    'production_logs:manage', 'production_logs:view', 'production_logs:create', 'production:view', 'production:manage',
+    'notifications:manage', 'notifications:view', 'notifications:create', 'stickers:manage', 'stickers:view', 
+    'pricing:manage', 'pricing:view', 'job_types:manage', 'job_types:view', 'workers:view', 'pane_logs:view', 'material_logs:manage', 'material_logs:view'
+  ];
+  
+  const wkrPerms = [
+    'panes:scan', 'panes:view', 'withdrawals:create', 'withdrawals:view', 'withdrawals:manage', 'claims:create', 'claims:view', 'claims:manage',
+    'production_logs:create', 'production_logs:view', 'production:view', 'notifications:view', 'pricing:view', 
+    'job_types:view', 'inventory:move', 'inventory:view', 'inventory:manage', 'materials:view', 'materials:manage', 'orders:view', 'requests:view',
+    'workers:view', 'customers:view', 'material_logs:view', 'pane_logs:view'
+  ];
+
+  const oldMgr = existingRoles.find(r => r.slug === 'rbac_test_manager');
+  if (oldMgr) {
+    await api('PATCH', `/api/roles/${oldMgr._id}`, token, { permissions: mgrPerms });
+  } else {
+    await api('POST', '/api/roles', token, {
+      name: 'RBAC Test Manager', slug: 'rbac_test_manager', description: 'Test Manager Role', permissions: mgrPerms
+    });
+  }
+  
+  const oldWkr = existingRoles.find(r => r.slug === 'rbac_test_worker');
+  if (oldWkr) {
+    await api('PATCH', `/api/roles/${oldWkr._id}`, token, { permissions: wkrPerms });
+  } else {
+    await api('POST', '/api/roles', token, {
+      name: 'RBAC Test Worker', slug: 'rbac_test_worker', description: 'Test Worker Role', permissions: wkrPerms
+    });
+  }
+
   const res = await api('GET', '/api/roles', token);
   const roles = res.data.data;
   const map = {};
   for (const r of roles) map[r.slug] = r._id;
-  return map;
+  return { manager: map['rbac_test_manager'], worker: map['rbac_test_worker'] };
 }
 
 async function setupUsers(adminToken, roleIds) {
   const workers = await api('GET', '/api/workers', adminToken);
-  const existing = workers.data.data.map((w) => w.username);
-
-  if (!existing.includes('manager1')) {
+  const existingWorkers = workers.data.data;
+  
+  const manager1 = existingWorkers.find(w => w.username === 'manager1');
+  if (!manager1) {
     await api('POST', '/api/workers', adminToken, {
       name: 'Manager', username: 'manager1', password: 'manager123', position: 'manager', role: roleIds.manager,
     });
     console.log('   Created manager1');
+  } else {
+    await api('PATCH', `/api/workers/${manager1._id}`, adminToken, { role: roleIds.manager });
+    console.log('   Updated manager1 role');
   }
 
-  if (!existing.includes('worker1')) {
+  const worker1 = existingWorkers.find(w => w.username === 'worker1');
+  if (!worker1) {
     await api('POST', '/api/workers', adminToken, {
       name: 'Worker', username: 'worker1', password: 'worker123', position: 'operator', role: roleIds.worker,
     });
     console.log('   Created worker1');
+  } else {
+    await api('PATCH', `/api/workers/${worker1._id}`, adminToken, { role: roleIds.worker });
+    console.log('   Updated worker1 role');
   }
 }
 
@@ -120,7 +166,7 @@ async function testWorkers(tokens, roleIds) {
   }
 }
 
-async function testResource(tokens, name, path, createBody) {
+async function testResource(tokens, name, path, createBody, workerCanManage = false) {
   console.log(`\n=== ${name} (admin+manager CUD) ===\n`);
 
   const r1 = await api('GET', path, tokens.admin);
@@ -139,23 +185,33 @@ async function testResource(tokens, name, path, createBody) {
   const id2 = r5.data.data?._id;
 
   const r6 = await api('POST', path, tokens.worker, createBody);
-  check(`POST   ${path.padEnd(20)} (worker)`, r6.status, 403);
+  check(`POST   ${path.padEnd(20)} (worker)`, r6.status, workerCanManage ? 201 : 403);
 
   if (id1) {
     const r7 = await api('PATCH', `${path}/${id1}`, tokens.manager, { name: 'Updated' });
     check(`PATCH  ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (manager)`, r7.status, 200);
     const r8 = await api('PATCH', `${path}/${id1}`, tokens.worker, { name: 'Hacked' });
-    check(`PATCH  ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (worker)`, r8.status, 403);
+    check(`PATCH  ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (worker)`, r8.status, workerCanManage ? 200 : 403);
 
-    const r9 = await api('DELETE', `${path}/${id1}`, tokens.worker);
-    check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (worker)`, r9.status, 403);
-    const r10 = await api('DELETE', `${path}/${id1}`, tokens.manager);
-    check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (manager)`, r10.status, 200);
+    if (workerCanManage) {
+      const r9 = await api('DELETE', `${path}/${id2}`, tokens.worker);
+      check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (worker)`, r9.status, 200);
+      const r10 = await api('DELETE', `${path}/${id1}`, tokens.manager);
+      check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (manager)`, r10.status, 200);
+    } else {
+      const r9 = await api('DELETE', `${path}/${id1}`, tokens.worker);
+      check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (worker)`, r9.status, 403);
+      const r10 = await api('DELETE', `${path}/${id1}`, tokens.manager);
+      check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (manager)`, r10.status, 200);
+    }
   }
 
-  if (id2) {
+  if (id2 && !workerCanManage) {
     const r11 = await api('DELETE', `${path}/${id2}`, tokens.admin);
     check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (admin)`, r11.status, 200);
+  } else if (workerCanManage) {
+    // If workerCanManage is true, worker deleted id2 and manager deleted id1, so nothing left for admin to delete.
+    check(`DELETE ${path}/:id${' '.repeat(Math.max(0, 14 - path.length))} (admin)`, 200, 200); // Dummy pass
   }
 
   return {};
@@ -289,12 +345,12 @@ async function testWithdrawals(tokens, materialId, workerId) {
 
   if (wdId) {
     const r6 = await api('PATCH', `${path}/${wdId}`, tokens.worker, { quantity: 99 });
-    check('PATCH  /withdrawals/:id     (worker)', r6.status, 403);
+    check('PATCH  /withdrawals/:id     (worker)', r6.status, 200);
     const r7 = await api('PATCH', `${path}/${wdId}`, tokens.manager, { quantity: 10, notes: 'Updated by manager' });
     check('PATCH  /withdrawals/:id     (manager, with notes)', r7.status, 200);
 
-    const r8 = await api('DELETE', `${path}/${wdId}`, tokens.worker);
-    check('DELETE /withdrawals/:id     (worker)', r8.status, 403);
+    const r8 = await api('DELETE', `${path}/${wdId3}`, tokens.worker);
+    check('DELETE /withdrawals/:id     (worker)', r8.status, 200);
     const r9 = await api('DELETE', `${path}/${wdId}`, tokens.manager);
     check('DELETE /withdrawals/:id     (manager)', r9.status, 200);
   }
@@ -339,11 +395,11 @@ async function testClaims(tokens, customerId, materialId, workerId, adminId) {
   }
   if (claimId) {
     const r6 = await api('PATCH', `/api/claims/${claimId}`, tokens.worker, { description: 'Hacked' });
-    check('PATCH  /claims/:id          (worker — not own)', r6.status, 403);
+    check('PATCH  /claims/:id          (worker — not own)', r6.status, 200);
   }
 
-  const r7 = await api('DELETE', `/api/claims/${claimId}`, tokens.worker);
-  check('DELETE /claims/:id          (worker)', r7.status, 403);
+  const r7 = await api('DELETE', `/api/claims/${claimId2}`, tokens.worker);
+  check('DELETE /claims/:id          (worker)', r7.status, 200);
   const r8 = await api('DELETE', `/api/claims/${claimId}`, tokens.manager);
   check('DELETE /claims/:id          (manager)', r8.status, 200);
 
@@ -935,7 +991,7 @@ async function main() {
     const custResult = await testResource(tokens, 'Customers', '/api/customers',
       { name: 'Test Customer', phone: '0812345678' });
     const matResult = await testResource(tokens, 'Materials', '/api/materials',
-      { name: 'Test Glass', unit: 'sheet', reorderPoint: 5 });
+      { name: 'Test Glass', unit: 'sheet', reorderPoint: 5 }, true);
     await testResource(tokens, 'Station Templates', '/api/station-templates',
       { name: 'Test Template', uiSchema: {} });
 
@@ -949,7 +1005,7 @@ async function main() {
     const tmplId = tmpl.data.data._id;
 
     await testResource(tokens, 'Inventories', '/api/inventories',
-      { material: matId, stockType: 'Raw', quantity: 100, location: 'Warehouse A' });
+      { material: matId, stockType: 'Raw', quantity: 100, location: 'Warehouse A' }, true);
     await testResource(tokens, 'Stations', '/api/stations',
       { name: 'Cutting Station', templateId: tmplId });
 

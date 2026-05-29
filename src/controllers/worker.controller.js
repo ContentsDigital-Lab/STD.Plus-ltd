@@ -12,6 +12,7 @@ const PaneLog = require('../models/PaneLog');
 const { success, fail } = require('../utils/response');
 const { cascadeDeleteReferenced, cascadeDeleteManyReferenced } = require('../services/integrity');
 const paginate = require('../utils/paginate');
+const emit = require('../utils/emitEvent');
 
 const restoreInventory = async (materialId, stockType, quantity) => {
   const inventory = await Inventory.findOne({ material: materialId, stockType }).sort({ createdAt: 1 });
@@ -121,6 +122,7 @@ exports.update = async (req, res, next) => {
     }).populate('role');
     if (!worker) return fail(res, 'Worker not found', 404);
     const populated = await populateWorkerRole(worker);
+    emit(req, 'worker:updated', { _id: populated._id, action: 'updated' });
     success(res, populated, 'Worker updated');
   } catch (err) {
     if (err.code === 11000) {
@@ -135,6 +137,7 @@ exports.deleteOne = async (req, res, next) => {
     await cascadeDeleteReferenced(req.params.id, WORKER_DEPENDENTS);
     const worker = await Worker.findByIdAndDelete(req.params.id);
     if (!worker) return fail(res, 'Worker not found', 404);
+    emit(req, 'worker:updated', { _id: req.params.id, action: 'deleted' });
     success(res, null, 'Worker deleted');
   } catch (err) {
     next(err);
@@ -146,6 +149,7 @@ exports.deleteMany = async (req, res, next) => {
     const { ids } = req.validated.body;
     await cascadeDeleteManyReferenced(ids, WORKER_DEPENDENTS);
     const result = await Worker.deleteMany({ _id: { $in: ids } });
+    ids.forEach(id => emit(req, 'worker:updated', { _id: id, action: 'deleted' }));
     success(res, { deletedCount: result.deletedCount }, 'Workers deleted');
   } catch (err) {
     next(err);

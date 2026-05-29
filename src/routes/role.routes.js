@@ -28,8 +28,8 @@ const updateSchema = z.object({
 router.get('/', auth, roleController.getAll);
 router.get('/permissions', auth, roleController.getPermissions);
 router.get('/:id', auth, roleController.getById);
-router.post('/', auth, authorize('admin'), validate(createSchema), roleController.create);
-router.patch('/:id', auth, authorize('admin'), validate(updateSchema), roleController.update);
-router.delete('/:id', auth, authorize('admin'), roleController.delete);
+router.post('/', auth, authorize('admin', 'roles:manage'), validate(createSchema), roleController.create);
+router.patch('/:id', auth, authorize('admin', 'roles:manage'), validate(updateSchema), roleController.update);
+router.delete('/:id', auth, authorize('admin', 'roles:manage'), roleController.delete);
 
 module.exports = router;

@@ -63,7 +63,7 @@ const restoreInventory = async (materialId, stockType, quantity, inventoryId = n
 
 exports.getAll = async (req, res, next) => {
   try {
-    const filter = hasPermission(req.user, 'withdrawals:manage') ? {} : { withdrawnBy: req.user._id };
+    const filter = (hasPermission(req.user, 'withdrawals:manage') || hasPermission(req.user, 'inventory:view')) ? {} : { withdrawnBy: req.user._id };
     const { data, pagination } = await paginate(Withdrawal, {
       filter,
       populate: POPULATE_FIELDS,

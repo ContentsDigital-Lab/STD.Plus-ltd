@@ -73,7 +73,7 @@ const createRemakePane = async (claim, remakeStationId, req) => {
 
 exports.getAll = async (req, res, next) => {
   try {
-    const filter = hasPermission(req.user, 'claims:manage') ? {} : { reportedBy: req.user._id };
+    const filter = (hasPermission(req.user, 'claims:manage') || hasPermission(req.user, 'inventory:view')) ? {} : { reportedBy: req.user._id };
     const { data, pagination } = await paginate(Claim, {
       filter,
       populate: POPULATE_FIELDS,

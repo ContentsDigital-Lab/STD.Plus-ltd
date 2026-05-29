@@ -1,6 +1,7 @@
 const Role = require('../models/Role');
 const { success, fail } = require('../utils/response');
 const paginate = require('../utils/paginate');
+const emit = require('../utils/emitEvent');
 
 const SYSTEM_PERMISSIONS = [
   'users:view',
@@ -101,6 +102,7 @@ exports.update = async (req, res, next) => {
     if (permissions !== undefined) role.permissions = permissions;
 
     await role.save();
+    emit(req, 'role:updated', { _id: role._id, action: 'updated' });
     success(res, role, 'Role updated');
   } catch (err) {
     if (err.code === 11000) {
@@ -118,6 +120,7 @@ exports.delete = async (req, res, next) => {
       return fail(res, 'Cannot delete system roles', 400);
     }
     await Role.findByIdAndDelete(req.params.id);
+    emit(req, 'role:updated', { _id: req.params.id, action: 'deleted' });
     success(res, null, 'Role deleted');
   } catch (err) {
     next(err);

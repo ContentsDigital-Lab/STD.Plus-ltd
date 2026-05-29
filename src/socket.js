@@ -2,7 +2,7 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const env = require('./config/env');
 const Worker = require('./models/Worker');
-const { populateWorkerRole } = require('./utils/populateWorkerRole');
+const { populateWorkerRole } = require('./utils/rolePopulator');
 
 const setupSocket = (httpServer) => {
   const io = new Server(httpServer, {
@@ -62,7 +62,7 @@ const setupSocket = (httpServer) => {
     }
 
     socket.on('join_station_room', (data, callback) => {
-      const stationId = data?.stationId;
+      const stationId = typeof data === 'string' ? data : data?.stationId;
       if (!stationId) {
         if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
         return;
@@ -74,7 +74,7 @@ const setupSocket = (httpServer) => {
     });
 
     socket.on('leave_station_room', (data, callback) => {
-      const stationId = data?.stationId;
+      const stationId = typeof data === 'string' ? data : data?.stationId;
       if (!stationId) {
         if (typeof callback === 'function') callback({ ok: false, error: 'stationId is required' });
         return;

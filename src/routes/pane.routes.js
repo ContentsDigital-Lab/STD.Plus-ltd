@@ -3,6 +3,7 @@ const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const paneController = require('../controllers/pane.controller');
 
 const router = Router();
@@ -153,13 +154,36 @@ const batchScanSchema = z.object({
   }),
 });
 
-router.get('/',                    auth, requirePermission('panes:view'), paneController.getAll);
-router.get('/:id',                 auth, requirePermission('panes:view'), paneController.getById);
-router.post('/',                   auth, requirePermission('panes:create'), validate(createSchema), paneController.create);
-router.patch('/:id',               auth, requirePermission('panes:manage'), validate(updateSchema), paneController.update);
-router.delete('/',                 auth, requirePermission('panes:manage'), validate(deleteManySchema), paneController.deleteMany);
-router.delete('/:id',              auth, requirePermission('panes:manage'), paneController.deleteOne);
-router.post('/:paneNumber/scan',   auth, requirePermission('panes:scan'), validate(scanSchema), paneController.scan);
-router.post('/batch-scan',         auth, requirePermission('panes:scan'), validate(batchScanSchema), paneController.batchScan);
+const allowStationView = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalView = ['production:view', 'orders:view'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  
+  if (isAdmin || hasGlobalView || hasAnyStationAccess) return next();
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+router.get('/',                    auth, allowStationView, paneController.getAll);
+router.get('/:id',                 auth, allowStationView, paneController.getById);
+router.post('/',                   auth, authorize('production:manage', 'orders:create', 'orders:manage'), validate(createSchema), paneController.create);
+router.patch('/:id',               auth, authorize('production:manage', 'orders:create', 'orders:manage'), validate(updateSchema), paneController.update);
+router.delete('/',                 auth, authorize('production:manage', 'orders:manage'), validate(deleteManySchema), paneController.deleteMany);
+router.delete('/:id',              auth, authorize('production:manage', 'orders:manage'), paneController.deleteOne);
+const allowScan = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalManage = perms.includes('production:manage');
+  const stationId = req.body?.station;
+  const hasStationAccess = stationId && perms.includes(`station:enter:${stationId}`);
+  
+  if (isAdmin || hasGlobalManage || hasStationAccess) return next();
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized to scan at this station', 403));
+};
+
+router.post('/:paneNumber/scan',   auth, allowScan, validate(scanSchema), paneController.scan);
+router.post('/batch-scan',         auth, allowScan, validate(batchScanSchema), paneController.batchScan);
 
 module.exports = router;

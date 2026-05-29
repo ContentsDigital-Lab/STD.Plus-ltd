@@ -1,5 +1,6 @@
 const Inventory = require('../models/Inventory');
 const Material = require('../models/Material');
+const MaterialLog = require('../models/MaterialLog');
 const { success, fail } = require('../utils/response');
 const emit = require('../utils/emitEvent');
 const { verifyReferences } = require('../services/integrity');
@@ -36,6 +37,14 @@ exports.create = async (req, res, next) => {
     ]);
 
     const inventory = await Inventory.create(req.validated.body);
+    await MaterialLog.create({
+      material: inventory.material,
+      actionType: 'import',
+      quantityChanged: inventory.quantity,
+      stockType: inventory.stockType,
+      worker: req.user ? req.user._id : null
+    });
+    
     const populated = await inventory.populate('material');
     emit(req, 'inventory:updated', { action: 'created', data: populated }, ['dashboard', 'inventory']);
     success(res, populated, 'Inventory created', 201);
@@ -50,11 +59,26 @@ exports.update = async (req, res, next) => {
       { model: Material, id: req.validated.body.material, label: 'Material' },
     ]);
 
+    const oldInventory = await Inventory.findById(req.params.id);
+    if (!oldInventory) return fail(res, 'Inventory not found', 404);
+    const oldQuantity = oldInventory.quantity;
+
     const inventory = await Inventory.findByIdAndUpdate(req.params.id, req.validated.body, {
       new: true,
       runValidators: true,
     }).populate('material');
-    if (!inventory) return fail(res, 'Inventory not found', 404);
+    
+    const delta = inventory.quantity - oldQuantity;
+    if (delta !== 0) {
+      await MaterialLog.create({
+        material: inventory.material._id,
+        actionType: delta > 0 ? 'import' : 'withdraw',
+        quantityChanged: delta,
+        stockType: inventory.stockType,
+        worker: req.user ? req.user._id : null
+      });
+    }
+
     emit(req, 'inventory:updated', { action: 'updated', data: inventory }, ['dashboard', 'inventory']);
     success(res, inventory, 'Inventory updated');
   } catch (err) {
@@ -109,6 +133,23 @@ exports.move = async (req, res, next) => {
 
     const populatedSource = await source.populate('material');
     const populatedTarget = await target.populate('material');
+
+    const withdrawLog = await MaterialLog.create({
+      material: source.material._id,
+      actionType: 'withdraw',
+      quantityChanged: -quantity,
+      stockType: source.stockType,
+      worker: req.user ? req.user._id : null
+    });
+
+    await MaterialLog.create({
+      material: target.material._id,
+      actionType: 'import',
+      quantityChanged: quantity,
+      stockType: target.stockType,
+      parentLog: withdrawLog._id,
+      worker: req.user ? req.user._id : null
+    });
 
     emit(req, 'inventory:updated', { action: 'moved', data: { source: populatedSource, target: populatedTarget, quantity } }, ['dashboard', 'inventory']);
     success(res, { source: populatedSource, target: populatedTarget, movedQuantity: quantity }, 'Inventory moved');

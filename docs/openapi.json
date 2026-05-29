@@ -1831,7 +1831,7 @@
       "post": {
         "tags": ["Inventories"],
         "summary": "Create an inventory",
-        "description": "Requires `inventory:manage` permission.",
+        "description": "Requires `inventory:manage` permission.\n\n**Note:** Automatically generates an `import` `MaterialLog` record.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InventoryCreateBody" } } } },
         "responses": {
@@ -1869,7 +1869,7 @@
       "patch": {
         "tags": ["Inventories"],
         "summary": "Update an inventory",
-        "description": "Requires `inventory:manage` permission.",
+        "description": "Requires `inventory:manage` permission.\n\n**Note:** Automatically generates a `MaterialLog` record (either `import` or `withdraw`) reflecting the quantity delta.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InventoryUpdateBody" } } } },
@@ -1898,7 +1898,7 @@
       "post": {
         "tags": ["Inventories"],
         "summary": "Move inventory to another location",
-        "description": "Moves a specified quantity from the source inventory record to a target location. If an inventory record already exists at the target location (same material and stock type), the quantity is added to it; otherwise a new record is created. Requires `inventory:move` permission.",
+        "description": "Moves a specified quantity from the source inventory record to a target location. If an inventory record already exists at the target location (same material and stock type), the quantity is added to it; otherwise a new record is created. Requires `inventory:move` permission.\n\n**Note:** Automatically generates linked `withdraw` and `import` `MaterialLog` records to track the movement.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
         "requestBody": {

@@ -3,6 +3,7 @@ const { z } = require('zod');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 const requirePermission = require('../middleware/requirePermission');
+const authorize = require('../middleware/authorize');
 const materialLogController = require('../controllers/materialLog.controller');
 
 const router = Router();
@@ -45,11 +46,11 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, requirePermission('material_logs:view'), materialLogController.getAll);
-router.get('/:id', auth, requirePermission('material_logs:view'), materialLogController.getById);
-router.post('/', auth, requirePermission('material_logs:manage'), validate(createSchema), materialLogController.create);
-router.patch('/:id', auth, requirePermission('material_logs:manage'), validate(updateSchema), materialLogController.update);
-router.delete('/', auth, requirePermission('material_logs:manage'), validate(deleteManySchema), materialLogController.deleteMany);
-router.delete('/:id', auth, requirePermission('material_logs:manage'), materialLogController.deleteOne);
+router.get('/', auth, authorize('inventory:view', 'dashboard:view'), materialLogController.getAll);
+router.get('/:id', auth, authorize('inventory:view', 'dashboard:view'), materialLogController.getById);
+router.post('/', auth, requirePermission('inventory:manage'), validate(createSchema), materialLogController.create);
+router.patch('/:id', auth, requirePermission('inventory:manage'), validate(updateSchema), materialLogController.update);
+router.delete('/', auth, requirePermission('inventory:manage'), validate(deleteManySchema), materialLogController.deleteMany);
+router.delete('/:id', auth, requirePermission('inventory:manage'), materialLogController.deleteOne);
 
 module.exports = router;
