@@ -34,8 +34,21 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, authorize('orders:view', 'users:view', 'orders:create'), customerController.getAll);
-router.get('/:id', auth, authorize('orders:view', 'users:view', 'orders:create'), customerController.getById);
+const allowStationView = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalView = ['orders:view', 'users:view', 'orders:create'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  
+  if (isAdmin || hasGlobalView || hasAnyStationAccess) {
+    return next();
+  }
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+router.get('/', auth, allowStationView, customerController.getAll);
+router.get('/:id', auth, allowStationView, customerController.getById);
 router.post('/', auth, requirePermission('orders:manage'), validate(createSchema), customerController.create);
 router.patch('/:id', auth, requirePermission('orders:manage'), validate(updateSchema), customerController.update);
 router.delete('/', auth, requirePermission('orders:manage'), validate(deleteManySchema), customerController.deleteMany);

@@ -61,7 +61,17 @@ const buildRefs = (body) => [
 
 exports.getAll = async (req, res, next) => {
   try {
-    const filter = (hasPermission(req.user, 'orders:manage') || hasPermission(req.user, 'production:view') || hasPermission(req.user, 'inventory:view')) ? {} : { assignedTo: req.user._id };
+    const perms = req.user?.role?.permissions || [];
+    const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+    const hasGlobalView = ['orders:manage', 'production:view', 'inventory:view'].some(p => perms.includes(p));
+    const isStationQuery = !!req.query.stationId && perms.includes(`station:enter:${req.query.stationId}`);
+    const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+    
+    const filter = {};
+    if (!isAdmin && !hasGlobalView && !isStationQuery && !hasAnyStationAccess) {
+      filter.assignedTo = req.user._id;
+    }
+    
     // Filter orders that include a specific station in their route
     if (req.query.stationId) filter.stations = req.query.stationId;
     const { data, pagination } = await paginate(Order, {
@@ -143,7 +153,8 @@ exports.update = async (req, res, next) => {
     const existing = await Order.findById(req.params.id);
     if (!existing) return fail(res, 'Order not found', 404);
 
-    if (!hasPermission(req.user, 'orders:manage')) {
+    const hasAnyStationAccess = req.user?.role?.permissions?.some(p => p.startsWith('station:enter:'));
+    if (!hasPermission(req.user, 'orders:manage') && !hasAnyStationAccess) {
       if (existing.assignedTo?.toString() !== req.user._id.toString()) {
         return fail(res, 'Not authorized', 403);
       }

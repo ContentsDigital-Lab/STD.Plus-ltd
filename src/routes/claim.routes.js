@@ -50,10 +50,30 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, authorize('inventory:view', 'production:view'), claimController.getAll);
-router.get('/:id', auth, authorize('inventory:view', 'production:view'), claimController.getById);
-router.post('/from-pane', auth, requirePermission('inventory:manage'), validate(createFromPaneSchema), claimController.createFromPane);
-router.patch('/:id', auth, requirePermission('inventory:view'), validate(updateSchema), claimController.update);
+const allowStationClaimView = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalView = ['inventory:view', 'production:view'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  if (isAdmin || hasGlobalView || hasAnyStationAccess) return next();
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+const allowStationClaimManage = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalManage = ['inventory:manage'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  if (isAdmin || hasGlobalManage || hasAnyStationAccess) return next();
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+router.get('/', auth, allowStationClaimView, claimController.getAll);
+router.get('/:id', auth, allowStationClaimView, claimController.getById);
+router.post('/from-pane', auth, allowStationClaimManage, validate(createFromPaneSchema), claimController.createFromPane);
+router.patch('/:id', auth, allowStationClaimView, validate(updateSchema), claimController.update);
 router.delete('/', auth, requirePermission('inventory:manage'), validate(deleteManySchema), claimController.deleteMany);
 router.delete('/:id', auth, requirePermission('inventory:manage'), claimController.deleteOne);
 

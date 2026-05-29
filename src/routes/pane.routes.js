@@ -165,10 +165,21 @@ const allowStationView = (req, res, next) => {
   return next(new AppError('Not authorized for this action', 403));
 };
 
+const allowPaneUpdate = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalManage = ['production:manage', 'orders:create', 'orders:manage'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  
+  if (isAdmin || hasGlobalManage || hasAnyStationAccess) return next();
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
 router.get('/',                    auth, allowStationView, paneController.getAll);
 router.get('/:id',                 auth, allowStationView, paneController.getById);
 router.post('/',                   auth, authorize('production:manage', 'orders:create', 'orders:manage'), validate(createSchema), paneController.create);
-router.patch('/:id',               auth, authorize('production:manage', 'orders:create', 'orders:manage'), validate(updateSchema), paneController.update);
+router.patch('/:id',               auth, allowPaneUpdate, validate(updateSchema), paneController.update);
 router.delete('/',                 auth, authorize('production:manage', 'orders:manage'), validate(deleteManySchema), paneController.deleteMany);
 router.delete('/:id',              auth, authorize('production:manage', 'orders:manage'), paneController.deleteOne);
 const allowScan = (req, res, next) => {

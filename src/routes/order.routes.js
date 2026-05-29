@@ -99,11 +99,24 @@ const allowStationView = (req, res, next) => {
   return next(new AppError('Not authorized for this action', 403));
 };
 
+const allowOrderCreate = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalCreate = perms.includes('orders:create') || perms.includes('orders:manage');
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  
+  if (isAdmin || hasGlobalCreate || hasAnyStationAccess) {
+    return next();
+  }
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
 router.get('/', auth, allowStationView, orderController.getAll);
 router.get('/:id', auth, allowStationView, orderController.getById);
-router.post('/', auth, requirePermission('orders:create'), validate(createSchema), orderController.create);
+router.post('/', auth, allowOrderCreate, validate(createSchema), orderController.create);
 router.post('/:orderId/claims', auth, requirePermission('inventory:manage'), validate(createClaimSchema), claimController.create);
-router.patch('/:id', auth, authorize('orders:view', 'production:view', 'inventory:view'), validate(updateSchema), orderController.update);
+router.patch('/:id', auth, allowOrderCreate, validate(updateSchema), orderController.update);
 router.delete('/', auth, requirePermission('orders:manage'), validate(deleteManySchema), orderController.deleteMany);
 router.delete('/:id', auth, requirePermission('orders:manage'), orderController.deleteOne);
 

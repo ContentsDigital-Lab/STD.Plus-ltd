@@ -54,9 +54,29 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, authorize('inventory:view'), withdrawalController.getAll);
-router.get('/:id', auth, authorize('inventory:view'), withdrawalController.getById);
-router.post('/', auth, requirePermission('inventory:manage'), validate(createSchema), withdrawalController.create);
+const allowStationWithdrawalView = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalView = ['inventory:view'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  if (isAdmin || hasGlobalView || hasAnyStationAccess) return next();
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+const allowStationWithdrawalCreate = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalManage = ['inventory:manage'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  if (isAdmin || hasGlobalManage || hasAnyStationAccess) return next();
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+router.get('/', auth, allowStationWithdrawalView, withdrawalController.getAll);
+router.get('/:id', auth, allowStationWithdrawalView, withdrawalController.getById);
+router.post('/', auth, allowStationWithdrawalCreate, validate(createSchema), withdrawalController.create);
 router.patch('/:id', auth, requirePermission('inventory:manage'), validate(updateSchema), withdrawalController.update);
 router.delete('/', auth, requirePermission('inventory:manage'), validate(deleteManySchema), withdrawalController.deleteMany);
 router.delete('/:id', auth, requirePermission('inventory:manage'), withdrawalController.deleteOne);

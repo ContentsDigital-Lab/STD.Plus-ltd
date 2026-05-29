@@ -42,8 +42,21 @@ const moveSchema = z.object({
   }),
 });
 
-router.get('/', auth, authorize('inventory:view', 'dashboard:view'), inventoryController.getAll);
-router.get('/:id', auth, authorize('inventory:view', 'dashboard:view'), inventoryController.getById);
+const allowStationInventory = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalView = ['inventory:view', 'dashboard:view'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  
+  if (isAdmin || hasGlobalView || hasAnyStationAccess) {
+    return next();
+  }
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+router.get('/', auth, allowStationInventory, inventoryController.getAll);
+router.get('/:id', auth, allowStationInventory, inventoryController.getById);
 router.post('/', auth, requirePermission('inventory:manage'), validate(createSchema), inventoryController.create);
 router.post('/:id/move', auth, requirePermission('inventory:manage'), validate(moveSchema), inventoryController.move);
 router.patch('/:id', auth, requirePermission('inventory:manage'), validate(updateSchema), inventoryController.update);

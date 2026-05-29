@@ -16,6 +16,7 @@ const createSchema = z.object({
     colorId: z.enum(stationColors).optional(),
     status: z.enum(['online', 'offline', 'maintenance']).optional(),
     isLaminateStation: z.boolean().optional(),
+    showWithdrawClaimActions: z.boolean().optional(),
     notes: z.string().optional(),
   }),
 });
@@ -27,6 +28,7 @@ const updateSchema = z.object({
     colorId: z.enum(stationColors).optional(),
     status: z.enum(['online', 'offline', 'maintenance']).optional(),
     isLaminateStation: z.boolean().optional(),
+    showWithdrawClaimActions: z.boolean().optional(),
     notes: z.string().optional(),
   }),
 });

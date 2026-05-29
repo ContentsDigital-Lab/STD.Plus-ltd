@@ -40,8 +40,21 @@ const deleteManySchema = z.object({
   }),
 });
 
-router.get('/', auth, authorize('inventory:view', 'orders:view', 'orders:create', 'dashboard:view'), materialController.getAll);
-router.get('/:id', auth, authorize('inventory:view', 'orders:view', 'orders:create', 'dashboard:view'), materialController.getById);
+const allowStationView = (req, res, next) => {
+  const perms = req.user?.role?.permissions || [];
+  const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
+  const hasGlobalView = ['inventory:view', 'orders:view', 'orders:create', 'dashboard:view'].some(p => perms.includes(p));
+  const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
+  
+  if (isAdmin || hasGlobalView || hasAnyStationAccess) {
+    return next();
+  }
+  const AppError = require('../utils/AppError');
+  return next(new AppError('Not authorized for this action', 403));
+};
+
+router.get('/', auth, allowStationView, materialController.getAll);
+router.get('/:id', auth, allowStationView, materialController.getById);
 router.post('/', auth, requirePermission('inventory:manage'), validate(createSchema), materialController.create);
 router.patch('/:id', auth, requirePermission('inventory:manage'), validate(updateSchema), materialController.update);
 router.delete('/', auth, requirePermission('inventory:manage'), validate(deleteManySchema), materialController.deleteMany);

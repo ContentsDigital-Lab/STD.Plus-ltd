@@ -27,6 +27,10 @@ const stationSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  showWithdrawClaimActions: {
+    type: Boolean,
+    default: true,
+  },
   notes: {
     type: String,
     default: '',
