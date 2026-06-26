@@ -24,6 +24,10 @@
           {
             "group": "WebSocket",
             "pages": ["websocket/overview", "websocket/events"]
+          },
+          {
+            "group": "Scripts & Tools",
+            "pages": ["scripts/import-materials"]
           }
         ]
       },
@@ -257,14 +261,5 @@
         ]
       }
     ]
-  },
-  "api": {
-    "baseUrl": "http://localhost:3000",
-    "auth": {
-      "method": "bearer"
-    },
-    "playground": {
-      "mode": "simple"
-    }
   }
 }

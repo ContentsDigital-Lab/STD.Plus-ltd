@@ -19,6 +19,7 @@
     "backfill": "node scripts/backfill-auto-numbers.js",
     "migrate:stations": "node scripts/migrate-station-ids.js",
     "migrate:roles": "node scripts/migrate-roles.js",
+    "import:materials": "node scripts/import-materials.js",
     "docs": "cd docs && npx mintlify dev"
   },
   "repository": {
@@ -35,6 +36,7 @@
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
+    "csv-parser": "^3.2.1",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "helmet": "^8.1.0",

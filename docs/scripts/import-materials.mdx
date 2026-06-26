@@ -1,0 +1,55 @@
+---
+title: 'Import Materials from CSV'
+description: 'How to use the import script to seed the Materials database from an Excel/CSV file'
+---
+
+## Overview
+
+The `import-materials.js` script allows you to quickly import material data from a CSV file directly into your MongoDB database. It is designed to safely handle missing fields, gracefully trim whitespace, and prevent duplicate entries if the script is run multiple times.
+
+## Prerequisites
+
+- Ensure you have a CSV file containing your material data. If your data is in an Excel file (`.xlsx`), export it as a CSV file first.
+- The script uses `csv-parser` which should already be installed via `npm install`.
+
+## CSV Structure
+
+The script is pre-configured to map the following Thai column headers to the `Material` database schema:
+
+| CSV Header (Thai) | Database Field             | Description |
+|-------------------|----------------------------|-------------|
+| รหัส              | `code`                     | Unique material code |
+| ชื่อวัสดุ         | `name`                     | Material name (Required) |
+| ความหนา           | `specDetails.thickness`    | e.g. "2มม.", "3มม." |
+| ประเภท            | `specDetails.glassType`    | e.g. "กระจกดิบ" |
+| สี                | `specDetails.color`        | e.g. "ใสห่อ", "ใส" |
+| กว้าง             | `specDetails.width`        | Number (e.g. 16, 24) |
+| สูง               | `specDetails.length`       | Number (e.g. 36, 40) |
+| ยี่ห้อ            | `brand`                    | Can be empty |
+| ตร.ฟ.             | `specDetails.sqft`         | e.g. 4, 3.89 |
+
+> **Note:** `unit` defaults to `"แผ่น"` and `reorderPoint` defaults to `10`.
+
+## How to Run
+
+You can run the script using the npm shortcut defined in `package.json`. Make sure you use Node.js directly or use `npm run` with `--` to pass the path correctly on Windows.
+
+### Using Node directly (Recommended on Windows)
+
+```bash
+node scripts/import-materials.js "C:\path\to\your\file.csv"
+```
+
+### Using npm run
+
+```bash
+npm run import:materials -- "C:\path\to\your\file.csv"
+```
+
+## How It Works under the Hood
+
+1. **Safety First**: The script trims headers and values to ensure no hidden spaces corrupt the database.
+2. **Upsert Logic**: It checks if a material with the same `code` already exists.
+    - If it **does exist**, it *updates* the existing record.
+    - If it **does not exist**, it *inserts* a new record.
+3. **Robust**: It safely skips rows that do not have a `ชื่อวัสดุ` (Name).
