@@ -120,12 +120,12 @@ async function main() {
   check('beyond last page → still has pagination', rBeyond.data.pagination.page, 9999);
 
   // ──────────────────────────────────────────
-  // 5. Limit clamping
+  // 5. Limit Check
   // ──────────────────────────────────────────
-  console.log('\n=== Limit Clamping ===\n');
+  console.log('\n=== Limit Check ===\n');
 
   const rMax = await api('GET', '/api/materials?limit=500', token);
-  check('limit=500 clamped to 100', rMax.data.pagination.limit, 100);
+  check('limit=500 returns limit 500', rMax.data.pagination.limit, 500);
 
   const rZero = await api('GET', '/api/materials?limit=0', token);
   check('limit=0 defaults to 20', rZero.data.pagination.limit, 20);

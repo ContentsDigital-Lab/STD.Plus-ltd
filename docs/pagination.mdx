@@ -1,0 +1,63 @@
+---
+title: Pagination & Limits
+description: How to fetch data, change page limits, and request unlimited data
+---
+
+## Overview
+
+All "List" endpoints in the STD Plus API (such as `/api/materials`, `/api/orders`, `/api/inventories`) return paginated results by default. This ensures the database and network aren't overloaded by massive queries unless explicitly requested.
+
+## Default Behavior
+
+If you make a `GET` request without specifying any pagination query parameters, the API will safely default to:
+- **`page`**: `1`
+- **`limit`**: `20`
+
+## Query Parameters
+
+You can control pagination and sorting by appending query parameters to the URL:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `page` | Integer | `1` | The page number to fetch. |
+| `limit` | Integer | `20` | The number of items to return per page. |
+| `sort` | String | `-createdAt` | The field to sort by. Prefix with `-` for descending order. |
+
+### Example Request
+
+```http
+GET /api/materials?page=2&limit=50&sort=name
+```
+
+## Fetching "Unlimited" Data
+
+The STD Plus backend **does not enforce a maximum hard limit** on queries. The frontend is in complete control of how much data it wants to retrieve in a single request.
+
+If you need to fetch an entire collection at once (for example, to populate a dropdown or export a massive Excel table), you can use a "brute-force" approach by setting an extremely high `limit`:
+
+```http
+GET /api/materials?limit=100000
+```
+
+Because there is no ceiling on the limit parameter, the backend will honor this request and attempt to return up to 100,000 items in a single response.
+
+> **Warning:** While there is no hard cap preventing you from fetching millions of records, be mindful of browser memory limits and network payload sizes when requesting massive datasets at once.
+
+## Response Structure
+
+A paginated endpoint always wraps the actual items in a `data` array and provides metadata in a `pagination` object:
+
+```json
+{
+  "success": true,
+  "data": [
+    // ... array of items ...
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 1767,
+    "totalPages": 36
+  }
+}
+```
