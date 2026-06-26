@@ -7,6 +7,7 @@ const Order = require('../src/models/Order');
 const Claim = require('../src/models/Claim');
 const Pane = require('../src/models/Pane');
 const Withdrawal = require('../src/models/Withdrawal');
+const Inventory = require('../src/models/Inventory');
 const Counter = require('../src/models/Counter');
 
 async function backfillCollection(Model, field, counterName, prefix) {
@@ -37,6 +38,7 @@ const backfill = async () => {
   await backfillCollection(Claim, 'claimNumber', 'claim', 'CLM');
   await backfillCollection(Pane, 'paneNumber', 'pane', 'PNE');
   await backfillCollection(Withdrawal, 'withdrawalNumber', 'withdrawal', 'WDW');
+  await backfillCollection(Inventory, 'inventoryNumber', 'inventory', 'INV');
 
   console.log('\nBackfill complete.');
   process.exit(0);

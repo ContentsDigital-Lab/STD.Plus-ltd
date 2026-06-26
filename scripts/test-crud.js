@@ -96,9 +96,9 @@ async function run() {
     );
 
     // Material
-    await testCrud('Material', '/api/materials', token,
-      { name: 'Test CRUD Material', color: 'Clear', thickness: '5mm', materialType: 'Glass', unit: 'sqm', reorderPoint: 10 },
-      { name: 'Updated Material Name' }
+    const matId = await testCrud('Material', '/api/materials', token,
+      { name: 'Test CRUD Material', code: 'MAT-001', brand: 'BrandX', specDetails: { color: 'Clear', thickness: '5mm', glassType: 'Glass', sqft: '10.5' }, unit: 'sqm', reorderPoint: 10 },
+      { code: 'MAT-002' }
     );
 
     // Job Type
@@ -124,6 +124,17 @@ async function run() {
       { name: 'Test CRUD Worker', username: 'crudworker', password: 'password', position: 'Operator', notificationPreferences: { inApp: true, line: false } },
       { position: 'Manager' }
     );
+
+    // Inventory
+    const invId = await testCrud('Inventory', '/api/inventories', token,
+      { material: matId, stockType: 'Raw', quantity: 100, location: 'A1' },
+      { location: 'B2' }
+    );
+
+    // Verify auto-increment inventoryNumber
+    const invRes = await api('GET', `/api/inventories/${invId}`, token);
+    const inventoryNumber = invRes.data?.data?.inventoryNumber;
+    check('Inventory auto-increment inventoryNumber exists and starts with INV', inventoryNumber?.startsWith('INV'), true);
 
   } finally {
     await sweepCreatedData(API, token, snap);

@@ -1,4 +1,5 @@
 const Inventory = require('../models/Inventory');
+const Counter = require('../models/Counter');
 const Material = require('../models/Material');
 const MaterialLog = require('../models/MaterialLog');
 const { success, fail } = require('../utils/response');
@@ -35,6 +36,9 @@ exports.create = async (req, res, next) => {
     await verifyReferences([
       { model: Material, id: req.validated.body.material, label: 'Material' },
     ]);
+
+    const inventoryNumber = await Counter.getNext('inventory', 'INV');
+    req.validated.body.inventoryNumber = inventoryNumber;
 
     const inventory = await Inventory.create(req.validated.body);
     await MaterialLog.create({
@@ -122,7 +126,9 @@ exports.move = async (req, res, next) => {
       if (toStorageColor !== undefined) target.storageColor = toStorageColor;
       await target.save();
     } else {
+      const inventoryNumber = await Counter.getNext('inventory', 'INV');
       target = await Inventory.create({
+        inventoryNumber,
         material: source.material._id,
         stockType: source.stockType,
         quantity,

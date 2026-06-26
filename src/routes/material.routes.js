@@ -14,11 +14,14 @@ const specDetailsSchema = z.object({
   glassType: z.string().optional(),
   width: z.string().optional(),
   length: z.string().optional(),
+  sqft: z.string().optional(),
 }).optional();
 
 const createSchema = z.object({
   body: z.object({
+    code: z.string().optional(),
     name: z.string().min(1),
+    brand: z.string().optional(),
     unit: z.string().min(1),
     reorderPoint: z.number().min(0),
     specDetails: specDetailsSchema,
@@ -27,7 +30,9 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   body: z.object({
+    code: z.string().optional(),
     name: z.string().min(1).optional(),
+    brand: z.string().optional(),
     unit: z.string().min(1).optional(),
     reorderPoint: z.number().min(0).optional(),
     specDetails: specDetailsSchema,

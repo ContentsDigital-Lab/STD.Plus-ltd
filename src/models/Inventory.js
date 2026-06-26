@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const inventorySchema = new mongoose.Schema({
+  inventoryNumber: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
   material: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Material',

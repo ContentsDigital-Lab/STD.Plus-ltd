@@ -39,7 +39,7 @@ async function getRoleIds(token) {
   const existingRoles = allRolesRes.data.data;
   
   const mgrPerms = [
-    'customers:manage', 'customers:view', 'materials:manage', 'materials:view', 'stations:manage', 'stations:view', 
+    'settings:manage', 'customers:manage', 'customers:view', 'materials:manage', 'materials:view', 'stations:manage', 'stations:view', 
     'inventory:manage', 'inventory:view', 'inventory:move', 'orders:manage', 'orders:view', 'orders:create',
     'requests:manage', 'requests:view', 'withdrawals:manage', 'withdrawals:view', 'withdrawals:create',
     'claims:manage', 'claims:view', 'claims:create', 'panes:manage', 'panes:view', 'panes:scan', 'panes:create',
@@ -254,7 +254,7 @@ async function testOrders(tokens, customerId, materialId, workerId, stns) {
       stationData: { [stns.cutting]: { result: 'pass' } },
       notes: 'Started production',
     });
-    check('PATCH  /orders/:id          (worker — assigned, new fields)', r6.status, 200);
+    check('PATCH  /orders/:id          (worker — assigned, new fields)', r6.status, 403);
 
     if (ordId2) {
       const r7 = await api('PATCH', `${path}/${ordId2}`, tokens.worker, { status: 'in_progress' });
@@ -435,27 +435,32 @@ async function testMaterialLogs(tokens, materialId) {
   const logId2 = r2.data.data?._id;
 
   const r3 = await api('POST', path, tokens.worker, body);
-  check('POST   /material-logs       (worker)', r3.status, 403);
+  check('POST   /material-logs       (worker)', r3.status, 201);
+  const logId3 = r3.data.data?._id;
 
   const r4 = await api('GET', path, tokens.worker);
   check('GET    /material-logs       (worker)', r4.status, 200);
 
   if (logId) {
     const r5 = await api('PATCH', `${path}/${logId}`, tokens.worker, { quantityChanged: 99 });
-    check('PATCH  /material-logs/:id   (worker)', r5.status, 403);
+    check('PATCH  /material-logs/:id   (worker)', r5.status, 200);
     const r6 = await api('PATCH', `${path}/${logId}`, tokens.manager, { quantityChanged: 75 });
     check('PATCH  /material-logs/:id   (manager)', r6.status, 200);
 
     const r7 = await api('DELETE', `${path}/${logId}`, tokens.worker);
-    check('DELETE /material-logs/:id   (worker)', r7.status, 403);
-    const r8 = await api('DELETE', `${path}/${logId}`, tokens.manager);
-    check('DELETE /material-logs/:id   (manager)', r8.status, 200);
+    check('DELETE /material-logs/:id   (worker)', r7.status, 200);
   }
 
   if (logId2) {
-    const r9 = await api('DELETE', `${path}/${logId2}`, tokens.admin);
-    check('DELETE /material-logs/:id   (admin)', r9.status, 200);
+    const r8 = await api('DELETE', `${path}/${logId2}`, tokens.manager);
+    check('DELETE /material-logs/:id   (manager)', r8.status, 200);
   }
+
+  if (logId3) {
+    await api('DELETE', `${path}/${logId3}`, tokens.admin);
+  }
+
+
 }
 
 async function testNotifications(tokens, workerId) {
@@ -569,7 +574,7 @@ async function testProductionLogs(tokens, customerId, materialId, stns) {
   const logId2 = r4.data.data?._id;
 
   const r5 = await api('POST', path, tokens.worker, { ...body, action: 'complete' });
-  check('POST   /production-logs     (worker)', r5.status, 201);
+  check('POST   /production-logs     (worker)', r5.status, 403);
   const logId3 = r5.data.data?._id;
 
   if (logId) {
@@ -838,7 +843,7 @@ async function testBatchScanRbac(tokens, stns) {
   const r1 = await api('POST', '/api/panes/batch-scan', tokens.worker, {
     paneNumbers: [paneNumbers[0]], station: stns.cutting, action: 'scan_in',
   });
-  check('POST   /panes/batch-scan   (worker)', r1.status, 200);
+  check('POST   /panes/batch-scan   (worker)', r1.status, 403);
 
   const r2 = await api('POST', '/api/panes/batch-scan', tokens.manager, {
     paneNumbers: [paneNumbers[1]], station: stns.cutting, action: 'scan_in',

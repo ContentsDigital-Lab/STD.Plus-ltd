@@ -171,7 +171,8 @@
           "color": { "type": "string" },
           "glassType": { "type": "string" },
           "width": { "type": "string" },
-          "length": { "type": "string" }
+          "length": { "type": "string" },
+          "sqft": { "type": "string" }
         }
       },
       "Material": {
@@ -179,6 +180,8 @@
         "properties": {
           "_id": { "type": "string" },
           "name": { "type": "string" },
+          "code": { "type": "string" },
+          "brand": { "type": "string" },
           "unit": { "type": "string" },
           "reorderPoint": { "type": "number" },
           "specDetails": { "$ref": "#/components/schemas/SpecDetails" },
@@ -191,6 +194,8 @@
         "required": ["name", "unit", "reorderPoint"],
         "properties": {
           "name": { "type": "string", "minLength": 1 },
+          "code": { "type": "string" },
+          "brand": { "type": "string" },
           "unit": { "type": "string", "minLength": 1 },
           "reorderPoint": { "type": "number", "minimum": 0 },
           "specDetails": { "$ref": "#/components/schemas/SpecDetails" }
@@ -200,6 +205,8 @@
         "type": "object",
         "properties": {
           "name": { "type": "string", "minLength": 1 },
+          "code": { "type": "string" },
+          "brand": { "type": "string" },
           "unit": { "type": "string", "minLength": 1 },
           "reorderPoint": { "type": "number", "minimum": 0 },
           "specDetails": { "$ref": "#/components/schemas/SpecDetails" }
@@ -209,6 +216,7 @@
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
+          "inventoryNumber": { "type": "string", "description": "Auto-generated unique identifier (e.g. INV0001)", "example": "INV0001" },
           "material": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Material" }] },
           "stockType": { "type": "string", "enum": ["Raw", "Reuse"] },
           "quantity": { "type": "number" },

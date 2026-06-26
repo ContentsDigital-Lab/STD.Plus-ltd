@@ -336,6 +336,29 @@ async function testSystemAlertRBAC() {
   console.log('=== System Alert RBAC ===\n');
 
   const adminToken = await getToken('admin', 'admin123');
+
+  // Ensure manager1 and worker1 exist
+  const roleRes = await fetch(`${API}/api/roles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ name: 'Socket Test Role', slug: `socket_test_${Date.now()}`, description: 'Test', permissions: [] })
+  });
+  const roleData = await roleRes.json();
+  const roleId = roleData.data?._id;
+
+  if (roleId) {
+    await fetch(`${API}/api/workers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ name: 'Manager', username: 'manager1', password: 'manager123', position: 'manager', role: roleId })
+    });
+    await fetch(`${API}/api/workers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ name: 'Worker', username: 'worker1', password: 'worker123', position: 'worker', role: roleId })
+    });
+  }
+
   const managerToken = await getToken('manager1', 'manager123');
   const workerToken = await getToken('worker1', 'worker123');
 

@@ -1,11 +1,13 @@
 const mongoose = require('mongoose');
 
 const materialSchema = new mongoose.Schema({
+  code: { type: String, trim: true },
   name: {
     type: String,
     required: true,
     trim: true,
   },
+  brand: { type: String, trim: true },
   unit: {
     type: String,
     required: true,
@@ -22,6 +24,7 @@ const materialSchema = new mongoose.Schema({
     glassType: { type: String, default: '' },
     width:  { type: Number, default: 0 },
     length: { type: Number, default: 0 },
+    sqft: { type: String, default: '' },
   },
 }, { timestamps: true });
 
