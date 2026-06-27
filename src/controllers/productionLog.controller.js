@@ -61,7 +61,7 @@ exports.update = async (req, res, next) => {
     ]);
 
     const log = await ProductionLog.findByIdAndUpdate(req.params.id, req.validated.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).populate(POPULATE_FIELDS);
     if (!log) return fail(res, 'Production log not found', 404);

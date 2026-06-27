@@ -83,7 +83,7 @@ exports.create = async (req, res, next) => {
 exports.update = async (req, res, next) => {
   try {
     const material = await Material.findByIdAndUpdate(req.params.id, req.validated.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     });
     if (!material) return fail(res, 'Material not found', 404);

@@ -263,7 +263,7 @@ exports.update = async (req, res, next) => {
             currentStation: null,
             currentStatus: 'pending',
           },
-          { new: true, runValidators: true }
+          { returnDocument: 'after', runValidators: true }
         );
 
         const paneNumber = existingPane.paneNumber;
@@ -321,7 +321,7 @@ exports.update = async (req, res, next) => {
     const pane = await Pane.findByIdAndUpdate(
       req.params.id,
       body,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).populate(POPULATE_FIELDS).lean();
     if (!pane) return fail(res, 'Pane not found', 404);
 

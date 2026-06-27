@@ -64,8 +64,9 @@ async function testCrud(entityName, endpoint, token, createPayload, updatePayloa
   
   // Verify Update
   const verifyRes = await api('GET', `${endpoint}/${id}`, token);
-  const verifyKey = Object.keys(updatePayload)[0];
-  check(`${entityName} Update Verified`, verifyRes.data.data[verifyKey], updatePayload[verifyKey]);
+  for (const verifyKey of Object.keys(updatePayload)) {
+    check(`${entityName} Update Verified (${verifyKey})`, verifyRes.data.data[verifyKey], updatePayload[verifyKey]);
+  }
 
   return id;
 }
@@ -98,7 +99,7 @@ async function run() {
     // Material
     const matId = await testCrud('Material', '/api/materials', token,
       { name: 'Test CRUD Material', code: 'MAT-001', brand: 'BrandX', specDetails: { color: 'Clear', thickness: '5mm', glassType: 'Glass', sqft: '10.5' }, unit: 'sqm', reorderPoint: 10 },
-      { code: 'MAT-002' }
+      { code: 'MAT-002', isActive: false }
     );
 
     // Job Type
@@ -128,7 +129,7 @@ async function run() {
     // Inventory
     const invId = await testCrud('Inventory', '/api/inventories', token,
       { material: matId, stockType: 'Raw', quantity: 100, location: 'A1' },
-      { location: 'B2' }
+      { location: 'B2', isActive: false }
     );
 
     // Verify auto-increment inventoryNumber

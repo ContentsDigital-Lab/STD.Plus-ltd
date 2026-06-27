@@ -189,7 +189,7 @@ exports.update = async (req, res, next) => {
       !existing.remadePane;
 
     const claim = await Claim.findByIdAndUpdate(req.params.id, req.validated.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).populate(POPULATE_FIELDS);
     if (!claim) return fail(res, 'Claim not found', 404);

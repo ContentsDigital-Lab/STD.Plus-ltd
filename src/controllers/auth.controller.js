@@ -48,7 +48,7 @@ exports.updateMe = async (req, res, next) => {
     }
 
     const worker = await Worker.findByIdAndUpdate(req.user._id, updates, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     });
     if (!worker) return fail(res, 'Worker not found', 404);

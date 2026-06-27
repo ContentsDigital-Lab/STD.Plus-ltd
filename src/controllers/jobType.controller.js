@@ -43,7 +43,7 @@ exports.create = async (req, res, next) => {
 exports.update = async (req, res, next) => {
   try {
     const jobType = await JobType.findByIdAndUpdate(req.params.id, req.validated.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     });
     if (!jobType) return fail(res, 'Job type not found', 404);

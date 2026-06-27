@@ -15,6 +15,7 @@ const createSchema = z.object({
     quantity: z.number().min(0),
     location: z.string().min(1),
     storageColor: z.string().optional(),
+    isActive: z.boolean().optional(),
   }),
 });
 
@@ -25,6 +26,7 @@ const updateSchema = z.object({
     quantity: z.number().min(0).optional(),
     location: z.string().min(1).optional(),
     storageColor: z.string().optional(),
+    isActive: z.boolean().optional(),
   }),
 });
 

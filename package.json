@@ -47,6 +47,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "mintlify": "^4.2.647",
     "nodemon": "^3.1.14",
     "socket.io-client": "^4.8.3"
   }

@@ -25,6 +25,7 @@ const createSchema = z.object({
     unit: z.string().min(1),
     reorderPoint: z.number().min(0),
     specDetails: specDetailsSchema,
+    isActive: z.boolean().optional(),
   }),
 });
 
@@ -36,6 +37,7 @@ const updateSchema = z.object({
     unit: z.string().min(1).optional(),
     reorderPoint: z.number().min(0).optional(),
     specDetails: specDetailsSchema,
+    isActive: z.boolean().optional(),
   }),
 });
 

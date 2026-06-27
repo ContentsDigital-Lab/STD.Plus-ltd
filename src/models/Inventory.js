@@ -31,6 +31,7 @@ const inventorySchema = new mongoose.Schema({
     default: '',
     trim: true,
   },
+  isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Inventory', inventorySchema);

@@ -69,7 +69,7 @@ exports.update = async (req, res, next) => {
         ...(notchPrice     !== undefined && { notchPrice }),
         updatedBy: req.user._id,
       },
-      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+      { returnDocument: 'after', upsert: true, runValidators: true, setDefaultsOnInsert: true }
     ).populate('updatedBy', 'name role');
 
     const plain = flattenSettings(settings);

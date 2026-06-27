@@ -117,7 +117,7 @@ exports.update = async (req, res, next) => {
     }
 
     const worker = await Worker.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).populate('role');
     if (!worker) return fail(res, 'Worker not found', 404);

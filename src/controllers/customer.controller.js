@@ -82,7 +82,7 @@ exports.create = async (req, res, next) => {
 exports.update = async (req, res, next) => {
   try {
     const customer = await Customer.findByIdAndUpdate(req.params.id, req.validated.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     });
     if (!customer) return fail(res, 'Customer not found', 404);

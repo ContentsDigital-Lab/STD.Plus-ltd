@@ -26,6 +26,7 @@ const materialSchema = new mongoose.Schema({
     length: { type: Number, default: 0 },
     sqft: { type: String, default: '' },
   },
+  isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Material', materialSchema);
