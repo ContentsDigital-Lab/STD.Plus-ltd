@@ -204,6 +204,8 @@ async function main() {
     const p = await api('POST', '/api/panes', token, {
       order: ordId,
       routing: [cuttingId, qcId],
+      currentStation: cuttingId,
+      currentStatus: 'pending',
       dimensions: { width: 100 * (i + 1), height: 200, thickness: 5 },
       glassType: 'tempered',
     });
@@ -225,6 +227,7 @@ async function main() {
   // Filter by station
   const rPanesSt = await api('GET', `/api/panes?station=${cuttingId}`, token);
   check('GET /panes?station= filter', rPanesSt.status, 200);
+  check('  station filter returns data', rPanesSt.data.data.length >= 5, true);
   const allCutting = rPanesSt.data.data.every(
     (p) => (p.currentStation?._id || p.currentStation) === cuttingId
   );
@@ -237,6 +240,12 @@ async function main() {
   // Filter by material
   const rPanesMat = await api('GET', `/api/panes?material=${mat1Id}`, token);
   check('GET /panes?material= filter', rPanesMat.status, 200);
+
+  // Pending counts
+  const rPending = await api('GET', `/api/panes/pending-counts?station=${cuttingId}`, token);
+  check('GET /panes/pending-counts (200)', rPending.status, 200);
+  const pendingCountForOrder = rPending.data.data.find(d => String(d.order) === String(ordId));
+  check('GET /panes/pending-counts has correct count', pendingCountForOrder?.count, 5);
 
   // ──────────────────────────────────────────
   // 9. Pane Logs endpoint (no pagination metadata, just limit)

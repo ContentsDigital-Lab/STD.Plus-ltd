@@ -94,6 +94,40 @@ exports.getAll = async (req, res, next) => {
   }
 };
 
+exports.getPendingCounts = async (req, res, next) => {
+  try {
+    const { station } = req.query;
+    if (!station) return res.status(400).json({ success: false, message: 'station is required' });
+
+    const mongoose = require('mongoose');
+    const result = await Pane.aggregate([
+      { 
+        $match: { 
+          currentStation: new mongoose.Types.ObjectId(station),
+          currentStatus: 'pending'
+        } 
+      },
+      { 
+        $group: { 
+          _id: { order: "$order", request: "$request" }, 
+          count: { $sum: 1 } 
+        } 
+      }
+    ]);
+
+    // Format output as array of { order, request, count }
+    const formatted = result.map(r => ({
+      order: r._id.order,
+      request: r._id.request,
+      count: r.count
+    }));
+
+    success(res, formatted);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ── GET /panes/:id ────────────────────────────────────────────────────────────
 exports.getById = async (req, res, next) => {
   try {

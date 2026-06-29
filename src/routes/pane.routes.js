@@ -177,6 +177,7 @@ const allowPaneUpdate = (req, res, next) => {
 };
 
 router.get('/',                    auth, allowStationView, paneController.getAll);
+router.get('/pending-counts',      auth, allowStationView, paneController.getPendingCounts);
 router.get('/:id',                 auth, allowStationView, paneController.getById);
 router.post('/',                   auth, authorize('production:manage', 'orders:create', 'orders:manage'), validate(createSchema), paneController.create);
 router.patch('/:id',               auth, allowPaneUpdate, validate(updateSchema), paneController.update);

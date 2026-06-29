@@ -152,6 +152,7 @@
             "group": "Panes",
             "pages": [
               "api-reference/panes/list-all-panes",
+              "api-reference/panes/get-pending-counts",
               "api-reference/panes/create-a-pane",
               "api-reference/panes/delete-multiple-panes",
               "api-reference/panes/get-pane-by-id",

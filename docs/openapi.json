@@ -10704,6 +10704,69 @@
           }
         }
       }
+    },
+    "/api/panes/pending-counts": {
+      "get": {
+        "summary": "Get Pending Pane Counts",
+        "description": "Retrieves an aggregated count of pending panes for a specific station, grouped by order and request.",
+        "tags": [
+          "Panes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "station",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the station to filter by."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "order": {
+                            "type": "string"
+                          },
+                          "request": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required station parameter"
+          }
+        }
+      }
     }
   },
   "tags": [
