@@ -270,6 +270,20 @@ exports.update = async (req, res, next) => {
     const existingPane = await Pane.findById(req.params.id).lean();
     if (!existingPane) return fail(res, 'Pane not found', 404);
 
+    if (existingPane.order) {
+      const orderDoc = await Order.findById(existingPane.order).select('status');
+      if (orderDoc && orderDoc.status === 'cancelled') {
+        return fail(res, 'This pane belongs to a cancelled order and cannot be updated', 400);
+      }
+    }
+    
+    if (existingPane.request) {
+      const requestDoc = await Request.findById(existingPane.request).select('status');
+      if (requestDoc && requestDoc.status === 'cancelled') {
+        return fail(res, 'This pane belongs to a cancelled request and cannot be updated', 400);
+      }
+    }
+
     const effectiveRouting = body.routing || existingPane.routing || [];
     const effectiveSheetsPerPane = body.rawGlass?.sheetsPerPane ?? existingPane.rawGlass?.sheetsPerPane ?? 1;
     const isSingle = (existingPane.laminateRole || 'single') === 'single';

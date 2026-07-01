@@ -1,5 +1,6 @@
 const Pane = require('../models/Pane');
 const Order = require('../models/Order');
+const Request = require('../models/Request');
 const ProductionLog = require('../models/ProductionLog');
 const Notification = require('../models/Notification');
 const Worker = require('../models/Worker');
@@ -22,6 +23,20 @@ exports.scan = async (req, res, next) => {
 
     if (!pane.currentStation && pane.currentStatus === 'completed') {
       return fail(res, 'Pane is already completed', 400);
+    }
+
+    if (pane.order) {
+      const order = await Order.findById(pane.order).select('status');
+      if (order && order.status === 'cancelled') {
+        return fail(res, 'This pane belongs to a cancelled order and cannot be processed', 400);
+      }
+    }
+    
+    if (pane.request) {
+      const request = await Request.findById(pane.request).select('status');
+      if (request && request.status === 'cancelled') {
+        return fail(res, 'This pane belongs to a cancelled request and cannot be processed', 400);
+      }
     }
 
     const currentStationStr = pane.currentStation ? pane.currentStation.toString() : null;

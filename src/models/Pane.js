@@ -1,10 +1,10 @@
 const mongoose = require('mongoose');
 
 const edgeTaskSchema = new mongoose.Schema({
-  side:        { type: String, default: '' },
+  side: { type: String, default: '' },
   edgeProfile: { type: String, default: '' },
   machineType: { type: String, default: '' },
-  status:      { type: String, enum: ['pending', 'in_progress', 'completed'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'in_progress', 'completed'], default: 'pending' },
 }, { _id: false });
 
 const vertexSchema = new mongoose.Schema({
@@ -13,75 +13,75 @@ const vertexSchema = new mongoose.Schema({
 }, { _id: false });
 
 const holeNotchSchema = new mongoose.Schema({
-  id:       { type: String, required: true },
-  type:     { type: String, enum: ['circle', 'rectangle', 'slot', 'custom'], required: true },
-  x:        { type: Number, required: true },
-  y:        { type: Number, required: true },
+  id: { type: String, required: true },
+  type: { type: String, enum: ['circle', 'rectangle', 'slot', 'custom'], required: true },
+  x: { type: Number, required: true },
+  y: { type: Number, required: true },
   diameter: { type: Number },
-  width:    { type: Number },
-  height:   { type: Number },
-  length:   { type: Number },
+  width: { type: Number },
+  height: { type: Number },
+  length: { type: Number },
   vertices: { type: [vertexSchema], default: undefined },
 }, { _id: false });
 
 const paneSchema = new mongoose.Schema({
   paneNumber: {
-    type:     String,
+    type: String,
     required: true,
-    unique:   true,
+    unique: true,
     uppercase: true,
-    trim:     true,
+    trim: true,
   },
   qrCode: { type: String, default: '' },
-  order:      { type: mongoose.Schema.Types.ObjectId, ref: 'Order',      default: null },
-  request:    { type: mongoose.Schema.Types.ObjectId, ref: 'Request',    default: null },
+  order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
+  request: { type: mongoose.Schema.Types.ObjectId, ref: 'Request', default: null },
   withdrawal: { type: mongoose.Schema.Types.ObjectId, ref: 'Withdrawal', default: null },
-  remakeOf:   { type: mongoose.Schema.Types.ObjectId, ref: 'Pane',       default: null },
-  material:   { type: mongoose.Schema.Types.ObjectId, ref: 'Material',   default: null },
-  inventory:  { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory',  default: null },
+  remakeOf: { type: mongoose.Schema.Types.ObjectId, ref: 'Pane', default: null },
+  material: { type: mongoose.Schema.Types.ObjectId, ref: 'Material', default: null },
+  inventory: { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory', default: null },
 
   currentStation: { type: mongoose.Schema.Types.ObjectId, ref: 'Station', default: null },
-  currentStatus:  { type: String, enum: ['pending', 'in_progress', 'awaiting_scan_out', 'completed', 'claimed', 'defected', 'merged_into'], default: 'pending' },
+  currentStatus: { type: String, enum: ['pending', 'in_progress', 'awaiting_scan_out', 'completed', 'claimed', 'defected', 'merged_into', 'cancelled'], default: 'pending' },
 
   /** Set when this pane was merged away (non-survivor sheet or dormant parent); use mergedInto for the live pane. */
-  mergedInto:     { type: mongoose.Schema.Types.ObjectId, ref: 'Pane', default: null },
+  mergedInto: { type: mongoose.Schema.Types.ObjectId, ref: 'Pane', default: null },
   /** Survivor after laminate merge; first scan_out from lam uses parent routing[0] (routing has no lam station). */
   laminateMergedAt: { type: Date, default: null },
 
-  routing:      { type: [mongoose.Schema.Types.ObjectId], ref: 'Station', default: [] },
-  customRouting:{ type: Boolean, default: false },
+  routing: { type: [mongoose.Schema.Types.ObjectId], ref: 'Station', default: [] },
+  customRouting: { type: Boolean, default: false },
 
   dimensions: {
-    width:     { type: Number, default: 0 },
-    height:    { type: Number, default: 0 },
+    width: { type: Number, default: 0 },
+    height: { type: Number, default: 0 },
     thickness: { type: Number, default: 0 },
-    area:      { type: Number, default: 0 },
+    area: { type: Number, default: 0 },
   },
 
-  jobType:        { type: String, default: '' },
+  jobType: { type: String, default: '' },
   rawGlass: {
-    glassType:     { type: String, default: '' },
-    color:         { type: String, default: '' },
-    thickness:     { type: Number, default: 0  },
-    sheetsPerPane: { type: Number, default: 1  },
+    glassType: { type: String, default: '' },
+    color: { type: String, default: '' },
+    thickness: { type: Number, default: 0 },
+    sheetsPerPane: { type: Number, default: 1 },
   },
 
-  glassType:           { type: String, default: '' },
-  glassTypeLabel:      { type: String, default: '' },
-  cornerSpec:          { type: String, default: '' },
-  dimensionTolerance:  { type: String, default: '' },
-  holes:          { type: [holeNotchSchema], default: [] },
-  notches:        { type: [holeNotchSchema], default: [] },
-  processes:      { type: [String], default: [] },
-  edgeTasks:      { type: [edgeTaskSchema], default: [] },
+  glassType: { type: String, default: '' },
+  glassTypeLabel: { type: String, default: '' },
+  cornerSpec: { type: String, default: '' },
+  dimensionTolerance: { type: String, default: '' },
+  holes: { type: [holeNotchSchema], default: [] },
+  notches: { type: [holeNotchSchema], default: [] },
+  processes: { type: [String], default: [] },
+  edgeTasks: { type: [edgeTaskSchema], default: [] },
 
-  laminateRole:    { type: String, enum: ['single', 'parent', 'sheet'], default: 'single' },
-  parentPane:      { type: mongoose.Schema.Types.ObjectId, ref: 'Pane', default: null },
-  childPanes:      { type: [mongoose.Schema.Types.ObjectId], ref: 'Pane', default: [] },
-  sheetLabel:      { type: String, default: '' },
+  laminateRole: { type: String, enum: ['single', 'parent', 'sheet'], default: 'single' },
+  parentPane: { type: mongoose.Schema.Types.ObjectId, ref: 'Pane', default: null },
+  childPanes: { type: [mongoose.Schema.Types.ObjectId], ref: 'Pane', default: [] },
+  sheetLabel: { type: String, default: '' },
   laminateStation: { type: mongoose.Schema.Types.ObjectId, ref: 'Station', default: null },
 
-  startedAt:   { type: Date, default: null },
+  startedAt: { type: Date, default: null },
   completedAt: { type: Date, default: null },
   deliveredAt: { type: Date, default: null },
 }, { timestamps: true });

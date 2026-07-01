@@ -652,6 +652,15 @@
             "format": "date-time",
             "nullable": true
           },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "cancelled"],
+            "default": "pending"
+          },
+          "cancelReason": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -708,6 +717,13 @@
           "expectedDeliveryDate": {
             "type": "string",
             "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "cancelled"]
+          },
+          "cancelReason": {
+            "type": "string"
           },
           "panes": {
             "type": "array",
@@ -846,6 +862,13 @@
           "expectedDeliveryDate": {
             "type": "string",
             "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "cancelled"]
+          },
+          "cancelReason": {
+            "type": "string"
           }
         }
       },

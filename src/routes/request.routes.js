@@ -20,14 +20,14 @@ const vertexSchema = z.object({
 });
 
 const holeNotchSchema = z.object({
-  id:       z.string().min(1),
-  type:     z.enum(['circle', 'rectangle', 'slot', 'custom']),
-  x:        z.number(),
-  y:        z.number(),
+  id: z.string().min(1),
+  type: z.enum(['circle', 'rectangle', 'slot', 'custom']),
+  x: z.number(),
+  y: z.number(),
   diameter: z.number().optional(),
-  width:    z.number().optional(),
-  height:   z.number().optional(),
-  length:   z.number().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  length: z.number().optional(),
   vertices: z.array(vertexSchema).optional(),
 });
 
@@ -42,9 +42,9 @@ const paneItemSchema = z.object({
   }).optional(),
   jobType: z.string().optional(),
   rawGlass: z.object({
-    glassType:     z.string().optional(),
-    color:         z.string().optional(),
-    thickness:     z.number().min(0).optional(),
+    glassType: z.string().optional(),
+    color: z.string().optional(),
+    thickness: z.number().min(0).optional(),
     sheetsPerPane: z.number().int().min(1).optional(),
   }).optional(),
   glassType: z.string().optional(),
@@ -71,6 +71,7 @@ const createSchema = z.object({
     deliveryLocation: z.string().optional(),
     assignedTo: z.string().min(1).optional(),
     expectedDeliveryDate: z.string().datetime().optional(),
+    status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
     panes: z.array(paneItemSchema).optional(),
   }),
 });
@@ -83,6 +84,8 @@ const updateSchema = z.object({
     deliveryLocation: z.string().optional(),
     assignedTo: z.string().min(1).optional(),
     expectedDeliveryDate: z.string().datetime().optional(),
+    status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
+    cancelReason: z.string().optional(),
   }),
 });
 
@@ -97,7 +100,7 @@ const allowStationView = (req, res, next) => {
   const isAdmin = req.user?.role?.slug === 'admin' || perms.includes('*');
   const hasGlobalView = ['orders:view', 'production:view', 'dashboard:view'].some(p => perms.includes(p));
   const hasAnyStationAccess = perms.some(p => p.startsWith('station:enter:'));
-  
+
   if (isAdmin || hasGlobalView || hasAnyStationAccess) {
     return next();
   }

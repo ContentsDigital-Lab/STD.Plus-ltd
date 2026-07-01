@@ -91,7 +91,7 @@ async function run() {
     );
 
     // Customer
-    await testCrud('Customer', '/api/customers', token,
+    const custId = await testCrud('Customer', '/api/customers', token,
       { name: 'Test CRUD Customer', address: '123 Main St' },
       { name: 'Updated CRUD Customer' }
     );
@@ -136,6 +136,17 @@ async function run() {
     const invRes = await api('GET', `/api/inventories/${invId}`, token);
     const inventoryNumber = invRes.data?.data?.inventoryNumber;
     check('Inventory auto-increment inventoryNumber exists and starts with INV', inventoryNumber?.startsWith('INV'), true);
+
+    // Request
+    const reqId = await testCrud('Request', '/api/requests', token,
+      { customer: custId, details: { type: 'Custom Request', quantity: 10 } },
+      { status: 'cancelled', cancelReason: 'Customer changed mind' }
+    );
+
+    // Verify Request auto-increment requestNumber
+    const reqRes = await api('GET', `/api/requests/${reqId}`, token);
+    const requestNumber = reqRes.data?.data?.requestNumber;
+    check('Request auto-increment requestNumber exists and starts with REQ', requestNumber?.startsWith('REQ'), true);
 
   } finally {
     await sweepCreatedData(API, token, snap);

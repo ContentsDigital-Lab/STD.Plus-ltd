@@ -34,9 +34,11 @@ const PANE_CASCADE = [
 
 const ORDER_CASCADE = [
   { model: Claim, field: 'order' },
-  { model: Withdrawal, field: 'order', beforeDelete: async (docs) => {
-    for (const w of docs) await restoreInventory(w.material, w.stockType, w.quantity);
-  }},
+  {
+    model: Withdrawal, field: 'order', beforeDelete: async (docs) => {
+      for (const w of docs) await restoreInventory(w.material, w.stockType, w.quantity);
+    }
+  },
   { model: MaterialLog, field: 'order' },
   { model: PaneLog, field: 'order' },
   { model: ProductionLog, field: 'order' },
@@ -186,6 +188,18 @@ exports.update = async (req, res, next) => {
       runValidators: true,
     }).populate(POPULATE_FIELDS);
     if (!request) return fail(res, 'Request not found', 404);
+
+    if (updates.status === 'cancelled') {
+      await Order.updateMany({ request: req.params.id }, { status: 'cancelled' });
+      await Pane.updateMany(
+        { request: req.params.id }, 
+        { currentStatus: 'cancelled', currentStation: null }
+      );
+      // Emit an event to refresh production/order views
+      emit(req, 'order:updated', { action: 'cancelled_by_request', data: { requestId: req.params.id } }, ['production', 'dashboard']);
+      emit(req, 'pane:updated', { action: 'cancelled_by_request', data: { requestId: req.params.id } }, ['station', 'production']);
+    }
+
     emit(req, 'request:updated', { action: 'updated', data: request }, ['dashboard', 'request']);
     success(res, request, 'Request updated');
   } catch (err) {

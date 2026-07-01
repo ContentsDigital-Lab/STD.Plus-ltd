@@ -45,6 +45,16 @@ const requestSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  status: {
+    type: String,
+    enum: ['pending', 'in_progress', 'completed', 'cancelled'],
+    default: 'pending',
+  },
+  cancelReason: {
+    type: String,
+    default: null,
+    trim: true,
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Request', requestSchema);
