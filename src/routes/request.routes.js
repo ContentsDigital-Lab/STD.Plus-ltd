@@ -67,6 +67,7 @@ const createSchema = z.object({
   body: z.object({
     details: detailsSchema,
     customer: z.string().min(1),
+    referenceId: z.string().optional(),
     deadline: z.string().datetime().optional(),
     deliveryLocation: z.string().optional(),
     assignedTo: z.string().min(1).optional(),
@@ -80,6 +81,7 @@ const updateSchema = z.object({
   body: z.object({
     details: detailsSchema.partial().optional(),
     customer: z.string().min(1).optional(),
+    referenceId: z.string().optional(),
     deadline: z.string().datetime().optional(),
     deliveryLocation: z.string().optional(),
     assignedTo: z.string().min(1).optional(),

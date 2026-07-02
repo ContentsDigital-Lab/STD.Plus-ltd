@@ -27,6 +27,11 @@ const requestSchema = new mongoose.Schema({
     ref: 'Customer',
     required: true,
   },
+  referenceId: {
+    type: String,
+    default: null,
+    trim: true,
+  },
   deadline: {
     type: Date,
     default: null,
