@@ -86,6 +86,7 @@ const updateSchema = z.object({
     expectedDeliveryDate: z.string().datetime().optional(),
     status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
     cancelReason: z.string().optional(),
+    deadlineChangeReason: z.string().optional(),
   }),
 });
 

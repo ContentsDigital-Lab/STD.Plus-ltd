@@ -661,6 +661,10 @@
             "type": "string",
             "nullable": true
           },
+          "deadlineChangeReason": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -868,6 +872,9 @@
             "enum": ["pending", "in_progress", "completed", "cancelled"]
           },
           "cancelReason": {
+            "type": "string"
+          },
+          "deadlineChangeReason": {
             "type": "string"
           }
         }

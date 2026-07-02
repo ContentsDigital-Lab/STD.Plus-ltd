@@ -183,6 +183,20 @@ exports.update = async (req, res, next) => {
       }
     }
 
+    const existingRequest = await Request.findById(req.params.id);
+    if (!existingRequest) return fail(res, 'Request not found', 404);
+
+    if ('deadline' in updates) {
+      const oldDeadline = existingRequest.deadline ? new Date(existingRequest.deadline).getTime() : null;
+      const newDeadline = updates.deadline ? new Date(updates.deadline).getTime() : null;
+      
+      if (oldDeadline !== newDeadline) {
+        if (!updates.deadlineChangeReason || !updates.deadlineChangeReason.trim()) {
+          return fail(res, 'Reason is required when changing deadline', 400);
+        }
+      }
+    }
+
     const request = await Request.findByIdAndUpdate(req.params.id, updates, {
       returnDocument: 'after',
       runValidators: true,

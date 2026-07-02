@@ -148,6 +148,32 @@ async function run() {
     const requestNumber = reqRes.data?.data?.requestNumber;
     check('Request auto-increment requestNumber exists and starts with REQ', requestNumber?.startsWith('REQ'), true);
 
+    // Request deadlineChangeReason test
+    console.log(`\n=== Testing Request deadlineChangeReason ===\n`);
+    const initialDeadline = new Date(Date.now() + 86400000).toISOString();
+    const updatedDeadline = new Date(Date.now() + 172800000).toISOString();
+    
+    const dcrReqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'DCR Test', quantity: 1 }, deadline: initialDeadline });
+    const dcrReqId = dcrReqRes.data.data._id;
+    
+    // 1. Try to update deadline without reason (should fail)
+    const failUpdate = await api('PATCH', `/api/requests/${dcrReqId}`, token, { deadline: updatedDeadline });
+    check('Request Update Deadline without reason fails (400)', failUpdate.status, 400);
+
+    // 2. Try to update deadline with reason (should succeed)
+    const successUpdate = await api('PATCH', `/api/requests/${dcrReqId}`, token, { deadline: updatedDeadline, deadlineChangeReason: 'Customer requested delay' });
+    check('Request Update Deadline with reason succeeds (200)', successUpdate.status, 200);
+
+    // 3. Try to update other fields without changing deadline, without reason (should succeed)
+    // Send the same deadline so `oldDeadline === newDeadline` in the controller logic
+    const sameDeadlineUpdate = await api('PATCH', `/api/requests/${dcrReqId}`, token, { deadline: updatedDeadline, expectedDeliveryDate: new Date(Date.now() + 200000000).toISOString() });
+    check('Request Update unchanged deadline without reason succeeds (200)', sameDeadlineUpdate.status, 200);
+
+    // 4. Try to update other fields (no deadline in body), without reason (should succeed)
+    const noDeadlineUpdate = await api('PATCH', `/api/requests/${dcrReqId}`, token, { expectedDeliveryDate: new Date(Date.now() + 300000000).toISOString() });
+    check('Request Update no deadline in body without reason succeeds (200)', noDeadlineUpdate.status, 200);
+
+
   } finally {
     await sweepCreatedData(API, token, snap);
   }

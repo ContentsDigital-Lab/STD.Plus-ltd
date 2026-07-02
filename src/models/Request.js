@@ -55,6 +55,11 @@ const requestSchema = new mongoose.Schema({
     default: null,
     trim: true,
   },
+  deadlineChangeReason: {
+    type: String,
+    default: null,
+    trim: true,
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Request', requestSchema);
