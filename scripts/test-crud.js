@@ -139,8 +139,8 @@ async function run() {
 
     // Request
     const reqId = await testCrud('Request', '/api/requests', token,
-      { customer: custId, details: { type: 'Custom Request', quantity: 10 } },
-      { status: 'cancelled', cancelReason: 'Customer changed mind' }
+      { customer: custId, details: { type: 'Custom Request', quantity: 10 }, referenceId: 'PO-12345' },
+      { status: 'cancelled', cancelReason: 'Customer changed mind', referenceId: 'PO-67890' }
     );
 
     // Verify Request auto-increment requestNumber

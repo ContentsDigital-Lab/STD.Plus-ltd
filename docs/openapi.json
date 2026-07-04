@@ -628,6 +628,10 @@
               }
             ]
           },
+          "referenceId": {
+            "type": "string",
+            "nullable": true
+          },
           "deadline": {
             "type": "string",
             "format": "date-time",
@@ -706,6 +710,9 @@
           "customer": {
             "type": "string",
             "minLength": 1
+          },
+          "referenceId": {
+            "type": "string"
           },
           "deadline": {
             "type": "string",
@@ -851,6 +858,9 @@
           "customer": {
             "type": "string",
             "minLength": 1
+          },
+          "referenceId": {
+            "type": "string"
           },
           "deadline": {
             "type": "string",

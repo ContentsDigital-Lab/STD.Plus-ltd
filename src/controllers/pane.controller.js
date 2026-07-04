@@ -772,6 +772,18 @@ exports.scan = async (req, res, next) => {
       if (materialId) await Pane.updateOne({ _id: pane._id }, { material: materialId });
     }
 
+    if (['scan_in', 'start', 'complete'].includes(action)) {
+      if (pane.order) {
+        const orderToUpdate = await Order.findById(pane.order);
+        if (orderToUpdate && (!orderToUpdate.status || orderToUpdate.status === 'pending')) {
+          orderToUpdate.status = 'in_progress';
+          await orderToUpdate.save();
+          const popOrder = await orderToUpdate.populate(['request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo']);
+          emit(req, 'order:updated', { action: 'updated', data: popOrder }, ['dashboard', 'order']);
+        }
+      }
+    }
+
     const log = await PaneLog.create({
       pane:        pane._id,
       order:       pane.order ?? null,
@@ -829,10 +841,9 @@ exports.scan = async (req, res, next) => {
 
           if (isLastStation && pane.laminateRole !== 'sheet') {
             order.panesCompleted = (order.panesCompleted || 0) + 1;
-            if (order.paneCount > 0) {
-              order.progressPercent = Math.round((order.panesCompleted / order.paneCount) * 100);
-            }
-            if (order.panesCompleted >= order.paneCount && order.paneCount > 0) {
+            const effectivePaneCount = order.paneCount > 0 ? order.paneCount : (order.quantity || 1);
+            order.progressPercent = Math.round((order.panesCompleted / effectivePaneCount) * 100);
+            if (order.panesCompleted >= effectivePaneCount) {
               order.status = 'completed';
             }
           }
@@ -980,6 +991,18 @@ exports.batchScan = async (req, res, next) => {
           if (materialId) {
             await Pane.updateOne({ _id: pane._id }, { material: materialId });
             pane.material = materialId;
+          }
+        }
+
+        if (['scan_in', 'start', 'complete'].includes(action)) {
+          if (pane.order) {
+            const orderToUpdate = await Order.findById(pane.order);
+            if (orderToUpdate && (!orderToUpdate.status || orderToUpdate.status === 'pending')) {
+              orderToUpdate.status = 'in_progress';
+              await orderToUpdate.save();
+              const popOrder = await orderToUpdate.populate(['request', 'customer', 'material', 'claim', 'withdrawal', 'assignedTo']);
+              emit(req, 'order:updated', { action: 'updated', data: popOrder }, ['dashboard', 'order']);
+            }
           }
         }
 
