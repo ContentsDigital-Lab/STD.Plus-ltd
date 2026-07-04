@@ -173,6 +173,44 @@ async function run() {
     const noDeadlineUpdate = await api('PATCH', `/api/requests/${dcrReqId}`, token, { expectedDeliveryDate: new Date(Date.now() + 300000000).toISOString() });
     check('Request Update no deadline in body without reason succeeds (200)', noDeadlineUpdate.status, 200);
 
+    // Request Validation (NaN / null) test
+    console.log(`\n=== Testing Request Validation (NaN/null) ===\n`);
+    // When estimatedPrice is NaN on the frontend, JSON.stringify converts it to null.
+    // Zod should block null since it expects a number or undefined.
+    const nanReqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'NaN Test', quantity: 1, estimatedPrice: null } });
+    check('Request POST with null estimatedPrice fails (400)', nanReqRes.status, 400);
+
+    const nanReqUpdate = await api('PATCH', `/api/requests/${dcrReqId}`, token, { details: { type: 'NaN Test', quantity: 1, estimatedPrice: null } });
+    check('Request PATCH with null estimatedPrice fails (400)', nanReqUpdate.status, 400);
+
+    // Request Panes test
+    console.log(`\n=== Testing Request Panes (Status Lock) ===\n`);
+    // Create a new request for pane testing
+    const paneReqRes = await api('POST', '/api/requests', token, { customer: custId, details: { type: 'Pane Test', quantity: 1 } });
+    const paneReqId = paneReqRes.data.data._id;
+    
+    // Create a pane for this pending request
+    const panePayload = {
+      request: paneReqId,
+      dimensions: { width: 800, height: 600, thickness: 5 },
+      glassType: 'Clear',
+      edgeTasks: [{ side: 'top', edgeProfile: 'N' }]
+    };
+    const pane1Res = await api('POST', '/api/panes', token, panePayload);
+    check('Pane POST for pending request succeeds (201)', pane1Res.status, 201);
+    
+    // Change request status to in_progress
+    const reqUpdateRes = await api('PATCH', `/api/requests/${paneReqId}`, token, { status: 'in_progress' });
+    check('Request status updated to in_progress (200)', reqUpdateRes.status, 200);
+    
+    // Try to add another pane to the in_progress request (should succeed as backend lock was removed or never existed)
+    const pane2Res = await api('POST', '/api/panes', token, { ...panePayload, dimensions: { width: 900, height: 600, thickness: 5 } });
+    check('Pane POST for in_progress request succeeds (201)', pane2Res.status, 201);
+    
+    // Try to delete a pane from the in_progress request
+    const paneToDelete = pane1Res.data.data._id;
+    const deleteRes = await api('DELETE', '/api/panes', token, { ids: [paneToDelete] });
+    check('Pane deleteMultiple for in_progress request succeeds (200)', deleteRes.status, 200);
 
   } finally {
     await sweepCreatedData(API, token, snap);

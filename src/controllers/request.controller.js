@@ -74,6 +74,80 @@ exports.getById = async (req, res, next) => {
   }
 };
 
+
+async function generatePanesForRequest(request, paneItems, res) {
+  let createdPanes = [];
+  if (paneItems && paneItems.length > 0) {
+    const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+    for (const paneData of paneItems) {
+      const sheetsPerPane = paneData.rawGlass?.sheetsPerPane || 1;
+      const paneNumber = await Counter.getNext('pane', 'PNE');
+      const qrCode = `STDPLUS:${paneNumber}`;
+      const hasRouting = paneData.routing?.length > 0;
+
+      if (sheetsPerPane > 1 && hasRouting) {
+        const routingIds = paneData.routing.map(String);
+        const stations = await Station.find({ _id: { $in: routingIds } }).lean();
+        const stationMap = Object.fromEntries(stations.map(s => [s._id.toString(), s]));
+        const lamIdx = routingIds.findIndex(id => stationMap[id]?.isLaminateStation);
+
+        if (lamIdx === -1) {
+          throw new Error('Routing must include a lamination station when sheetsPerPane > 1');
+        }
+
+        const laminateStationId = routingIds[lamIdx];
+        const childRouting = routingIds.slice(0, lamIdx + 1);
+        const parentRouting = routingIds.slice(lamIdx + 1);
+
+        const parentPane = await Pane.create({
+          ...paneData,
+          request: request._id,
+          paneNumber,
+          qrCode,
+          laminateRole: 'parent',
+          laminateStation: laminateStationId,
+          routing: parentRouting,
+          currentStation: null,
+          currentStatus: 'pending',
+        });
+
+        const childIds = [];
+        for (let i = 0; i < sheetsPerPane; i++) {
+          const label = LABELS[i] || `S${i + 1}`;
+          const childNumber = `${paneNumber}-${label}`;
+          const childQr = `STDPLUS:${childNumber}`;
+          const child = await Pane.create({
+            ...paneData,
+            request: request._id,
+            paneNumber: childNumber,
+            qrCode: childQr,
+            laminateRole: 'sheet',
+            parentPane: parentPane._id,
+            sheetLabel: label,
+            laminateStation: laminateStationId,
+            routing: childRouting,
+            currentStation: childRouting[0],
+            currentStatus: 'pending',
+          });
+          childIds.push(child._id);
+          createdPanes.push(child);
+        }
+
+        parentPane.childPanes = childIds;
+        await parentPane.save();
+        createdPanes.push(parentPane);
+      } else {
+        const currentStation = hasRouting ? paneData.routing[0] : null;
+        const extras = hasRouting ? {} : { currentStatus: 'completed', completedAt: new Date() };
+        const pane = await Pane.create({ ...paneData, request: request._id, paneNumber, qrCode, currentStation, ...extras });
+        createdPanes.push(pane);
+      }
+    }
+  }
+  return createdPanes;
+}
+
 exports.create = async (req, res, next) => {
   try {
     const { customer, assignedTo, panes: paneItems, ...rest } = req.validated.body;
@@ -86,73 +160,10 @@ exports.create = async (req, res, next) => {
     const request = await Request.create({ ...rest, customer, assignedTo, requestNumber });
 
     let createdPanes = [];
-    if (paneItems && paneItems.length > 0) {
-      const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-      for (const paneData of paneItems) {
-        const sheetsPerPane = paneData.rawGlass?.sheetsPerPane || 1;
-        const paneNumber = await Counter.getNext('pane', 'PNE');
-        const qrCode = `STDPLUS:${paneNumber}`;
-        const hasRouting = paneData.routing?.length > 0;
-
-        if (sheetsPerPane > 1 && hasRouting) {
-          const routingIds = paneData.routing.map(String);
-          const stations = await Station.find({ _id: { $in: routingIds } }).lean();
-          const stationMap = Object.fromEntries(stations.map(s => [s._id.toString(), s]));
-          const lamIdx = routingIds.findIndex(id => stationMap[id]?.isLaminateStation);
-
-          if (lamIdx === -1) {
-            return fail(res, 'Routing must include a lamination station when sheetsPerPane > 1', 400);
-          }
-
-          const laminateStationId = routingIds[lamIdx];
-          const childRouting = routingIds.slice(0, lamIdx + 1);
-          const parentRouting = routingIds.slice(lamIdx + 1);
-
-          const parentPane = await Pane.create({
-            ...paneData,
-            request: request._id,
-            paneNumber,
-            qrCode,
-            laminateRole: 'parent',
-            laminateStation: laminateStationId,
-            routing: parentRouting,
-            currentStation: null,
-            currentStatus: 'pending',
-          });
-
-          const childIds = [];
-          for (let i = 0; i < sheetsPerPane; i++) {
-            const label = LABELS[i] || `S${i + 1}`;
-            const childNumber = `${paneNumber}-${label}`;
-            const childQr = `STDPLUS:${childNumber}`;
-            const child = await Pane.create({
-              ...paneData,
-              request: request._id,
-              paneNumber: childNumber,
-              qrCode: childQr,
-              laminateRole: 'sheet',
-              parentPane: parentPane._id,
-              sheetLabel: label,
-              laminateStation: laminateStationId,
-              routing: childRouting,
-              currentStation: childRouting[0],
-              currentStatus: 'pending',
-            });
-            childIds.push(child._id);
-            createdPanes.push(child);
-          }
-
-          parentPane.childPanes = childIds;
-          await parentPane.save();
-          createdPanes.push(parentPane);
-        } else {
-          const currentStation = hasRouting ? paneData.routing[0] : null;
-          const extras = hasRouting ? {} : { currentStatus: 'completed', completedAt: new Date() };
-          const pane = await Pane.create({ ...paneData, request: request._id, paneNumber, qrCode, currentStation, ...extras });
-          createdPanes.push(pane);
-        }
-      }
+    try {
+      createdPanes = await generatePanesForRequest(request, paneItems, res);
+    } catch (error) {
+      return fail(res, error.message || 'Failed to generate panes', 400);
     }
 
     const populated = await request.populate(POPULATE_FIELDS);
