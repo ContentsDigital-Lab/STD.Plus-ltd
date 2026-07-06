@@ -72,7 +72,7 @@ const createSchema = z.object({
     deliveryLocation: z.string().optional(),
     assignedTo: z.string().min(1).optional(),
     expectedDeliveryDate: z.string().datetime().optional(),
-    status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
+    status: z.enum(['draft', 'pending', 'in_progress', 'completed', 'cancelled']).optional(),
     panes: z.array(paneItemSchema).optional(),
   }),
 });
@@ -86,7 +86,7 @@ const updateSchema = z.object({
     deliveryLocation: z.string().optional(),
     assignedTo: z.string().min(1).optional(),
     expectedDeliveryDate: z.string().datetime().optional(),
-    status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
+    status: z.enum(['draft', 'pending', 'in_progress', 'completed', 'cancelled']).optional(),
     cancelReason: z.string().optional(),
     deadlineChangeReason: z.string().optional(),
   }),

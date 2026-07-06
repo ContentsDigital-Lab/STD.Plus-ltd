@@ -658,7 +658,7 @@
           },
           "status": {
             "type": "string",
-            "enum": ["pending", "in_progress", "completed", "cancelled"],
+            "enum": ["draft", "pending", "in_progress", "completed", "cancelled"],
             "default": "pending"
           },
           "cancelReason": {
@@ -731,7 +731,7 @@
           },
           "status": {
             "type": "string",
-            "enum": ["pending", "in_progress", "completed", "cancelled"]
+            "enum": ["draft", "pending", "in_progress", "completed", "cancelled"]
           },
           "cancelReason": {
             "type": "string"
@@ -879,7 +879,7 @@
           },
           "status": {
             "type": "string",
-            "enum": ["pending", "in_progress", "completed", "cancelled"]
+            "enum": ["draft", "pending", "in_progress", "completed", "cancelled"]
           },
           "cancelReason": {
             "type": "string"

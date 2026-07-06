@@ -143,6 +143,12 @@ async function run() {
       { status: 'cancelled', cancelReason: 'Customer changed mind', referenceId: 'PO-67890' }
     );
 
+    // Request Draft Status
+    const draftReqId = await testCrud('Request Draft', '/api/requests', token,
+      { customer: custId, details: { type: 'Draft Request', quantity: 5 }, status: 'draft' },
+      { status: 'pending' }
+    );
+
     // Verify Request auto-increment requestNumber
     const reqRes = await api('GET', `/api/requests/${reqId}`, token);
     const requestNumber = reqRes.data?.data?.requestNumber;
