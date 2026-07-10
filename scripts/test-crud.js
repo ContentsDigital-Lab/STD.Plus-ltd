@@ -98,9 +98,13 @@ async function run() {
 
     // Material
     const matId = await testCrud('Material', '/api/materials', token,
-      { name: 'Test CRUD Material', code: 'MAT-001', brand: 'BrandX', specDetails: { color: 'Clear', thickness: '5mm', glassType: 'Glass', sqft: '10.5' }, unit: 'sqm', reorderPoint: 10 },
+      { name: 'Test CRUD Material', code: 'MAT-001', brand: 'BrandX', specDetails: { color: 'Clear', thickness: '5mm', glassType: 'Glass', sqft: '10.5', dimensionUnit: 'mm' }, unit: 'sqm', reorderPoint: 10 },
       { code: 'MAT-002', isActive: false }
     );
+
+    // Verify Material dimensionUnit
+    const matRes = await api('GET', `/api/materials/${matId}`, token);
+    check('Material dimensionUnit is saved', matRes.data?.data?.specDetails?.dimensionUnit, 'mm');
 
     // Job Type
     await testCrud('Job Type', '/api/job-types', token,

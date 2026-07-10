@@ -15,6 +15,7 @@ const specDetailsSchema = z.object({
   width: z.string().optional(),
   length: z.string().optional(),
   sqft: z.string().optional(),
+  dimensionUnit: z.string().optional(),
 }).optional();
 
 const createSchema = z.object({

@@ -25,6 +25,7 @@ const materialSchema = new mongoose.Schema({
     width:  { type: Number, default: 0 },
     length: { type: Number, default: 0 },
     sqft: { type: String, default: '' },
+    dimensionUnit: { type: String },
   },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });

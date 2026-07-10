@@ -383,7 +383,13 @@
             "type": "number"
           },
           "specDetails": {
-            "$ref": "#/components/schemas/SpecDetails"
+            "$ref": "#/components/schemas/SpecDetails",
+            "properties": {
+              "dimensionUnit": {
+                "type": "string",
+                "description": "Unit for dimensions (e.g., mm, cm, in)"
+              }
+            }
           },
           "createdAt": {
             "type": "string",
@@ -427,7 +433,13 @@
             "minimum": 0
           },
           "specDetails": {
-            "$ref": "#/components/schemas/SpecDetails"
+            "$ref": "#/components/schemas/SpecDetails",
+            "properties": {
+              "dimensionUnit": {
+                "type": "string",
+                "description": "Unit for dimensions (e.g., mm, cm, in)"
+              }
+            }
           },
           "isActive": {
             "type": "boolean",
@@ -458,7 +470,13 @@
             "minimum": 0
           },
           "specDetails": {
-            "$ref": "#/components/schemas/SpecDetails"
+            "$ref": "#/components/schemas/SpecDetails",
+            "properties": {
+              "dimensionUnit": {
+                "type": "string",
+                "description": "Unit for dimensions (e.g., mm, cm, in)"
+              }
+            }
           },
           "isActive": {
             "type": "boolean",
@@ -658,7 +676,13 @@
           },
           "status": {
             "type": "string",
-            "enum": ["draft", "pending", "in_progress", "completed", "cancelled"],
+            "enum": [
+              "draft",
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ],
             "default": "pending"
           },
           "cancelReason": {
@@ -731,7 +755,13 @@
           },
           "status": {
             "type": "string",
-            "enum": ["draft", "pending", "in_progress", "completed", "cancelled"]
+            "enum": [
+              "draft",
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
           },
           "cancelReason": {
             "type": "string"
@@ -879,7 +909,13 @@
           },
           "status": {
             "type": "string",
-            "enum": ["draft", "pending", "in_progress", "completed", "cancelled"]
+            "enum": [
+              "draft",
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
           },
           "cancelReason": {
             "type": "string"
