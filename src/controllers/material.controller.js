@@ -47,6 +47,8 @@ const MATERIAL_DEPENDENTS = [
   { model: MaterialLog, field: 'material' },
 ];
 
+exports.MATERIAL_DEPENDENTS = MATERIAL_DEPENDENTS;
+
 exports.getAll = async (req, res, next) => {
   try {
     const { data, pagination } = await paginate(Material, {

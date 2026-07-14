@@ -62,7 +62,8 @@ mongoose.connect(env.MONGODB_URI).then(() => {
            color: color,
            width: widthStr ? parseFloat(widthStr) : 0,
            length: lengthStr ? parseFloat(lengthStr) : 0,
-           sqft: sqft
+           sqft: sqft,
+           dimensionUnit: 'inch'
          }
       });
     })

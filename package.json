@@ -20,6 +20,7 @@
     "migrate:stations": "node scripts/migrate-station-ids.js",
     "migrate:roles": "node scripts/migrate-roles.js",
     "import:materials": "node scripts/import-materials.js",
+    "delete:materials": "node scripts/delete-materials-from-csv.js",
     "docs": "cd docs && npx mintlify dev"
   },
   "repository": {

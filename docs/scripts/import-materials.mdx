@@ -28,7 +28,7 @@ The script is pre-configured to map the following Thai column headers to the `Ma
 | ยี่ห้อ            | `brand`                    | Can be empty |
 | ตร.ฟ.             | `specDetails.sqft`         | e.g. 4, 3.89 |
 
-> **Note:** `unit` defaults to `"แผ่น"` and `reorderPoint` defaults to `10`.
+> **Note:** `unit` defaults to `"แผ่น"`, `reorderPoint` defaults to `10`, and `dimensionUnit` is automatically set to `"inch"`.
 
 ## How to Run
 
@@ -44,6 +44,14 @@ node scripts/import-materials.js "C:\path\to\your\file.csv"
 
 ```bash
 npm run import:materials -- "C:\path\to\your\file.csv"
+```
+
+## Reversing an Import (Deletion)
+
+If you made a mistake or imported incorrect data, you can reverse the import by running the delete script with the **exact same CSV file**. This will safely remove only the items listed in the CSV, leaving all your other data untouched, while also handling any dependent references.
+
+```bash
+npm run delete:materials -- "C:\path\to\your\file.csv"
 ```
 
 ## How It Works under the Hood
