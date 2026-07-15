@@ -22,7 +22,8 @@
     "import:materials": "node scripts/import-materials.js",
     "delete:materials": "node scripts/delete-materials-from-csv.js",
     "docs": "cd docs && npx mintlify dev",
-    "migrate:data": "node scripts/migrate-data.js"
+    "migrate:data": "node scripts/migrate-data.js",
+    "reverse:data": "node scripts/reverse-migrate.js"
   },
   "repository": {
     "type": "git",

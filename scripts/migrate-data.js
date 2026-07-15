@@ -24,7 +24,9 @@ if (!fs.existsSync(dumpDir)) {
 const DEPENDENCY_COLLECTIONS = [
   'requests', 'stations', 'customers', 'inventories', 
   'orders', 'claims', 'withdrawals', 'materiallogs', 
-  'panes', 'panelogs'
+  'panes', 'panelogs', 'productionlogs', 'workers',
+  'roles', 'notifications', 'jobtypes', 'counters',
+  'pricingsettings', 'stationtemplates', 'stickertemplates'
 ];
 
 async function main() {
