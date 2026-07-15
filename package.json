@@ -21,7 +21,8 @@
     "migrate:roles": "node scripts/migrate-roles.js",
     "import:materials": "node scripts/import-materials.js",
     "delete:materials": "node scripts/delete-materials-from-csv.js",
-    "docs": "cd docs && npx mintlify dev"
+    "docs": "cd docs && npx mintlify dev",
+    "migrate:data": "node scripts/migrate-data.js"
   },
   "repository": {
     "type": "git",
@@ -36,6 +37,7 @@
   "homepage": "https://github.com/ContentsDigital-Lab/STD.Plus-ltd#readme",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "bson": "^7.3.1",
     "cors": "^2.8.6",
     "csv-parser": "^3.2.1",
     "dotenv": "^17.3.1",
