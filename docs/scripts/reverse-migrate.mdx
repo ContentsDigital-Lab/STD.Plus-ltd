@@ -1,0 +1,30 @@
+---
+title: 'Reverse Database Migration'
+description: 'How to undo a data migration and remove the restored data'
+---
+
+## Overview
+
+The `reverse-migrate.js` script allows you to undo the actions of the `migrate:data` script. If a migration resulted in unwanted data, this script safely removes exactly what was in the BSON dump from your live database.
+
+## Prerequisites
+
+- You must provide the exact same folder containing the BSON dump files that was used for the original migration.
+
+## How It Works
+
+The script operates by looking at the original BSON files and deleting the corresponding records in the live database:
+1. **Reversing Materials**: Reads `materials.bson`, collects the IDs, and deletes those specific materials from the live database.
+2. **Reversing Dependencies**: Reads all dependency collections (orders, claims, panes, etc.) in the backup dump, collects their IDs, and deletes them in batches.
+
+This process ensures that the database is returned to its exact pre-migration state.
+
+## How to Run
+
+Provide the path to the same folder containing your BSON dump files:
+
+```bash
+npm run reverse:data -- "C:\path\to\your\dump\folder"
+```
+
+> **Warning:** This is a destructive operation. It deletes data matching the IDs found in the backup files. Proceed with caution.

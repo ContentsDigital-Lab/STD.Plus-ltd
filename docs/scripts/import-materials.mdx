@@ -30,6 +30,12 @@ The script is pre-configured to map the following Thai column headers to the `Ma
 
 > **Note:** `unit` defaults to `"แผ่น"`, `reorderPoint` defaults to `10`, and `dimensionUnit` is automatically set to `"inch"`.
 
+### Dimension Unit Conversion
+
+The system standardizes on storing all dimensions in the database as **millimeters (mm)**. Since the CSV dimensions (`กว้าง` and `สูง`) are typically provided in inches, the import script will **automatically multiply them by 25.4** before saving them to the database. 
+
+This ensures compatibility with the frontend UI, which dynamically converts the stored millimeter values back into inches for display.
+
 ## How to Run
 
 You can run the script using the npm shortcut defined in `package.json`. Make sure you use Node.js directly or use `npm run` with `--` to pass the path correctly on Windows.

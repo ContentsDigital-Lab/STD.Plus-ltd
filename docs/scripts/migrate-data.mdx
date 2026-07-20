@@ -1,0 +1,31 @@
+---
+title: 'Migrate Database'
+description: 'How to use the data migration script to restore dependencies from a BSON backup'
+---
+
+## Overview
+
+The `migrate-data.js` script allows you to restore missing materials and missing related documents from an older database dump (`.bson` files). 
+
+It specifically checks for missing references and only restores records that are missing, while safely skipping records that already exist.
+
+## Prerequisites
+
+- You need a folder containing your BSON dump files (e.g. `materials.bson`, `orders.bson`, etc.).
+
+## How It Works
+
+The script operates in three phases:
+1. **Restoring Materials**: Checks `materials.bson` against live data and restores missing materials.
+2. **ID Mapping**: Builds a mapping of old IDs to new IDs to ensure relational integrity.
+3. **Restoring Dependencies**: Scans through all dependency collections (orders, claims, panes, etc.) in the backup dump, fixes their material references using the map, and inserts missing documents safely.
+
+## How to Run
+
+Provide the path to the folder containing your BSON dump files:
+
+```bash
+npm run migrate:data -- "C:\path\to\your\dump\folder"
+```
+
+> **Warning:** Be aware that this script restores the materials exactly as they were in the `.bson` backup. If your backup has outdated formats (e.g., missing units or wrong dimensions), they will be restored in that old format.

@@ -27,7 +27,7 @@
           },
           {
             "group": "Scripts & Tools",
-            "pages": ["scripts/import-materials"]
+            "pages": ["scripts/import-materials", "scripts/migrate-data", "scripts/reverse-migrate"]
           }
         ]
       },
