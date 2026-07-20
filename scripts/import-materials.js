@@ -60,8 +60,8 @@ mongoose.connect(env.MONGODB_URI).then(() => {
            thickness: thickness,
            glassType: glassType,
            color: color,
-           width: widthStr ? parseFloat(widthStr) : 0,
-           length: lengthStr ? parseFloat(lengthStr) : 0,
+           width: widthStr ? (parseFloat(widthStr) * 25.4) : 0,
+           length: lengthStr ? (parseFloat(lengthStr) * 25.4) : 0,
            sqft: sqft,
            dimensionUnit: 'inch'
          }
