@@ -20,6 +20,7 @@ const pricingSettingsRoutes = require('./pricingSettings.routes');
 const paneLogRoutes = require('./paneLog.routes');
 const jobTypeRoutes = require('./jobType.routes');
 const roleRoutes = require('./role.routes');
+const dashboardRoutes = require('./dashboard.routes');
 
 const router = Router();
 
@@ -44,5 +45,6 @@ router.use('/pricing-settings', pricingSettingsRoutes);
 router.use('/pane-logs', paneLogRoutes);
 router.use('/job-types', jobTypeRoutes);
 router.use('/roles', roleRoutes);
+router.use('/dashboard', dashboardRoutes);
 
 module.exports = router;
