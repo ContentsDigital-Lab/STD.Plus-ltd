@@ -60,6 +60,11 @@ const requestSchema = new mongoose.Schema({
     default: null,
     trim: true,
   },
+  cancelledBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Worker',
+    default: null,
+  },
   deadlineChangeReason: {
     type: String,
     default: null,

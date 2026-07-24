@@ -16,7 +16,7 @@ const ProductionLog = require('../models/ProductionLog');
 const PaneLog = require('../models/PaneLog');
 const paginate = require('../utils/paginate');
 
-const POPULATE_FIELDS = ['customer', 'assignedTo'];
+const POPULATE_FIELDS = ['customer', 'assignedTo', 'cancelledBy'];
 
 const restoreInventory = async (materialId, stockType, quantity) => {
   const inventory = await Inventory.findOne({ material: materialId, stockType }).sort({ createdAt: 1 });
@@ -206,6 +206,10 @@ exports.update = async (req, res, next) => {
           return fail(res, 'Reason is required when changing deadline', 400);
         }
       }
+    }
+
+    if (updates.status === 'cancelled' && req.user && req.user._id) {
+      updates.cancelledBy = req.user._id;
     }
 
     const request = await Request.findByIdAndUpdate(req.params.id, updates, {
